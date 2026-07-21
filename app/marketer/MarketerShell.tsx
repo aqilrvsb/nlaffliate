@@ -44,7 +44,9 @@ type Unknown = {
   ad_spend: number | null; gross_revenue: number | null; roi: number | null;
 };
 type Product = {
-  id: number; report_date: string; campaign_id: string | null;
+  id: number; report_date: string;
+  brand_id: number | null; brand_name: string | null;
+  campaign_id: string | null;
   campaign_name: string | null; spend: number | null; sku_orders: number | null;
   cost_per_order: number | null; gross_revenue: number | null; roi: number | null;
 };
@@ -203,22 +205,22 @@ export default function MarketerShell({
               </div>
             )}
 
-            {/* Product GMV — its own main category */}
-            <button onClick={() => go("product-gmv")}
-              className={`mt-1 flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
-                active === "product-gmv" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
-              }`}>
-              <PackageSearch className="h-4 w-4 shrink-0" aria-hidden="true" />
-              Product GMV
-            </button>
-
-            {/* Brand — its own main category, sits above Overall */}
+            {/* Brand — everything below is scoped by it, so it leads. */}
             <button onClick={() => go("brand")}
-              className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
+              className={`mt-1 flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
                 active === "brand" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
               }`}>
               <Tag className="h-4 w-4 shrink-0" aria-hidden="true" />
               Brand
+            </button>
+
+            {/* Product GMV — its own main category */}
+            <button onClick={() => go("product-gmv")}
+              className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
+                active === "product-gmv" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
+              }`}>
+              <PackageSearch className="h-4 w-4 shrink-0" aria-hidden="true" />
+              Product GMV
             </button>
 
             {/* Overall — its own main category */}
@@ -339,9 +341,14 @@ function DashboardTab({ affiliates, inRange, pending, success, products, overall
   const t = aggregate(success);
   const rm = (n: number, has: boolean) => (has ? `RM${n.toFixed(2)}` : "—");
 
+  // "" = All Brands, the default. Only the brand-scoped summaries (Overall and
+  // Product GMV Max) respond to it — lives belong to affiliates, not brands.
+  const [brand, setBrand] = useState("");
+  const inBrand = (id: number | null) => !brand || String(id ?? "") === brand;
+
   const within = (d: string) => (!from || d >= from) && (!to || d <= to);
-  const prod = products.filter((p) => within(p.report_date));
-  const ovr = overall.filter((o) => within(o.report_date));
+  const prod = products.filter((p) => within(p.report_date) && inBrand(p.brand_id));
+  const ovr = overall.filter((o) => within(o.report_date) && inBrand(o.brand_id));
 
   const pSpend = prod.reduce((s, r) => s + (r.spend || 0), 0);
   const pGross = prod.reduce((s, r) => s + (r.gross_revenue || 0), 0);
@@ -355,6 +362,22 @@ function DashboardTab({ affiliates, inRange, pending, success, products, overall
   return (
     <>
       <DateRangeFilter count={inRange.length} defaultMode="month" />
+
+      <div className="card flex flex-wrap items-end gap-3">
+        <div className="min-w-[220px]">
+          <label className="label" htmlFor="dash-brand">
+            <Tag className="mr-1 inline h-3 w-3" aria-hidden="true" />
+            Filter By Brands
+          </label>
+          <BrandSelect id="dash-brand" value={brand} onChange={setBrand}
+            allowAll className="!py-2 text-sm" />
+        </div>
+        <p className="pb-2 text-xs text-muted-fg">
+          {brand
+            ? "Overall & Product GMV Max ditapis ikut brand ini. Success Live ikut affiliate, tidak terikat brand."
+            : "Menunjukkan semua brand."}
+        </p>
+      </div>
 
       {/* 1) Overall */}
       <section>
@@ -947,17 +970,20 @@ function ProductImport() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [date, setDate] = useState("");
+  const [brand, setBrand] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
 
   async function submit() {
     if (!file) return setError("Choose an .xlsx file.");
+    if (!brand) return setError("Pick a brand.");
     if (!date) return setError("Pick the report date.");
     setBusy(true); setError(""); setMsg("");
     const fd = new FormData();
     fd.append("file", file);
     fd.append("report_date", date);
+    fd.append("brand_id", brand);
     const res = await fetch("/api/marketer/product-gmv/import", { method: "POST", body: fd });
     const data = await res.json();
     setBusy(false);
@@ -992,6 +1018,12 @@ function ProductImport() {
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[180px]">
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
+            htmlFor="pg-brand">Brand</label>
+          <BrandSelect id="pg-brand" value={brand} onChange={setBrand}
+            className="!py-2 text-sm" />
+        </div>
         <div>
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg">Report date</label>
           <input type="date" className="input cursor-pointer !py-2 text-sm"
@@ -1023,9 +1055,12 @@ function ProductGmvTab({ products }: { products: Product[] }) {
     { from: params.get("from"), to: params.get("to"), all: params.get("all") },
     "month"
   );
+  // "" = All Brands, the default.
+  const [brand, setBrand] = useState("");
   const rows = products.filter((p) => {
     if (from && p.report_date < from) return false;
     if (to && p.report_date > to) return false;
+    if (brand && String(p.brand_id ?? "") !== brand) return false;
     return true;
   });
 
@@ -1041,7 +1076,19 @@ function ProductGmvTab({ products }: { products: Product[] }) {
   return (
     <>
       <ProductImport />
-      <DateRangeFilter count={rows.length} defaultMode="month" />
+      <DateRangeFilter count={rows.length} countNoun={["campaign", "campaigns"]}
+        defaultMode="month" />
+
+      <div className="card flex flex-wrap items-end gap-3">
+        <div className="min-w-[220px]">
+          <label className="label" htmlFor="pg-filter-brand">Brand</label>
+          <BrandSelect id="pg-filter-brand" value={brand} onChange={setBrand}
+            allowAll className="!py-2 text-sm" />
+        </div>
+        <p className="pb-2 text-xs text-muted-fg">
+          {brand ? "Menunjukkan satu brand sahaja." : "Menunjukkan semua brand."}
+        </p>
+      </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Kpi Icon={PackageSearch} label="Product Campaigns" value={rows.length} />
@@ -1064,6 +1111,7 @@ function ProductGmvTab({ products }: { products: Product[] }) {
               <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Product Campaign</th>
+                  <th className="px-4 py-3 font-semibold">Brand</th>
                   <th className="px-4 py-3 font-semibold">Date</th>
                   <th className="px-4 py-3 text-right font-semibold">Product Spend</th>
                   <th className="px-4 py-3 text-right font-semibold">Product SKU Orders</th>
@@ -1080,6 +1128,11 @@ function ProductGmvTab({ products }: { products: Product[] }) {
                         {r.campaign_name || "—"}
                       </div>
                       <div className="font-mono text-[11px] text-muted-fg">{r.campaign_id}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {r.brand_name
+                        ? <span className="chip bg-primary/10 text-primary">{r.brand_name}</span>
+                        : <span className="text-muted-fg/50">—</span>}
                     </td>
                     <td className="px-4 py-3 text-ink">{fmtDate(r.report_date)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{r.spend != null ? `RM${r.spend}` : "—"}</td>

@@ -28,10 +28,19 @@ export async function POST(req: Request) {
   const form = await req.formData();
   const file = form.get("file") as File | null;
   const reportDate = String(form.get("report_date") || "").trim();
+  const brandId = Number(form.get("brand_id"));
 
   if (!file) return NextResponse.json({ error: "Attach an .xlsx file." }, { status: 400 });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(reportDate))
     return NextResponse.json({ error: "Pick a valid report date." }, { status: 400 });
+
+  if (!Number.isFinite(brandId))
+    return NextResponse.json({ error: "Pick a brand." }, { status: 400 });
+  const brand = await db
+    .prepare("SELECT id FROM brands WHERE id = ? AND marketer_id = ?")
+    .get(brandId, user.id);
+  if (!brand)
+    return NextResponse.json({ error: "That brand is not yours." }, { status: 403 });
 
   let rows: any[];
   try {
@@ -43,15 +52,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Could not read that .xlsx file." }, { status: 400 });
   }
 
-  // Replace any existing rows for this date (idempotent re-import).
-  await db.prepare("DELETE FROM product_gmv WHERE marketer_id = ? AND report_date = ?")
-    .run(user.id, reportDate);
+  // Replace this brand's rows for this date (idempotent re-import). Scoped by
+  // brand so importing brand B does not wipe brand A's rows for the same day.
+  await db.prepare(
+      "DELETE FROM product_gmv WHERE marketer_id = ? AND brand_id = ? AND report_date = ?"
+    ).run(user.id, brandId, reportDate);
 
-  const insert = await db.prepare(
+  const insert = db.prepare(
     `INSERT INTO product_gmv
-       (marketer_id, report_date, campaign_id, campaign_name, spend, sku_orders,
+       (marketer_id, brand_id, report_date, campaign_id, campaign_name, spend, sku_orders,
         cost_per_order, gross_revenue, roi)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   let imported = 0;
@@ -59,8 +70,10 @@ export async function POST(req: Request) {
   for (const r of rows) {
     const spend = num(r["Cost"] ?? r["Spend"]);
     if (spend == null || spend === 0) { skipped++; continue; } // skip zero-cost rows
-    insert.run(
-      user.id, reportDate,
+    // await: run() is async, and without it the inserts race the response —
+    // on serverless the function can be frozen before they land.
+    await insert.run(
+      user.id, brandId, reportDate,
       r["Campaign ID"] != null ? String(r["Campaign ID"]) : null,
       r["Campaign name"] != null ? String(r["Campaign name"]) : null,
       spend,

@@ -73,10 +73,13 @@ export default async function MarketerPage() {
   // Imported Product GMV (TikTok Ads xlsx) rows.
   const products = plain(
     await db.prepare(
-        `SELECT id, report_date, campaign_id, campaign_name, spend, sku_orders,
-                cost_per_order, gross_revenue, roi
-         FROM product_gmv WHERE marketer_id = ?
-         ORDER BY report_date DESC, gross_revenue DESC`
+        `SELECT p.id, p.report_date, p.brand_id, b.name AS brand_name,
+                p.campaign_id, p.campaign_name, p.spend, p.sku_orders,
+                p.cost_per_order, p.gross_revenue, p.roi
+           FROM product_gmv p
+           LEFT JOIN brands b ON b.id = p.brand_id
+          WHERE p.marketer_id = ?
+          ORDER BY p.report_date DESC, p.gross_revenue DESC`
       )
       .all(user.id) as any[]
   );

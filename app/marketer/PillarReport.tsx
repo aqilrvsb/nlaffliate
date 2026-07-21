@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  Loader2, ChevronDown,
+  Loader2, ChevronDown, Tag,
 } from "lucide-react";
+import { BrandSelect } from "./BrandsTab";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import { resolveRange } from "@/lib/daterange";
 import { fmtDate } from "@/lib/format";
@@ -15,6 +16,7 @@ import {
 
 type Entry = {
   id: number; level: number; item_no: number; entry_date: string;
+  brand_id: number | null; brand_name: string | null;
   problem: string | null; solution: string | null;
   planning: string | null; execution: string | null;
 };
@@ -35,6 +37,8 @@ export default function PillarReport() {
   // We track what's been collapsed rather than what's open so newly
   // populated levels are visible without another click.
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  // "" = All Brands, the default.
+  const [brand, setBrand] = useState("");
 
   const params = useSearchParams();
   const { from, to } = resolveRange(
@@ -47,10 +51,11 @@ export default function PillarReport() {
     const qs = new URLSearchParams();
     if (from) qs.set("from", from);
     if (to) qs.set("to", to);
+    if (brand) qs.set("brand", brand); // omitted = All Brands
     const d = await fetch(`/api/pillars?${qs}`).then((r) => r.json());
     setEntries(d.entries || []);
     setLoading(false);
-  }, [from, to]);
+  }, [from, to, brand]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -99,6 +104,20 @@ export default function PillarReport() {
 
       <DateRangeFilter count={entries.length} countNoun={["entri", "entri"]}
         defaultMode="month" />
+
+      <div className="card flex flex-wrap items-end gap-3">
+        <div className="min-w-[220px]">
+          <label className="label" htmlFor="pr-brand">
+            <Tag className="mr-1 inline h-3 w-3" aria-hidden="true" />
+            Brand
+          </label>
+          <BrandSelect id="pr-brand" value={brand} onChange={setBrand}
+            allowAll className="!py-2 text-sm" />
+        </div>
+        <p className="pb-2 text-xs text-muted-fg">
+          {brand ? "Menunjukkan satu brand sahaja." : "Menunjukkan semua brand."}
+        </p>
+      </div>
 
       {loading ? (
         <p className="flex items-center gap-2 text-sm text-muted-fg">
@@ -197,6 +216,7 @@ function LevelDetail({ level, entries }: { level: number; entries: Entry[] }) {
         <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
           <tr>
             <th className="px-3 py-2 font-semibold">Item</th>
+            <th className="px-3 py-2 font-semibold">Brand</th>
             <th className="px-3 py-2 font-semibold">Tarikh</th>
             {PILLAR_COLUMNS.map((c) => (
               <th key={c.key} className="px-3 py-2 font-semibold">{c.emoji} {c.label}</th>
@@ -208,6 +228,11 @@ function LevelDetail({ level, entries }: { level: number; entries: Entry[] }) {
             <tr key={e.id} className="border-t border-line/60 align-top">
               <td className="px-3 py-2 font-semibold text-ink">
                 {pillar.items.find((i) => i.no === e.item_no)?.name ?? `#${e.item_no}`}
+              </td>
+              <td className="whitespace-nowrap px-3 py-2">
+                {e.brand_name
+                  ? <span className="chip bg-primary/10 text-primary">{e.brand_name}</span>
+                  : <span className="text-xs text-muted-fg/50">—</span>}
               </td>
               <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-fg">
                 {fmtDate(e.entry_date)}

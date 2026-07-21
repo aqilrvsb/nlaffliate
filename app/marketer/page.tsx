@@ -94,10 +94,14 @@ export default async function MarketerPage() {
   // Overall GMV-Max reports (2-screenshot import).
   const overall = plain(
     await db.prepare(
-        `SELECT id, report_date, cost, sku_orders, cost_per_order, gross_revenue, roi,
-                gmv, visitors, product_impressions, product_clicks, img1_path, img2_path
-         FROM overall_reports WHERE marketer_id = ?
-         ORDER BY report_date DESC`
+        `SELECT o.id, o.report_date, o.brand_id, b.name AS brand_name,
+                o.cost, o.sku_orders, o.cost_per_order, o.gross_revenue, o.roi,
+                o.gmv, o.visitors, o.product_impressions, o.product_clicks,
+                o.img1_path, o.img2_path
+           FROM overall_reports o
+           LEFT JOIN brands b ON b.id = o.brand_id
+          WHERE o.marketer_id = ?
+          ORDER BY o.report_date DESC`
       )
       .all(user.id) as any[]
   );

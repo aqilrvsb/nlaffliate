@@ -38,22 +38,33 @@ export async function POST(req: Request) {
   const img1 = form.get("image1") as File | null;
   const img2 = form.get("image2") as File | null;
   const reportDate = String(form.get("report_date") || "").trim();
+  const brandId = Number(form.get("brand_id"));
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(reportDate))
     return NextResponse.json({ error: "Pick a valid report date." }, { status: 400 });
   if (!img1 && !img2)
     return NextResponse.json({ error: "Attach at least one screenshot." }, { status: 400 });
 
+  if (!Number.isFinite(brandId)) {
+    return NextResponse.json({ error: "Pick a brand." }, { status: 400 });
+  }
+  const brand = await db
+    .prepare("SELECT id FROM brands WHERE id = ? AND marketer_id = ?")
+    .get(brandId, user.id);
+  if (!brand) {
+    return NextResponse.json({ error: "That brand is not yours." }, { status: 403 });
+  }
+
   let overview: any = {}, metrics: any = {};
   let img1Path: string | null = null, img2Path: string | null = null;
   try {
     if (img1) {
-      const s = await saveImg(img1, `overall_ov_${user.id}_${reportDate}`);
+      const s = await saveImg(img1, `overall_ov_${user.id}_${brandId}_${reportDate}`);
       img1Path = s.publicPath;
       overview = await readImageJson(s.dataUrl, OVERVIEW_PROMPT);
     }
     if (img2) {
-      const s = await saveImg(img2, `overall_km_${user.id}_${reportDate}`);
+      const s = await saveImg(img2, `overall_km_${user.id}_${brandId}_${reportDate}`);
       img2Path = s.publicPath;
       metrics = await readImageJson(s.dataUrl, METRICS_PROMPT);
     }
@@ -61,17 +72,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: e?.message || "Could not read the images." }, { status: 502 });
   }
 
-  // Replace this date's report for the marketer.
-  await db.prepare("DELETE FROM overall_reports WHERE marketer_id = ? AND report_date = ?")
-    .run(user.id, reportDate);
+  // Replace this brand's report for this date — re-importing corrects it
+  // rather than stacking a second row.
+  await db.prepare(
+      "DELETE FROM overall_reports WHERE marketer_id = ? AND brand_id = ? AND report_date = ?"
+    ).run(user.id, brandId, reportDate);
 
   await db.prepare(
     `INSERT INTO overall_reports
-       (marketer_id, report_date, cost, sku_orders, cost_per_order, gross_revenue, roi,
+       (marketer_id, brand_id, report_date, cost, sku_orders, cost_per_order, gross_revenue, roi,
         gmv, visitors, product_impressions, product_clicks, img1_path, img2_path)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
-    user.id, reportDate,
+    user.id, brandId, reportDate,
     num(overview.cost), num(overview.sku_orders), num(overview.cost_per_order),
     num(overview.gross_revenue), num(overview.roi),
     num(metrics.gmv), num(metrics.visitors), num(metrics.product_impressions),

@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  HelpCircle, Save, Loader2, Check, AlertCircle, Layers, CalendarDays, X,
+  HelpCircle, Save, Loader2, Check, AlertCircle, Layers, CalendarDays, X, Tag,
 } from "lucide-react";
+import { BrandSelect } from "./BrandsTab";
 import { PILLARS, PILLAR_COLUMNS, getPillar, type PillarColumnKey } from "@/lib/pillars";
 import { todayKL } from "@/lib/daterange";
 
@@ -27,6 +28,7 @@ const COL_HEAD: Record<PillarColumnKey, string> = {
 export default function PillarCreate() {
   const [level, setLevel] = useState(1);
   const [date, setDate] = useState(todayKL());
+  const [brand, setBrand] = useState("");
   const [rows, setRows] = useState<Record<number, Row>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -38,7 +40,16 @@ export default function PillarCreate() {
 
   const load = useCallback(async () => {
     setLoading(true); setSaved(null); setError("");
-    const d = await fetch(`/api/pillars?level=${level}&date=${date}`).then((r) => r.json());
+    // Entries are per (brand, level, date) — with no brand chosen there is
+    // nothing to load, so start from a blank sheet.
+    if (!brand) {
+      setRows({});
+      setLoading(false);
+      return;
+    }
+    const d = await fetch(
+      `/api/pillars?level=${level}&date=${date}&brand=${brand}`
+    ).then((r) => r.json());
     const next: Record<number, Row> = {};
     for (const e of d.entries || []) {
       next[e.item_no] = {
@@ -50,7 +61,7 @@ export default function PillarCreate() {
     }
     setRows(next);
     setLoading(false);
-  }, [level, date]);
+  }, [level, date, brand]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -69,11 +80,12 @@ export default function PillarCreate() {
   );
 
   async function save() {
+    if (!brand) return setError("Pilih brand dahulu.");
     setSaving(true); setError(""); setSaved(null);
     const res = await fetch("/api/pillars", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ level, date, rows }),
+      body: JSON.stringify({ level, date, brand_id: brand, rows }),
     });
     const data = await res.json();
     setSaving(false);
@@ -90,15 +102,33 @@ export default function PillarCreate() {
             Pilih level, isi kolum yang berkaitan. Tidak semua baris perlu diisi.
           </p>
         </div>
-        <div>
-          <label className="label" htmlFor="pillar-date">
-            <CalendarDays className="mr-1 inline h-3 w-3" aria-hidden="true" />
-            Tarikh
-          </label>
-          <input id="pillar-date" type="date" className="input !py-2"
-            value={date} onChange={(e) => setDate(e.target.value)} />
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="min-w-[200px]">
+            <label className="label" htmlFor="pillar-brand">
+              <Tag className="mr-1 inline h-3 w-3" aria-hidden="true" />
+              Brand
+            </label>
+            <BrandSelect id="pillar-brand" value={brand} onChange={setBrand}
+              className="!py-2" />
+          </div>
+          <div>
+            <label className="label" htmlFor="pillar-date">
+              <CalendarDays className="mr-1 inline h-3 w-3" aria-hidden="true" />
+              Tarikh
+            </label>
+            <input id="pillar-date" type="date" className="input !py-2"
+              value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
         </div>
       </div>
+
+      {!brand && (
+        <p className="card flex items-center gap-2 border-amber-200 bg-amber-50/60 text-sm text-amber-800">
+          <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Pilih brand dahulu sebelum mengisi — setiap pillar disimpan mengikut
+          brand dan tarikh.
+        </p>
+      )}
 
       {/* Level picker */}
       <fieldset className="card">
@@ -164,7 +194,8 @@ export default function PillarCreate() {
               <AlertCircle className="h-4 w-4" aria-hidden="true" />{error}
             </span>
           )}
-          <button className="btn" onClick={save} disabled={saving || loading}>
+          <button className="btn" onClick={save} disabled={saving || loading || !brand}
+            title={!brand ? "Pilih brand dahulu" : undefined}>
             {saving
               ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Menyimpan…</>
               : <><Save className="h-4 w-4" aria-hidden="true" />Simpan</>}
@@ -220,9 +251,10 @@ export default function PillarCreate() {
                         <textarea
                           rows={2}
                           value={row[c.key]}
+                          disabled={!brand}
                           onChange={(e) => set(item.no, c.key, e.target.value)}
                           aria-label={`${item.name} — ${c.label}`}
-                          className={`w-full min-w-[180px] resize-y rounded-lg border border-line bg-white/70 px-2.5 py-1.5 text-sm text-ink outline-none transition-colors duration-200 focus:ring-2 ${COL_TINT[c.key]}`}
+                          className={`w-full min-w-[180px] resize-y rounded-lg border border-line bg-white/70 px-2.5 py-1.5 text-sm text-ink outline-none transition-colors duration-200 focus:ring-2 disabled:cursor-not-allowed disabled:bg-muted/40 ${COL_TINT[c.key]}`}
                         />
                       </td>
                     ))}

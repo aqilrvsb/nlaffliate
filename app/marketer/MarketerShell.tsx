@@ -8,8 +8,9 @@ import {
   Mail, Phone, MapPin, Link2, Menu, ChevronDown, List, Check, Loader2, Wallet,
   HelpCircle, Upload, ImagePlus, TrendingDown, Pencil, BarChart3,
   PackageSearch, FileSpreadsheet, ShoppingCart, Layers, Eye, MousePointerClick,
-  Send, Boxes, ClipboardList,
+  Send, Boxes, ClipboardList, Tag,
 } from "lucide-react";
+import BrandsTab, { BrandSelect } from "./BrandsTab";
 import PillarCreate from "./PillarCreate";
 import PillarReport from "./PillarReport";
 import DateRangeFilter from "@/components/DateRangeFilter";
@@ -52,6 +53,7 @@ type Post = {
 };
 type Overall = {
   id: number; report_date: string;
+  brand_id: number | null; brand_name: string | null;
   cost: number | null; sku_orders: number | null; cost_per_order: number | null;
   gross_revenue: number | null; roi: number | null;
   gmv: number | null; visitors: number | null;
@@ -75,6 +77,7 @@ const PILLAR_CHILDREN = [
 ] as const;
 
 const TAB_LABELS: Record<string, string> = {
+  brand: "Brand",
   "pillar-create": "Create Pillar",
   "pillar-report": "Reporting Pillar",
   dashboard: "Dashboard",
@@ -209,6 +212,15 @@ export default function MarketerShell({
               Product GMV
             </button>
 
+            {/* Brand — its own main category, sits above Overall */}
+            <button onClick={() => go("brand")}
+              className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
+                active === "brand" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
+              }`}>
+              <Tag className="h-4 w-4 shrink-0" aria-hidden="true" />
+              Brand
+            </button>
+
             {/* Overall — its own main category */}
             <button onClick={() => go("overall")}
               className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
@@ -308,6 +320,7 @@ export default function MarketerShell({
           )}
           {active === "unknown" && <UnknownTab rows={unknowns} />}
           {active === "product-gmv" && <ProductGmvTab products={products} />}
+          {active === "brand" && <BrandsTab />}
           {active === "overall" && <OverallTab overall={overall} />}
           {active === "pillar-create" && <PillarCreate />}
           {active === "pillar-report" && <PillarReport />}
@@ -1096,18 +1109,21 @@ function OverallImport() {
   const [img1, setImg1] = useState<File | null>(null);
   const [img2, setImg2] = useState<File | null>(null);
   const [date, setDate] = useState("");
+  const [brand, setBrand] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
 
   async function submit() {
     if (!img1 && !img2) return setError("Attach at least one screenshot.");
+    if (!brand) return setError("Pick a brand.");
     if (!date) return setError("Pick the report date.");
     setBusy(true); setError(""); setMsg("");
     const fd = new FormData();
     if (img1) fd.append("image1", img1);
     if (img2) fd.append("image2", img2);
     fd.append("report_date", date);
+    fd.append("brand_id", brand);
     const res = await fetch("/api/marketer/overall/import", { method: "POST", body: fd });
     const data = await res.json();
     setBusy(false);
@@ -1140,6 +1156,12 @@ function OverallImport() {
         {slot(2, "Key metrics panel", img2, setImg2)}
         <div className="flex flex-col justify-end gap-2">
           <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
+              htmlFor="ov-brand">Brand</label>
+            <BrandSelect id="ov-brand" value={brand} onChange={setBrand}
+              className="!py-2 text-sm" />
+          </div>
+          <div>
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg">Report date</label>
             <input type="date" className="input cursor-pointer !py-2 text-sm"
               value={date} onChange={(e) => setDate(e.target.value)} />
@@ -1166,9 +1188,12 @@ function OverallTab({ overall }: { overall: Overall[] }) {
     { from: params.get("from"), to: params.get("to"), all: params.get("all") },
     "month"
   );
+  // "" = All Brands, the default.
+  const [brand, setBrand] = useState("");
   const rows = overall.filter((o) => {
     if (from && o.report_date < from) return false;
     if (to && o.report_date > to) return false;
+    if (brand && String(o.brand_id ?? "") !== brand) return false;
     return true;
   });
 
@@ -1179,7 +1204,19 @@ function OverallTab({ overall }: { overall: Overall[] }) {
   return (
     <>
       <OverallImport />
-      <DateRangeFilter count={rows.length} defaultMode="month" />
+      <DateRangeFilter count={rows.length} countNoun={["report", "reports"]}
+        defaultMode="month" />
+
+      <div className="card flex flex-wrap items-end gap-3">
+        <div className="min-w-[220px]">
+          <label className="label" htmlFor="ov-filter-brand">Brand</label>
+          <BrandSelect id="ov-filter-brand" value={brand} onChange={setBrand}
+            allowAll className="!py-2 text-sm" />
+        </div>
+        <p className="pb-2 text-xs text-muted-fg">
+          {brand ? "Menunjukkan satu brand sahaja." : "Menunjukkan semua brand."}
+        </p>
+      </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Kpi Icon={TrendingUp} label="Overall GMV" value={money(gmv)} fill="yellow" />
@@ -1202,6 +1239,7 @@ function OverallTab({ overall }: { overall: Overall[] }) {
             <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
               <tr>
                 <th className="px-4 py-3 font-semibold">Date</th>
+                <th className="px-4 py-3 font-semibold">Brand</th>
                 <th className="px-4 py-3 text-right font-semibold">Overall GMV</th>
                 <th className="px-4 py-3 text-right font-semibold">Overall Spend</th>
                 <th className="px-4 py-3 text-right font-semibold">Gross Revenue</th>
@@ -1217,6 +1255,11 @@ function OverallTab({ overall }: { overall: Overall[] }) {
               {rows.map((o) => (
                 <tr key={o.id} className="border-t border-line/60 hover:bg-white/50">
                   <td className="px-4 py-3 font-semibold text-ink">{fmtDate(o.report_date)}</td>
+                  <td className="px-4 py-3">
+                    {o.brand_name
+                      ? <span className="chip bg-primary/10 text-primary">{o.brand_name}</span>
+                      : <span className="text-muted-fg/50">—</span>}
+                  </td>
                   <td className="px-4 py-3 text-right font-semibold text-ink">{money(o.gmv)}</td>
                   <td className="px-4 py-3 text-right">{money(o.cost)}</td>
                   <td className="px-4 py-3 text-right">{money(o.gross_revenue)}</td>

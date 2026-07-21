@@ -20,7 +20,7 @@ import DateRangeFilter from "@/components/DateRangeFilter";
 import Pagination from "@/components/Pagination";
 import ImageModal from "@/components/ImageModal";
 import { getPage, paginate } from "@/lib/pagination";
-import { fmtDate, fmtTimeRange, sumDurations } from "@/lib/format";
+import { fmtDate, fmtTime, fmtTimeRange, sumDurations } from "@/lib/format";
 import { resolveRange } from "@/lib/daterange";
 import { useSearchParams } from "next/navigation";
 import type { SessionUser } from "@/lib/session";
@@ -494,7 +494,7 @@ function ScheduleTab({ title, rows, kind, showUpload, affiliates, defaultMode = 
 
       {showUpload && (
         <div className="grid gap-3 lg:grid-cols-2">
-          <LivePerformanceImport affiliates={affiliates ?? []} />
+          <LivePerformanceImport />
           <BulkUpload />
         </div>
       )}
@@ -953,35 +953,23 @@ function BulkUpload() {
  * figures; rows with no schedule are created as Inhouse so the live is not
  * lost, and the marketer can tag the brand afterwards on the card.
  */
-function LivePerformanceImport({ affiliates }: { affiliates: Affiliate[] }) {
+function LivePerformanceImport() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
-  const [profileId, setProfileId] = useState("");
-  const [brand, setBrand] = useState("");
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
+  const [result, setResult] = useState<any>(null);
   const [error, setError] = useState("");
-
-  // Flatten to "Affiliate — Profile" so one dropdown identifies both.
-  const options = affiliates.flatMap((a) =>
-    (a.links || []).map((p) => ({ id: p.id, label: `${a.name} — ${p.label}` }))
-  );
 
   async function submit() {
     if (!file) return setError("Choose the .xlsx export.");
-    if (!profileId) return setError("Pick whose TikTok profile this is.");
-    setBusy(true); setError(""); setMsg("");
+    setBusy(true); setError(""); setResult(null);
     const fd = new FormData();
     fd.append("file", file);
-    fd.append("profile_id", profileId);
-    if (brand) fd.append("brand_id", brand);
     const res = await fetch("/api/marketer/live-performance/import", { method: "POST", body: fd });
     const data = await res.json();
     setBusy(false);
-    if (!res.ok) return setError(data.error || "Import failed");
-    setMsg(
-      `${data.matched} matched · ${data.inhouse} inhouse${data.skipped ? ` · ${data.skipped} skipped` : ""}`
-    );
+    if (!res.ok) return setError(data.error || "Check failed");
+    setResult(data);
     setFile(null);
     router.refresh();
   }
@@ -992,7 +980,7 @@ function LivePerformanceImport({ affiliates }: { affiliates: Affiliate[] }) {
         <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-extrabold text-white">1</span>
           <FileSpreadsheet className="h-4 w-4 text-primary" aria-hidden="true" />
-          Creator Live Performance (.xlsx)
+          Check Schedule (.xlsx)
         </p>
         <a href="/examples/creator-live-performance-sample.xlsx" download
           className="inline-flex items-center gap-1 text-[11px] font-semibold text-accent hover:underline">
@@ -1002,46 +990,49 @@ function LivePerformanceImport({ affiliates }: { affiliates: Affiliate[] }) {
       </div>
 
       <p className="text-[11px] text-muted-fg">
-        TikTok → Creator Live Performance export. Baris yang padan dengan
-        jadual akan diisi automatik; baris tanpa jadual akan dibuka sebagai{" "}
-        <b>Inhouse</b> supaya tiada live tercicir.
+        Semak live yang benar-benar berjalan melawan jadual affiliate. Yang
+        padan akan diisi automatik; yang <b>tiada jadual</b> akan dibuka di
+        bawah <b>Inhouse</b> supaya tiada live tercicir.
       </p>
 
       <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-[200px]">
-          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
-            htmlFor="lp-profile">Affiliate / profile</label>
-          <select id="lp-profile" className="input cursor-pointer !py-2 text-sm"
-            value={profileId} onChange={(e) => setProfileId(e.target.value)}>
-            <option value="">— Pilih profile —</option>
-            {options.map((o) => (
-              <option key={o.id} value={o.id}>{o.label}</option>
-            ))}
-          </select>
-        </div>
-        <div className="min-w-[160px]">
-          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
-            htmlFor="lp-brand">Brand (optional)</label>
-          <BrandSelect id="lp-brand" value={brand} onChange={setBrand} allowAll
-            className="!py-2 text-sm" />
-        </div>
-        <div>
-          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg">File</label>
-          <label className="btn-ghost cursor-pointer !py-2">
-            {file ? <><Check className="h-4 w-4" aria-hidden="true" />{file.name.slice(0, 18)}</>
-                  : <><Upload className="h-4 w-4" aria-hidden="true" />Choose .xlsx</>}
-            <input type="file" accept=".xlsx,.xls" className="sr-only"
-              onChange={(e) => { setFile(e.target.files?.[0] || null); setError(""); setMsg(""); }} />
-          </label>
-        </div>
+        <label className="btn-ghost cursor-pointer !py-2">
+          {file ? <><Check className="h-4 w-4" aria-hidden="true" />{file.name.slice(0, 22)}</>
+                : <><Upload className="h-4 w-4" aria-hidden="true" />Choose .xlsx</>}
+          <input type="file" accept=".xlsx,.xls" className="sr-only"
+            onChange={(e) => { setFile(e.target.files?.[0] || null); setError(""); setResult(null); }} />
+        </label>
         <button className="btn !py-2.5" onClick={submit} disabled={busy}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                : <Upload className="h-4 w-4" aria-hidden="true" />}
-          Submit
+                : <Check className="h-4 w-4" aria-hidden="true" />}
+          Check
         </button>
       </div>
 
-      {msg && <p className="text-xs font-medium text-emerald-600">{msg}</p>}
+      {result && (
+        <div className="space-y-2 rounded-xl border border-line bg-white/60 p-3">
+          <p className="text-xs text-muted-fg">
+            {result.total} live disemak —{" "}
+            <span className="font-semibold text-emerald-600">{result.matched} ada jadual</span>
+            {result.inhouse > 0 && (
+              <> · <span className="font-semibold text-violet-600">{result.inhouse} tiada jadual → Inhouse</span></>
+            )}
+            {result.skipped > 0 && <> · {result.skipped} dilangkau</>}
+          </p>
+          {/* Name the lives that had no schedule — that is the whole point of
+              the check, and a bare count would leave the marketer guessing. */}
+          {result.inhouseList?.length > 0 && (
+            <ul className="space-y-0.5">
+              {result.inhouseList.map((x: any, i: number) => (
+                <li key={i} className="text-[11px] text-muted-fg">
+                  <span className="font-semibold text-violet-700">Tiada jadual</span>{" "}
+                  {fmtDate(x.date)} · {fmtTime(x.time)}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       {error && <p className="text-xs text-danger">{error}</p>}
     </div>
   );

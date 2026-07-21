@@ -18,9 +18,12 @@ export type TabDef = {
 export default function TabBar({
   tabs,
   active,
+  param = "tab",
 }: {
   tabs: TabDef[];
   active: string;
+  /** Query key to drive. Override so a nested row doesn't fight ?tab=. */
+  param?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -28,8 +31,8 @@ export default function TabBar({
 
   function go(key: string) {
     const next = new URLSearchParams(params.toString());
-    if (key === tabs[0].key) next.delete("tab");
-    else next.set("tab", key);
+    if (key === tabs[0].key) next.delete(param);
+    else next.set(param, key);
     next.delete("page"); // switching tabs starts at page 1
     const qs = next.toString();
     router.push(qs ? `${pathname}?${qs}` : pathname);

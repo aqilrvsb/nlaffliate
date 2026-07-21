@@ -5,7 +5,11 @@ import { useEffect, useState } from "react";
 import {
   TrendingUp, Users, ShoppingBag, UserRound, Bot, Check, ExternalLink,
   Loader2, KeyRound, Clock, AlertTriangle, CalendarDays, Timer,
+  LayoutDashboard, Package, Boxes,
 } from "lucide-react";
+import TabBar from "@/components/TabBar";
+import ProductsTab from "./ProductsTab";
+import SamplesTab from "./SamplesTab";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import Pagination from "@/components/Pagination";
 import { getPage, paginate } from "@/lib/pagination";
@@ -59,15 +63,27 @@ export default function AdminDashboard({
   const page = getPage(params.get("page"));
   const pageRows = paginate(rows, page);
 
+  const tab = params.get("tab") || "overview";
+
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-extrabold tracking-tight text-ink">Admin Console</h1>
         <p className="text-sm text-muted-fg">
-          Assign affiliates to marketers and review all live reporting.
+          Assign affiliates, manage products, and fulfil sample requests.
         </p>
       </div>
 
+      <TabBar active={tab} tabs={[
+        { key: "overview", label: "Overview", icon: LayoutDashboard },
+        { key: "product",  label: "Product",  icon: Package },
+        { key: "sample",   label: "Sample",   icon: Boxes },
+      ]} />
+
+      {tab === "product" && <ProductsTab />}
+      {tab === "sample" && <SamplesTab />}
+      {tab !== "overview" ? null : (
+      <>
       <DateRangeFilter count={rows.length} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -194,6 +210,8 @@ export default function AdminDashboard({
         </div>
         <Pagination page={page} total={rows.length} />
       </section>
+      </>
+      )}
     </div>
   );
 }

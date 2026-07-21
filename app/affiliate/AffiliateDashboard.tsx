@@ -7,8 +7,10 @@ import {
   Link2, CalendarPlus, CalendarDays, Clock, Camera, Settings,
   Sparkles, Check, AlertCircle, Pencil, TrendingUp, Trash2,
   Users, ShoppingBag, Timer, Loader2, Image as ImageIcon, Send, Lock,
+  MessageCircle, Package,
 } from "lucide-react";
 import TabBar from "@/components/TabBar";
+import SampleTab from "./SampleTab";
 import PostGrid, { PostItem } from "./PostGrid";
 import ImageModal from "@/components/ImageModal";
 import { compressScreenshot, fmtBytes, MAX_UPLOAD_BYTES } from "@/lib/image";
@@ -31,7 +33,15 @@ type Booking = {
 
 const MAX_PROFILES = 4;
 
-export default function AffiliateDashboard({ userName }: { userName: string }) {
+export default function AffiliateDashboard({
+  userName,
+  marketerName,
+  waGroupUrl,
+}: {
+  userName: string;
+  marketerName?: string | null;
+  waGroupUrl?: string | null;
+}) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [posts, setPosts] = useState<PostItem[]>([]);
@@ -113,12 +123,25 @@ export default function AffiliateDashboard({ userName }: { userName: string }) {
           <h1 className="text-2xl font-extrabold tracking-tight text-ink">Hi {userName}</h1>
           <p className="text-sm text-muted-fg">
             Schedule your lives and upload your results.
+            {marketerName && (
+              <> Marketer anda: <span className="font-semibold text-ink">{marketerName}</span>.</>
+            )}
           </p>
         </div>
-        <Link href="/profile" className="btn-ghost !py-2">
-          <Settings className="h-4 w-4" aria-hidden="true" />
-          Profile &amp; TikTok links
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Appears the moment the assigned marketer sets a group link. */}
+          {waGroupUrl && (
+            <a href={waGroupUrl} target="_blank" rel="noopener noreferrer"
+              className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-lift transition-colors duration-200 hover:bg-emerald-700">
+              <MessageCircle className="h-4 w-4" aria-hidden="true" />
+              Link Group WhatsApp
+            </a>
+          )}
+          <Link href="/profile" className="btn-ghost !py-2">
+            <Settings className="h-4 w-4" aria-hidden="true" />
+            Profile &amp; TikTok links
+          </Link>
+        </div>
       </div>
 
       <DateRangeFilter count={filtered.length} profiles={profiles} />
@@ -154,6 +177,7 @@ export default function AffiliateDashboard({ userName }: { userName: string }) {
         { key: "schedule", label: "My Scheduled Lives", icon: CalendarDays },
         { key: "pending",  label: "Pending Post",       icon: Clock, activeTone: "red" },
         { key: "done",     label: "Done Post",          icon: Send,  activeTone: "emerald" },
+        { key: "sample",   label: "Sample",             icon: Package },
       ]} />
 
       <section>
@@ -203,6 +227,8 @@ export default function AffiliateDashboard({ userName }: { userName: string }) {
               reload={load} />
           </>
         )}
+
+        {tab === "sample" && <SampleTab />}
       </section>
 
       <ScheduleModal

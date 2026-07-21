@@ -1,0 +1,72 @@
+/** "14:30" -> "2:30 PM". Returns "" for empty/invalid input. */
+export function fmtTime(t?: string | null): string {
+  if (!t) return "";
+  const [hRaw, mRaw] = String(t).split(":");
+  const h24 = Number(hRaw);
+  if (!Number.isFinite(h24)) return String(t);
+  const suffix = h24 >= 12 ? "PM" : "AM";
+  const h12 = h24 % 12 || 12;
+  return `${h12}:${(mRaw ?? "00").padStart(2, "0")} ${suffix}`;
+}
+
+/**
+ * "2026-07-21" -> "21-07-2026". Dates are stored ISO (sortable) and only
+ * formatted for display.
+ */
+export function fmtDate(d?: string | null): string {
+  if (!d) return "";
+  const m = String(d).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : String(d);
+}
+
+/** "10:00","12:00" -> "10:00 AM – 12:00 PM". End is optional. */
+export function fmtTimeRange(start?: string | null, end?: string | null): string {
+  const s = fmtTime(start);
+  const e = fmtTime(end);
+  return e ? `${s} – ${e}` : s;
+}
+
+/**
+ * Parse a live duration into seconds. Handles the TikTok recap format
+ * ("2h 0m 25s", "45m 10s", "90s") and clock format ("02:00:25", "20:15").
+ * Returns 0 for anything unrecognised so sums stay safe.
+ */
+export function durationToSeconds(d?: string | null): number {
+  if (!d) return 0;
+  const str = String(d).trim();
+
+  const h = str.match(/(\d+)\s*h/i);
+  const m = str.match(/(\d+)\s*m/i);
+  const s = str.match(/(\d+)\s*s/i);
+  if (h || m || s) {
+    return (
+      (h ? Number(h[1]) * 3600 : 0) +
+      (m ? Number(m[1]) * 60 : 0) +
+      (s ? Number(s[1]) : 0)
+    );
+  }
+
+  // clock style hh:mm:ss or mm:ss
+  const parts = str.split(":").map((p) => Number(p));
+  if (parts.length && parts.every((n) => Number.isFinite(n))) {
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+  }
+  return 0;
+}
+
+/** 7225 -> "2h 0m". Under an hour -> "45m 10s". Under a minute -> "25s". */
+export function fmtDuration(totalSeconds: number): string {
+  const sec = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (h) return `${h}h ${m}m`;
+  if (m) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+/** Sum a list of duration strings and format the total. */
+export function sumDurations(list: (string | null | undefined)[]): string {
+  return fmtDuration(list.reduce((acc, d) => acc + durationToSeconds(d), 0));
+}

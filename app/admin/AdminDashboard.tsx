@@ -1,0 +1,351 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import {
+  TrendingUp, Users, ShoppingBag, UserRound, Bot, Check, ExternalLink,
+  Loader2, KeyRound, Clock, AlertTriangle, CalendarDays, Timer,
+} from "lucide-react";
+import DateRangeFilter from "@/components/DateRangeFilter";
+import Pagination from "@/components/Pagination";
+import { getPage, paginate } from "@/lib/pagination";
+import { useSearchParams } from "next/navigation";
+import { fmtDate, fmtTimeRange, sumDurations } from "@/lib/format";
+
+type Marketer = { id: number; name: string; email: string };
+type Affiliate = {
+  id: number; name: string; email: string; phone: string | null;
+  marketer_id: number | null; marketer_name: string | null;
+  lives: number; done: number; gmv: number; items: number; viewers: number;
+};
+type Row = {
+  booking_id: number; affiliate: string; marketer: string | null;
+  profile_label: string; profile_url: string;
+  live_date: string; start_time: string; end_time: string | null; status: string;
+  gmv: number | null; viewers: number | null; items_sold: number | null;
+  duration_live: string | null; screenshot_path: string | null;
+};
+
+export default function AdminDashboard({
+  marketers, affiliates, rows,
+}: { marketers: Marketer[]; affiliates: Affiliate[]; rows: Row[] }) {
+  const router = useRouter();
+  const [savingId, setSavingId] = useState<number | null>(null);
+
+  async function assign(affiliateId: number, marketerId: string) {
+    setSavingId(affiliateId);
+    await fetch("/api/admin/assign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        affiliate_id: affiliateId,
+        marketer_id: marketerId ? Number(marketerId) : null,
+      }),
+    });
+    setSavingId(null);
+    router.refresh();
+  }
+
+  const totalGmv = rows.reduce((s, r) => s + (r.gmv || 0), 0);
+  const totalItems = rows.reduce((s, r) => s + (r.items_sold || 0), 0);
+  const totalViewers = rows.reduce((s, r) => s + (r.viewers || 0), 0);
+  const completed = rows.filter((r) => r.status === "completed").length;
+  const pending = rows.filter((r) => r.status === "pending").length;
+  const totalDuration = sumDurations(
+    rows.filter((r) => r.status === "completed").map((r) => r.duration_live)
+  );
+
+  const params = useSearchParams();
+  const page = getPage(params.get("page"));
+  const pageRows = paginate(rows, page);
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-extrabold tracking-tight text-ink">Admin Console</h1>
+        <p className="text-sm text-muted-fg">
+          Assign affiliates to marketers and review all live reporting.
+        </p>
+      </div>
+
+      <DateRangeFilter count={rows.length} />
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Kpi Icon={CalendarDays} label="Total Live" value={rows.length} />
+        <Kpi Icon={Clock} label="Total Pending Live" value={pending} tone="amber" />
+        <Kpi Icon={Check} label="Total Completed Live" value={completed} tone="emerald" />
+        <Kpi Icon={Timer} label="Total Duration Completed Live" value={totalDuration} />
+
+        <Kpi Icon={TrendingUp} label="Total GMV" value={`RM${totalGmv.toFixed(2)}`}
+          accent className="col-span-2" />
+        <Kpi Icon={Users} label="Total Viewers" value={totalViewers} />
+        <Kpi Icon={ShoppingBag} label="Item Sold" value={totalItems} />
+      </div>
+
+      <AiSettingsCard />
+
+      <section>
+        <h2 className="section-title mb-3">Affiliates &amp; Assignment</h2>
+        <div className="grid gap-3 md:grid-cols-2">
+          {affiliates.map((a) => (
+            <div key={a.id} className="card flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate font-bold text-ink">{a.name}</p>
+                  <p className="truncate text-xs text-muted-fg">
+                    {a.email}{a.phone ? ` · ${a.phone}` : ""}
+                  </p>
+                </div>
+                <span className="chip shrink-0 bg-primary/10 text-primary">
+                  RM{Number(a.gmv).toFixed(0)}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <MiniStat label="Lives" value={`${a.done}/${a.lives}`} />
+                <MiniStat label="Items" value={a.items} />
+                <MiniStat label="Viewers" value={a.viewers} />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
+                  htmlFor={`mk-${a.id}`}>
+                  Assigned marketer
+                </label>
+                <div className="flex items-center gap-2">
+                  <select id={`mk-${a.id}`} className="input cursor-pointer !py-2 text-sm"
+                    value={a.marketer_id ?? ""} disabled={savingId === a.id}
+                    onChange={(e) => assign(a.id, e.target.value)}>
+                    <option value="">— Unassigned —</option>
+                    {marketers.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                  {savingId === a.id && (
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-fg" aria-hidden="true" />
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+          {affiliates.length === 0 && (
+            <p className="card text-center text-sm text-muted-fg">No affiliates registered yet.</p>
+          )}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="section-title mb-3">All Live Reporting</h2>
+        <div className="glass overflow-x-auto rounded-2xl">
+          <table className="w-full min-w-[980px] text-sm">
+            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+              <tr>
+                <th className="px-4 py-3 font-semibold">Affiliate</th>
+                <th className="px-4 py-3 font-semibold">Marketer</th>
+                <th className="px-4 py-3 font-semibold">Date / Time</th>
+                <th className="px-4 py-3 font-semibold">Status</th>
+                <th className="px-4 py-3 text-right font-semibold">GMV</th>
+                <th className="px-4 py-3 text-right font-semibold">Viewers</th>
+                <th className="px-4 py-3 text-right font-semibold">Items</th>
+                <th className="px-4 py-3 font-semibold">Duration</th>
+                <th className="px-4 py-3 font-semibold">Proof</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageRows.map((r) => (
+                <tr key={r.booking_id}
+                  className="border-t border-line/60 transition-colors duration-200 hover:bg-white/50">
+                  <td className="px-4 py-3 font-semibold text-ink">{r.affiliate}</td>
+                  <td className="px-4 py-3">
+                    {r.marketer ?? <span className="text-muted-fg/50">—</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="text-ink">{fmtDate(r.live_date)}</div>
+                    <div className="text-xs text-muted-fg">
+                      {fmtTimeRange(r.start_time, r.end_time)}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
+                  <td className="px-4 py-3 text-right font-semibold text-ink">
+                    {r.gmv != null ? `RM${r.gmv}` : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-right">{r.viewers ?? "—"}</td>
+                  <td className="px-4 py-3 text-right">{r.items_sold ?? "—"}</td>
+                  <td className="px-4 py-3">{r.duration_live ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    {r.screenshot_path ? (
+                      <a href={r.screenshot_path} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline">
+                        View <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                      </a>
+                    ) : <span className="text-xs text-muted-fg/50">none</span>}
+                  </td>
+                </tr>
+              ))}
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-4 py-12 text-center text-muted-fg">
+                    No lives recorded yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <Pagination page={page} total={rows.length} />
+      </section>
+    </div>
+  );
+}
+
+function AiSettingsCard() {
+  const [cfg, setCfg] = useState<any>(null);
+  const [key, setKey] = useState("");
+  const [model, setModel] = useState("");
+  const [base, setBase] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function load() {
+    const d = await fetch("/api/admin/settings").then((r) => r.json());
+    setCfg(d);
+    setModel(d.model || "");
+    setBase(d.base || "");
+  }
+  useEffect(() => { load(); }, []);
+
+  async function save() {
+    setSaving(true); setSaved(false);
+    await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, model, base }),
+    });
+    setKey(""); setSaving(false); setSaved(true); load();
+  }
+
+  return (
+    <section className="card">
+      <div className="mb-1 flex items-center gap-2">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent/10 text-accent">
+          <Bot className="h-4 w-4" aria-hidden="true" />
+        </span>
+        <h2 className="font-bold text-ink">AI Reader — GRSAI (Gemini 2.5 Flash)</h2>
+      </div>
+      <p className="mb-4 text-xs text-muted-fg">
+        The key &amp; model used to auto-read live screenshots. Stored in the database.
+      </p>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <label className="label" htmlFor="grsai-key">GRSAI API Key</label>
+          <div className="relative">
+            <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-fg"
+              aria-hidden="true" />
+            <input id="grsai-key" className="input pl-9" type="password" autoComplete="off"
+              placeholder={cfg?.key_set ? `Saved (${cfg.key_hint}) — blank to keep` : "Paste GRSAI API key"}
+              value={key} onChange={(e) => setKey(e.target.value)} />
+          </div>
+          {cfg && (
+            <p className="mt-1.5 flex items-center gap-1.5 text-[11px]">
+              <span className={`h-1.5 w-1.5 rounded-full ${cfg.key_set ? "bg-emerald-500" : "bg-amber-500"}`} />
+              <span className="text-muted-fg">
+                {cfg.key_set
+                  ? <>Connected <span className="text-muted-fg/70">({cfg.key_source})</span></>
+                  : "No key set — screenshots must be filled in manually"}
+              </span>
+            </p>
+          )}
+        </div>
+        <div>
+          <label className="label" htmlFor="grsai-model">Model</label>
+          <input id="grsai-model" className="input" placeholder="gemini-2.5-flash"
+            value={model} onChange={(e) => setModel(e.target.value)} />
+        </div>
+        <div>
+          <label className="label" htmlFor="grsai-base">Base URL</label>
+          <input id="grsai-base" className="input" placeholder="https://grsaiapi.com/v1"
+            value={base} onChange={(e) => setBase(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center gap-3">
+        <button className="btn-accent" onClick={save} disabled={saving}>
+          {saving
+            ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Saving…</>
+            : "Save AI settings"}
+        </button>
+        {saved && (
+          <span className="flex items-center gap-1 text-sm font-medium text-emerald-600">
+            <Check className="h-4 w-4" aria-hidden="true" />Saved
+          </span>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function Kpi({ Icon, label, value, sub, accent, tone, fill, className = "" }: {
+  Icon: typeof TrendingUp;
+  label: string;
+  value: React.ReactNode;
+  sub?: string;
+  accent?: boolean;
+  tone?: "amber" | "emerald";
+  fill?: "yellow" | "orange" | "red" | "emerald";
+  className?: string;
+}) {
+  const solid = accent || !!fill;
+
+  const bg = accent
+    ? "bg-gradient-to-br from-primary to-primary-hover text-white"
+    : fill === "yellow"
+      ? "bg-gradient-to-br from-amber-500 to-yellow-500 text-white"
+      : fill === "orange"
+        ? "bg-gradient-to-br from-orange-500 to-orange-600 text-white"
+        : fill === "red"
+          ? "bg-gradient-to-br from-red-500 to-red-600 text-white"
+          : fill === "emerald"
+            ? "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white"
+            : "glass text-ink";
+
+  const iconTone = solid
+    ? "text-white/80"
+    : tone === "amber" ? "text-amber-600"
+      : tone === "emerald" ? "text-emerald-600"
+      : "text-muted-fg";
+
+  return (
+    <div className={`rounded-2xl p-4 shadow-lift ${bg} ${className}`}>
+      <Icon className={`mb-2 h-4 w-4 ${iconTone}`} aria-hidden="true" />
+      <p className="text-xl font-extrabold leading-tight">{value}</p>
+      <p className={`text-xs ${solid ? "text-white/90" : "text-muted-fg"}`}>{label}</p>
+      {sub && <p className={`text-[11px] ${solid ? "text-white/75" : "text-muted-fg/70"}`}>{sub}</p>}
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-line bg-white/60 py-2 text-center">
+      <p className="text-sm font-extrabold text-ink">{value}</p>
+      <p className="text-[10px] uppercase tracking-wide text-muted-fg">{label}</p>
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, { cls: string; Icon: typeof Check; label: string }> = {
+    pending: { cls: "bg-amber-100 text-amber-700", Icon: Clock, label: "Pending" },
+    completed: { cls: "bg-emerald-100 text-emerald-700", Icon: Check, label: "Completed" },
+    missed: { cls: "bg-danger/10 text-danger", Icon: AlertTriangle, label: "Missed" },
+  };
+  const s = map[status] ?? { cls: "bg-muted text-muted-fg", Icon: Clock, label: status };
+  const Icon = s.Icon;
+  return (
+    <span className={`chip ${s.cls}`}>
+      <Icon className="h-3 w-3" aria-hidden="true" />
+      {s.label}
+    </span>
+  );
+}

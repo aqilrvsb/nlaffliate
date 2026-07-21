@@ -37,7 +37,7 @@ type Live = {
   note: string | null; status: string; post_url: string | null;
   ads_budget: number | null; affiliate_can_edit: number;
   ad_spend: number | null; gross_revenue: number | null; roi: number | null;
-  brand_id: number | null; brand_name: string | null;
+  brand_id: number | null; brand_name: string | null; source: string;
   live_title: string | null;
   gmv: number | null; viewers: number | null; items_sold: number | null;
   duration_live: string | null; screenshot_path: string | null;
@@ -74,9 +74,7 @@ const AFFILIATE_CHILDREN = [
   { key: "success", label: "Success Affiliate", icon: CheckCircle2 },
   { key: "posting", label: "Posting Affiliate", icon: Send },
   { key: "reporting", label: "Reporting Affiliate", icon: BarChart3 },
-  // "unknown" is intentionally absent from the sidebar — unmatched bulk rows
-  // are still collected and the ?tab=unknown route still renders, so nothing
-  // is lost, but it is not a place marketers need to visit day to day.
+  { key: "unknown", label: "Unknown Affiliate", icon: HelpCircle },
 ] as const;
 
 const PILLAR_CHILDREN = [
@@ -314,7 +312,7 @@ export default function MarketerShell({
           )}
           {active === "pending" && (
             <ScheduleTab title="Pending lives" rows={pending} kind="pending"
-              showUpload defaultMode="today" />
+              showUpload affiliates={affiliates} defaultMode="today" />
           )}
           {active === "success" && (
             <ScheduleTab title="Completed lives" rows={success} kind="success"
@@ -477,8 +475,9 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
 
 /* ── Schedule (pending / success) ──────────────────────── */
 
-function ScheduleTab({ title, rows, kind, showUpload, defaultMode = "today" }: {
+function ScheduleTab({ title, rows, kind, showUpload, affiliates, defaultMode = "today" }: {
   title: string; rows: Live[]; kind: "pending" | "success"; showUpload?: boolean;
+  affiliates?: Affiliate[];
   defaultMode?: "today" | "month" | "all";
 }) {
   const params = useSearchParams();
@@ -491,12 +490,14 @@ function ScheduleTab({ title, rows, kind, showUpload, defaultMode = "today" }: {
 
   return (
     <>
-      <div className="flex flex-wrap items-start gap-3">
-        <div className="min-w-[280px] flex-1">
-          <DateRangeFilter count={shown.length} defaultMode={defaultMode} />
+      <DateRangeFilter count={shown.length} defaultMode={defaultMode} />
+
+      {showUpload && (
+        <div className="grid gap-3 lg:grid-cols-2">
+          <LivePerformanceImport affiliates={affiliates ?? []} />
+          <BulkUpload />
         </div>
-        {showUpload && <BulkUpload />}
-      </div>
+      )}
 
       <BrandFilterCard id={`sched-brand-${kind}`} value={brand} onChange={setBrand} />
 
@@ -652,6 +653,12 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
               <Tag className="h-3 w-3" aria-hidden="true" />
               {l.brand_name || "Tiada brand"}
             </span>
+            {l.source === "inhouse" && (
+              <span className="chip bg-violet-100 text-violet-700"
+                title="Dari import Creator Live Performance — tiada jadual sepadan">
+                Inhouse
+              </span>
+            )}
           </div>
           {l.live_title && (
             <p className="mt-1 text-sm font-bold text-ink">{l.live_title}</p>
@@ -899,6 +906,7 @@ function BulkUpload() {
     <div className="card w-full sm:w-auto">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-extrabold text-white">2</span>
           <ImagePlus className="h-4 w-4 text-primary" aria-hidden="true" />
           Upload LIVE analytics
         </p>
@@ -933,6 +941,108 @@ function BulkUpload() {
         </p>
       )}
       {error && <p className="mt-2 text-xs text-danger">{error}</p>}
+    </div>
+  );
+}
+
+/**
+ * Step 1 — Creator Live Performance (.xlsx).
+ *
+ * The export carries no creator column, so the marketer names the TikTok
+ * profile it belongs to. Rows that match an existing schedule fill in its
+ * figures; rows with no schedule are created as Inhouse so the live is not
+ * lost, and the marketer can tag the brand afterwards on the card.
+ */
+function LivePerformanceImport({ affiliates }: { affiliates: Affiliate[] }) {
+  const router = useRouter();
+  const [file, setFile] = useState<File | null>(null);
+  const [profileId, setProfileId] = useState("");
+  const [brand, setBrand] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
+
+  // Flatten to "Affiliate — Profile" so one dropdown identifies both.
+  const options = affiliates.flatMap((a) =>
+    (a.links || []).map((p) => ({ id: p.id, label: `${a.name} — ${p.label}` }))
+  );
+
+  async function submit() {
+    if (!file) return setError("Choose the .xlsx export.");
+    if (!profileId) return setError("Pick whose TikTok profile this is.");
+    setBusy(true); setError(""); setMsg("");
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("profile_id", profileId);
+    if (brand) fd.append("brand_id", brand);
+    const res = await fetch("/api/marketer/live-performance/import", { method: "POST", body: fd });
+    const data = await res.json();
+    setBusy(false);
+    if (!res.ok) return setError(data.error || "Import failed");
+    setMsg(
+      `${data.matched} matched · ${data.inhouse} inhouse${data.skipped ? ` · ${data.skipped} skipped` : ""}`
+    );
+    setFile(null);
+    router.refresh();
+  }
+
+  return (
+    <div className="card space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-extrabold text-white">1</span>
+          <FileSpreadsheet className="h-4 w-4 text-primary" aria-hidden="true" />
+          Creator Live Performance (.xlsx)
+        </p>
+        <a href="/examples/creator-live-performance-sample.xlsx" download
+          className="inline-flex items-center gap-1 text-[11px] font-semibold text-accent hover:underline">
+          <FileSpreadsheet className="h-3 w-3" aria-hidden="true" />
+          Muat turun contoh
+        </a>
+      </div>
+
+      <p className="text-[11px] text-muted-fg">
+        TikTok → Creator Live Performance export. Baris yang padan dengan
+        jadual akan diisi automatik; baris tanpa jadual akan dibuka sebagai{" "}
+        <b>Inhouse</b> supaya tiada live tercicir.
+      </p>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[200px]">
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
+            htmlFor="lp-profile">Affiliate / profile</label>
+          <select id="lp-profile" className="input cursor-pointer !py-2 text-sm"
+            value={profileId} onChange={(e) => setProfileId(e.target.value)}>
+            <option value="">— Pilih profile —</option>
+            {options.map((o) => (
+              <option key={o.id} value={o.id}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="min-w-[160px]">
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
+            htmlFor="lp-brand">Brand (optional)</label>
+          <BrandSelect id="lp-brand" value={brand} onChange={setBrand} allowAll
+            className="!py-2 text-sm" />
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg">File</label>
+          <label className="btn-ghost cursor-pointer !py-2">
+            {file ? <><Check className="h-4 w-4" aria-hidden="true" />{file.name.slice(0, 18)}</>
+                  : <><Upload className="h-4 w-4" aria-hidden="true" />Choose .xlsx</>}
+            <input type="file" accept=".xlsx,.xls" className="sr-only"
+              onChange={(e) => { setFile(e.target.files?.[0] || null); setError(""); setMsg(""); }} />
+          </label>
+        </div>
+        <button className="btn !py-2.5" onClick={submit} disabled={busy}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                : <Upload className="h-4 w-4" aria-hidden="true" />}
+          Submit
+        </button>
+      </div>
+
+      {msg && <p className="text-xs font-medium text-emerald-600">{msg}</p>}
+      {error && <p className="text-xs text-danger">{error}</p>}
     </div>
   );
 }

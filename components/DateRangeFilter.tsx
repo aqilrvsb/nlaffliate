@@ -50,7 +50,7 @@ export default function DateRangeFilter({
     if (key !== "profile") next.delete("all");
     next.delete("page");
     const qs = next.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname);
+    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
 
   /** Today only. Sets the dates explicitly so it works regardless of the
@@ -62,7 +62,7 @@ export default function DateRangeFilter({
     next.set("to", t);
     next.delete("all");
     next.delete("page");
-    router.push(`${pathname}?${next.toString()}`);
+    router.push(`${pathname}?${next.toString()}`, { scroll: false });
   }
 
   /** Whole of the current month. */
@@ -73,7 +73,7 @@ export default function DateRangeFilter({
     next.set("to", m.to);
     next.delete("all");
     next.delete("page");
-    router.push(`${pathname}?${next.toString()}`);
+    router.push(`${pathname}?${next.toString()}`, { scroll: false });
   }
 
   return (

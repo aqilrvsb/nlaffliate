@@ -35,7 +35,9 @@ export default function TabBar({
     else next.set(param, key);
     next.delete("page"); // switching tabs starts at page 1
     const qs = next.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname);
+    // scroll:false — switching tabs is an in-place swap. Next's default jump
+    // to the top would throw the reader back above the KPI cards each click.
+    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
 
   return (

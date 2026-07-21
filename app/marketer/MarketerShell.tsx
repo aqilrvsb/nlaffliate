@@ -110,7 +110,7 @@ export default function MarketerShell({
     else next.set("tab", key);
     next.delete("page");
     const qs = next.toString();
-    router.push(qs ? `/marketer?${qs}` : "/marketer");
+    router.push(qs ? `/marketer?${qs}` : "/marketer", { scroll: false });
     setNavOpen(false);
   }
 

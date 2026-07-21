@@ -27,7 +27,7 @@ export default function Pagination({
     if (p <= 1) next.delete("page");
     else next.set("page", String(p));
     const qs = next.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname);
+    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
 
   // Compact window of page numbers around the current page.

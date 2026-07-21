@@ -539,6 +539,10 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
   const router = useRouter();
   const done = kind === "success";
   const hasProof = !!l.screenshot_path;
+  // Results can exist without a screenshot now (entered by hand), so the
+  // panel keys off the figures rather than the image.
+  const hasResults =
+    l.gmv != null || l.viewers != null || l.items_sold != null || !!l.duration_live;
 
   const [budget, setBudget] = useState(l.ads_budget != null ? String(l.ads_budget) : "");
   const [canEdit, setCanEdit] = useState(l.affiliate_can_edit === 1);
@@ -696,10 +700,14 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
         </div>
       )}
 
-      {hasProof && (
-        <div className="mt-4 grid grid-cols-1 gap-4 border-t border-line pt-4 sm:grid-cols-[140px_1fr]">
-          <ImageModal src={l.screenshot_path!} title={l.live_title || "Live result"}
-            className="self-start" />
+      {(hasProof || hasResults) && (
+        <div className={`mt-4 grid grid-cols-1 gap-4 border-t border-line pt-4 ${
+          hasProof ? "sm:grid-cols-[140px_1fr]" : ""
+        }`}>
+          {hasProof && (
+            <ImageModal src={l.screenshot_path!} title={l.live_title || "Live result"}
+              className="self-start" />
+          )}
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-bold text-ink">Live Results</p>

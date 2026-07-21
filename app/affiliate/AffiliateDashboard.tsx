@@ -682,8 +682,14 @@ function ResultView({ b, reload }: { b: Booking; reload: () => void }) {
     reload();
   }
 
+  // Only reserve the thumbnail column when there is actually a screenshot.
+  // A result can now exist without one (the marketer can enter figures by
+  // hand), and with the column always present the stats were being squeezed
+  // into the 140px track meant for the image.
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-[140px_1fr]">
+    <div className={`grid grid-cols-1 gap-4 ${
+      b.screenshot_path ? "sm:grid-cols-[140px_1fr]" : ""
+    }`}>
       {b.screenshot_path && (
         <ImageModal src={b.screenshot_path} title={b.live_title || "Live result"}
           className="self-start" />

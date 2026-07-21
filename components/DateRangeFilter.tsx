@@ -15,10 +15,13 @@ type ProfileOption = { id: number; label: string; url?: string };
  */
 export default function DateRangeFilter({
   count,
+  countNoun = ["live", "lives"],
   profiles,
   defaultMode = "today",
 }: {
   count?: number;
+  /** [singular, plural] for the count label — not every page counts lives. */
+  countNoun?: [string, string];
   profiles?: ProfileOption[];
   defaultMode?: "today" | "month" | "all";
 }) {
@@ -126,7 +129,7 @@ export default function DateRangeFilter({
 
       {typeof count === "number" && (
         <span className="self-center text-xs text-muted-fg">
-          {count} {count === 1 ? "live" : "lives"}
+          {count} {count === 1 ? countNoun[0] : countNoun[1]}
           {showAll ? " total" : " in range"}
         </span>
       )}

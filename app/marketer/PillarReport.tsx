@@ -101,7 +101,8 @@ export default function PillarReport() {
         </p>
       </div>
 
-      <DateRangeFilter count={entries.length} />
+      <DateRangeFilter count={entries.length} countNoun={["entri", "entri"]}
+        defaultMode="month" />
 
       {loading ? (
         <p className="flex items-center gap-2 text-sm text-muted-fg">

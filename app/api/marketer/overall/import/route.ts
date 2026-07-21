@@ -46,8 +46,15 @@ export async function POST(req: Request) {
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(reportDate))
     return NextResponse.json({ error: "Pick a valid report date." }, { status: 400 });
-  if (!img1 && !img2)
-    return NextResponse.json({ error: "Attach at least one screenshot." }, { status: 400 });
+  // Both panels are required. Overview carries Cost / SKU orders /
+  // Cost-per-order / Gross revenue / ROI and Key metrics carries GMV /
+  // Visitors / Impressions / Clicks — one alone stores a half-empty report,
+  // and the replace-by-date rule means it would overwrite a complete one.
+  if (!img1 || !img2)
+    return NextResponse.json(
+      { error: "Attach both Image 1 (Overview) and Image 2 (Key metrics)." },
+      { status: 400 }
+    );
 
   if (!brandRaw || !Number.isFinite(brandId)) {
     return NextResponse.json({ error: "Pick a brand." }, { status: 400 });

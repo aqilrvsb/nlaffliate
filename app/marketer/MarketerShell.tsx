@@ -143,7 +143,7 @@ export default function MarketerShell({
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-fg shadow-lift">
               <Radio className="h-4 w-4" aria-hidden="true" />
             </span>
-            <span className="text-base font-extrabold tracking-tight text-ink">LiveAffiliate</span>
+            <span className="text-base font-extrabold tracking-tight text-ink">NL Affiliate Army</span>
           </div>
 
           <span className="mb-2 px-2 text-[11px] font-bold uppercase tracking-widest text-muted-fg">

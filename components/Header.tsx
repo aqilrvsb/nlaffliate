@@ -21,7 +21,7 @@ export default function Header({ user }: { user: SessionUser }) {
             <Radio className="h-4 w-4" aria-hidden="true" />
           </span>
           <span className="truncate text-base font-extrabold tracking-tight text-ink">
-            LiveAffiliate
+            NL Affiliate Army
           </span>
           <span className={`chip ${meta.chip} hidden sm:inline-flex`}>
             <RoleIcon className="h-3 w-3" aria-hidden="true" />

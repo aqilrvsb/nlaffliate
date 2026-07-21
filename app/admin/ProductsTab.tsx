@@ -5,6 +5,7 @@ import {
   Package, Plus, Pencil, Trash2, Loader2, AlertCircle, ImagePlus, Check,
 } from "lucide-react";
 import Modal from "@/components/Modal";
+import { compressScreenshot, fmtBytes, MAX_UPLOAD_BYTES } from "@/lib/image";
 
 export type Product = { id: number; name: string; image_url: string | null };
 
@@ -120,13 +121,26 @@ function ProductModal({
     setError("");
   }, [open, product]);
 
-  function pick(f: File | null) {
-    setFile(f);
-    setPreview(f ? URL.createObjectURL(f) : product?.image_url || null);
+  async function pick(f: File | null) {
+    if (!f) {
+      setFile(null);
+      setPreview(product?.image_url || null);
+      return;
+    }
+    // Vercel caps a serverless request body at 4.5 MB, and a photo straight
+    // off a phone is routinely 6–8 MB — it would hang and then fail. Shrink
+    // it in the browser first, same as the live-screenshot flow.
+    setError("");
+    const { file: out } = await compressScreenshot(f);
+    setFile(out);
+    setPreview(URL.createObjectURL(out));
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (file && file.size > MAX_UPLOAD_BYTES) {
+      return setError(`Image too large (${fmtBytes(file.size)}). Use one under ${fmtBytes(MAX_UPLOAD_BYTES)}.`);
+    }
     setSaving(true); setError("");
 
     const fd = new FormData();

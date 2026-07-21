@@ -267,7 +267,7 @@ export default async function Home() {
 
       {/* ── AI video supply ───────────────────────────── */}
       <section className="mx-auto max-w-6xl px-4 py-14">
-        <div className="card grid items-center gap-8 lg:grid-cols-[1fr_minmax(0,380px)]">
+        <div className="card grid items-center gap-8 lg:grid-cols-[1fr_minmax(0,480px)]">
           <div>
             <span className="chip mb-3 bg-accent/10 text-accent">
               <Video className="h-3 w-3" aria-hidden="true" />Video AI Percuma
@@ -295,16 +295,16 @@ export default async function Home() {
             </ul>
           </div>
 
-          {/* One live clip + three covers. Capped width so this column's
-              height stays near the copy's — a full-width 2×2 of 9:16 tiles
-              ran ~950px tall and left the text stranded in dead space. */}
-          <div className="mx-auto grid w-full max-w-[380px] grid-cols-2 gap-3">
+          {/* A single filmstrip row: stacking 9:16 tiles two-deep made this
+              column ~666px against ~320px of copy, so `items-center` left a
+              wide blank band. One row keeps the two columns the same height. */}
+          <div className="mx-auto grid w-full max-w-[480px] grid-cols-3 gap-3">
             <UgcVideo
               src={SUPPLY_VIDEO}
-              label="Video AI kami"
+              label="Video AI"
               className="aspect-[9/16] w-full"
             />
-            {UGC_COVERS.slice(1).map(({ t, s, src }) => (
+            {UGC_COVERS.slice(1, 3).map(({ t, s, src }) => (
               <div key={t} className="relative aspect-[9/16] overflow-hidden rounded-xl shadow-lift">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover" />

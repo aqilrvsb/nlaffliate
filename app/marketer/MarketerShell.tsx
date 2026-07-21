@@ -11,6 +11,8 @@ import {
   Send, Boxes, ClipboardList, Tag,
 } from "lucide-react";
 import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
+import ExampleHint from "@/components/ExampleHint";
+import { compressScreenshot } from "@/lib/image";
 import PillarCreate from "./PillarCreate";
 import PillarReport from "./PillarReport";
 import DateRangeFilter from "@/components/DateRangeFilter";
@@ -548,9 +550,12 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
   const [spend, setSpend] = useState(l.ad_spend != null ? String(l.ad_spend) : "");
   const [gross, setGross] = useState(l.gross_revenue != null ? String(l.gross_revenue) : "");
   const [roi, setRoi] = useState(l.roi != null ? String(l.roi) : "");
+  const [dur, setDur] = useState(l.duration_live ?? "");
 
   async function saveResults() {
-    const d = await patch({ ad_spend: spend, gross_revenue: gross, roi });
+    const d = await patch({
+      ad_spend: spend, gross_revenue: gross, roi, duration_live: dur,
+    });
     if (d) { setResultsOpen(false); router.refresh(); }
   }
 
@@ -660,7 +665,7 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
       {/* Manual ad-results entry — Spend / Gross Revenue / ROI. Saving
           moves the live to Success. */}
       {!done && resultsOpen && (
-        <div className="mt-3 grid grid-cols-1 gap-2 rounded-xl border border-line bg-white/60 p-3 sm:grid-cols-4">
+        <div className="mt-3 grid grid-cols-1 gap-2 rounded-xl border border-line bg-white/60 p-3 sm:grid-cols-5">
           <div>
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg">Spend (RM)</label>
             <input type="number" min="0" step="any" className="input !py-1.5 text-sm"
@@ -675,6 +680,11 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg">ROI</label>
             <input type="number" step="any" className="input !py-1.5 text-sm"
               value={roi} onChange={(e) => setRoi(e.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg">Duration</label>
+            <input className="input !py-1.5 text-sm" placeholder="e.g. 2h 0m 25s"
+              value={dur} onChange={(e) => setDur(e.target.value)} />
           </div>
           <div className="flex items-end gap-2">
             <button className="btn !py-1.5 text-xs" onClick={saveResults} disabled={busy}>
@@ -747,9 +757,13 @@ function BulkUpload() {
   const [result, setResult] = useState<{ matched: number; unknown: number; total: number } | null>(null);
   const [error, setError] = useState("");
 
-  function setSlot(i: number, f: File | null) {
-    setFiles((prev) => prev.map((x, idx) => (idx === i ? f : x)));
+  // Shrink before upload: these are phone screenshots that also get base64'd
+  // for Gemini, so raw files are slow on the wire and can trip Vercel's 4.5MB
+  // request cap when three are attached at once.
+  async function setSlot(i: number, f: File | null) {
     setResult(null); setError("");
+    const out = f ? (await compressScreenshot(f)).file : null;
+    setFiles((prev) => prev.map((x, idx) => (idx === i ? out : x)));
   }
 
   const chosen = files.filter((f): f is File => !!f);
@@ -770,10 +784,17 @@ function BulkUpload() {
 
   return (
     <div className="card w-full sm:w-auto">
-      <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-ink">
-        <ImagePlus className="h-4 w-4 text-primary" aria-hidden="true" />
-        Upload LIVE analytics
-      </p>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
+          <ImagePlus className="h-4 w-4 text-primary" aria-hidden="true" />
+          Upload LIVE analytics
+        </p>
+        <ExampleHint
+          src="/examples/bulk-live-analytics.jpeg"
+          alt="Contoh screenshot LIVE analytics"
+          caption="Senarai live dari TikTok. Setiap baris perlu ada: nama live, tarikh & masa, tempoh, spend, gross revenue, ROI. Boleh muat naik sehingga 3 gambar."
+        />
+      </div>
       <div className="flex items-center gap-2">
         {[0, 1, 2].map((i) => (
           <label key={i}
@@ -1028,6 +1049,11 @@ function ProductImport() {
         <p className="mt-1 text-[11px] text-muted-fg">
           TikTok Ads → Product campaign data export. <b>Cost</b> is shown as <b>Product Spend</b>. Zero-cost rows are skipped.
         </p>
+        <a href="/examples/product-campaign-data-sample.xlsx" download
+          className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-accent hover:underline">
+          <FileSpreadsheet className="h-3 w-3" aria-hidden="true" />
+          Muat turun contoh .xlsx
+        </a>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
@@ -1172,7 +1198,10 @@ function OverallImport() {
   const [error, setError] = useState("");
 
   async function submit() {
-    if (!img1 && !img2) return setError("Attach at least one screenshot.");
+    // Both panels are required: Overview carries Cost/Orders/Revenue/ROI and
+    // Key metrics carries GMV/Visitors/Impressions/Clicks. One alone leaves
+    // half the report blank.
+    if (!img1 || !img2) return setError("Attach both Image 1 and Image 2.");
     if (!brand) return setError("Pick a brand.");
     if (!date) return setError("Pick the report date.");
     setBusy(true); setError(""); setMsg("");
@@ -1190,16 +1219,30 @@ function OverallImport() {
     router.refresh();
   }
 
-  const slot = (n: 1 | 2, label: string, file: File | null, set: (f: File | null) => void) => (
-    <label className={`flex flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed p-3 text-center text-xs font-semibold transition-colors ${
-      file ? "border-emerald-400 bg-emerald-50 text-emerald-600" : "border-line text-muted-fg hover:border-primary hover:text-primary"
-    }`}>
-      {file ? <Check className="h-5 w-5" aria-hidden="true" /> : <ImagePlus className="h-5 w-5" aria-hidden="true" />}
-      <span>Image {n}</span>
-      <span className="font-normal opacity-70">{label}</span>
-      <input type="file" accept="image/*" className="sr-only"
-        onChange={(e) => { set(e.target.files?.[0] || null); setError(""); setMsg(""); }} />
-    </label>
+  async function pick(f: File | null, set: (f: File | null) => void) {
+    setError(""); setMsg("");
+    set(f ? (await compressScreenshot(f)).file : null);
+  }
+
+  const slot = (
+    n: 1 | 2, label: string, file: File | null,
+    set: (f: File | null) => void, example: string
+  ) => (
+    <div className="flex flex-1 flex-col gap-1">
+      <label className={`flex flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed p-3 text-center text-xs font-semibold transition-colors ${
+        file ? "border-emerald-400 bg-emerald-50 text-emerald-600" : "border-line text-muted-fg hover:border-primary hover:text-primary"
+      }`}>
+        {file ? <Check className="h-5 w-5" aria-hidden="true" /> : <ImagePlus className="h-5 w-5" aria-hidden="true" />}
+        <span>Image {n} <span className="text-danger">*</span></span>
+        <span className="font-normal opacity-70">{label}</span>
+        <input type="file" accept="image/*" className="sr-only"
+          onChange={(e) => pick(e.target.files?.[0] || null, set)} />
+      </label>
+      <div className="text-center">
+        <ExampleHint src={example} alt={`Contoh — ${label}`}
+          caption="Screenshot dari TikTok Ads Manager → GMV Max." />
+      </div>
+    </div>
   );
 
   return (
@@ -1209,8 +1252,8 @@ function OverallImport() {
         Import Overall — GMV Max screenshots
       </p>
       <div className="flex flex-wrap items-stretch gap-3">
-        {slot(1, "Overview panel", img1, setImg1)}
-        {slot(2, "Key metrics panel", img2, setImg2)}
+        {slot(1, "Overview panel", img1, setImg1, "/examples/overall-overview.jpeg")}
+        {slot(2, "Key metrics panel", img2, setImg2, "/examples/overall-key-metrics.jpeg")}
         <div className="flex flex-col justify-end gap-2">
           <div>
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"

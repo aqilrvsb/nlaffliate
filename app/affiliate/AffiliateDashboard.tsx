@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import TabBar from "@/components/TabBar";
 import SampleTab from "./SampleTab";
+import ExampleHint from "@/components/ExampleHint";
 import PostGrid, { PostItem } from "./PostGrid";
 import ImageModal from "@/components/ImageModal";
 import { compressScreenshot, fmtBytes, MAX_UPLOAD_BYTES } from "@/lib/image";
@@ -612,7 +613,7 @@ function BookingCard({ b, reload }: { b: Booking; reload: () => void }) {
         {hasResult ? (
           <ResultView b={b} reload={reload} />
         ) : (
-          <div>
+          <div className="flex flex-wrap items-center gap-3">
             <label className={`btn-ghost ${uploading ? "pointer-events-none opacity-60" : ""}`}>
               {uploading
                 ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Reading screenshot…</>
@@ -620,6 +621,11 @@ function BookingCard({ b, reload }: { b: Booking; reload: () => void }) {
               <input type="file" accept="image/*" className="sr-only"
                 onChange={upload} disabled={uploading} />
             </label>
+            <ExampleHint
+              src="/examples/live-analytics.jpeg"
+              alt="Contoh screenshot keputusan live"
+              caption="Pastikan GMV, viewers, items sold dan tempoh live kelihatan jelas."
+            />
           </div>
         )}
         {note && (
@@ -721,8 +727,11 @@ function ResultView({ b, reload }: { b: Booking; reload: () => void }) {
           <Camera className="h-3.5 w-3.5" aria-hidden="true" />Replace screenshot
           <input type="file" accept="image/*" className="sr-only"
             onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
+              const picked = e.target.files?.[0];
+              if (!picked) return;
+              // Compress here too — this path was sending the raw file, so a
+              // phone screenshot could exceed Vercel's request-body cap.
+              const { file } = await compressScreenshot(picked);
               const fd = new FormData();
               fd.append("booking_id", String(b.id));
               fd.append("screenshot", file);

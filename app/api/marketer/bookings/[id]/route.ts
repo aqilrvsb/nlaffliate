@@ -61,8 +61,34 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     }
   }
 
-  if (sets.length === 0)
+  // Duration lives on live_results, not bookings — a live can have a duration
+  // recorded before any screenshot exists, so upsert the row.
+  if ("duration_live" in body) {
+    const d = String(body.duration_live ?? "").trim() || null;
+    const owner = await db
+      .prepare("SELECT user_id FROM bookings WHERE id = ?")
+      .get<{ user_id: number }>(params.id);
+    const existing = await db
+      .prepare("SELECT id FROM live_results WHERE booking_id = ?")
+      .get(params.id);
+
+    if (existing) {
+      await db.prepare("UPDATE live_results SET duration_live = ? WHERE booking_id = ?")
+        .run(d, params.id);
+    } else if (d) {
+      await db.prepare(
+          "INSERT INTO live_results (booking_id, user_id, duration_live) VALUES (?, ?, ?)"
+        ).run(params.id, owner!.user_id, d);
+    }
+  }
+
+  if (sets.length === 0) {
+    if ("duration_live" in body) {
+      const status = await completeIfReady(params.id);
+      return NextResponse.json({ ok: true, status });
+    }
     return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
+  }
 
   args.push(params.id);
   await db.prepare(`UPDATE bookings SET ${sets.join(", ")} WHERE id = ?`).run(...args);

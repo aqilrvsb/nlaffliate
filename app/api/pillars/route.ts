@@ -76,7 +76,10 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const level = Number(body.level);
   const date = String(body.date || "");
-  const brandId = Number(body.brand_id);
+  // Number(null) and Number("") are both 0, which would pass isFinite and
+  // then fail as a confusing "not yours" — check the raw value first.
+  const brandRaw = String(body.brand_id ?? "").trim();
+  const brandId = Number(brandRaw);
   const rows = body.rows || {};
 
   const pillar = getPillar(level);
@@ -84,7 +87,7 @@ export async function POST(req: Request) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return NextResponse.json({ error: "A valid date is required." }, { status: 400 });
   }
-  if (!Number.isFinite(brandId)) {
+  if (!brandRaw || !Number.isFinite(brandId)) {
     return NextResponse.json({ error: "Pick a brand." }, { status: 400 });
   }
   const brand = await db

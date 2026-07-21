@@ -38,14 +38,18 @@ export async function POST(req: Request) {
   const img1 = form.get("image1") as File | null;
   const img2 = form.get("image2") as File | null;
   const reportDate = String(form.get("report_date") || "").trim();
-  const brandId = Number(form.get("brand_id"));
+  // Number(null) and Number("") are both 0, which would sail past a plain
+  // isFinite check and fail later as a confusing "not yours" — so test the
+  // raw value before coercing.
+  const brandRaw = String(form.get("brand_id") ?? "").trim();
+  const brandId = Number(brandRaw);
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(reportDate))
     return NextResponse.json({ error: "Pick a valid report date." }, { status: 400 });
   if (!img1 && !img2)
     return NextResponse.json({ error: "Attach at least one screenshot." }, { status: 400 });
 
-  if (!Number.isFinite(brandId)) {
+  if (!brandRaw || !Number.isFinite(brandId)) {
     return NextResponse.json({ error: "Pick a brand." }, { status: 400 });
   }
   const brand = await db

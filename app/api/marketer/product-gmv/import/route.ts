@@ -28,13 +28,17 @@ export async function POST(req: Request) {
   const form = await req.formData();
   const file = form.get("file") as File | null;
   const reportDate = String(form.get("report_date") || "").trim();
-  const brandId = Number(form.get("brand_id"));
+  // Number(null) and Number("") are both 0, which would sail past a plain
+  // isFinite check and fail later as a confusing "not yours" — so test the
+  // raw value before coercing.
+  const brandRaw = String(form.get("brand_id") ?? "").trim();
+  const brandId = Number(brandRaw);
 
   if (!file) return NextResponse.json({ error: "Attach an .xlsx file." }, { status: 400 });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(reportDate))
     return NextResponse.json({ error: "Pick a valid report date." }, { status: 400 });
 
-  if (!Number.isFinite(brandId))
+  if (!brandRaw || !Number.isFinite(brandId))
     return NextResponse.json({ error: "Pick a brand." }, { status: 400 });
   const brand = await db
     .prepare("SELECT id FROM brands WHERE id = ? AND marketer_id = ?")

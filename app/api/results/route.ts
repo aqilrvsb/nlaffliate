@@ -86,7 +86,7 @@ export async function POST(req: Request) {
 
   // Uploading a screenshot never auto-completes a live — the affiliate must
   // add the post link and press "transfer to Done Post" explicitly.
-  const status = demoteIfIncomplete(bookingId as string);
+  const status = await demoteIfIncomplete(bookingId as string);
 
   return NextResponse.json({
     ok: true,

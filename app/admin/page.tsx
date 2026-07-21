@@ -50,7 +50,9 @@ export default async function AdminPage({
        LEFT JOIN bookings b ON b.user_id = u.id${dateWhere}
        LEFT JOIN live_results r ON r.booking_id = b.id
        WHERE u.role = 'affiliate'
-       GROUP BY u.id
+       -- Postgres needs every non-aggregated column in GROUP BY
+       -- (SQLite allowed bare columns).
+       GROUP BY u.id, u.name, u.email, u.phone, u.marketer_id, m.name
        ORDER BY gmv DESC, u.name`
     )
     .all(...dateArgs) as any[]);

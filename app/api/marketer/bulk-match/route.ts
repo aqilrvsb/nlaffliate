@@ -100,7 +100,7 @@ export async function POST(req: Request) {
     if (best) {
       used.add(best.id);
       updateStmt.run(row.ad_spend, row.gross_revenue, row.roi, best.id);
-      completeIfReady(best.id); // -> Success only if a budget is also set
+      await completeIfReady(best.id); // -> Success only if a budget is also set
       matched++;
     } else {
       unknownStmt.run(

@@ -68,7 +68,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   await db.prepare(`UPDATE bookings SET ${sets.join(", ")} WHERE id = ?`).run(...args);
 
   // A live auto-completes only when Budget + Spend + Gross + ROI are all set.
-  const status = completeIfReady(params.id);
+  const status = await completeIfReady(params.id);
 
   const row = await db.prepare("SELECT ads_budget, affiliate_can_edit FROM bookings WHERE id = ?")
     .get(params.id) as any;

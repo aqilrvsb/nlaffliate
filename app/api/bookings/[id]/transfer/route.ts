@@ -8,12 +8,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const user = await getSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const owns = db
-    .prepare("SELECT id FROM bookings WHERE id = ? AND user_id = ?")
+  const owns = await db.prepare("SELECT id FROM bookings WHERE id = ? AND user_id = ?")
     .get(params.id, user.id);
   if (!owns) return NextResponse.json({ error: "Live not found." }, { status: 404 });
 
-  const { hasResult, hasLink, ready } = readiness(params.id);
+  const { hasResult, hasLink, ready } = await readiness(params.id);
   if (!ready) {
     const missing = [
       !hasResult ? "a screenshot" : null,
@@ -25,6 +24,6 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     );
   }
 
-  db.prepare("UPDATE bookings SET status = 'completed' WHERE id = ?").run(params.id);
+  await db.prepare("UPDATE bookings SET status = 'completed' WHERE id = ?").run(params.id);
   return NextResponse.json({ ok: true, status: "completed" });
 }

@@ -6,8 +6,7 @@ export async function GET() {
   const user = await getSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const row = db
-    .prepare("SELECT id, name, email, phone, address, role FROM users WHERE id = ?")
+  const row = await db.prepare("SELECT id, name, email, phone, address, role FROM users WHERE id = ?")
     .get(user.id) as any;
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -26,7 +25,7 @@ export async function PUT(req: Request) {
     );
   }
 
-  db.prepare("UPDATE users SET name = ?, phone = ?, address = ? WHERE id = ?")
+  await db.prepare("UPDATE users SET name = ?, phone = ?, address = ? WHERE id = ?")
     .run(name, phone, address, user.id);
 
   return NextResponse.json({ ok: true });

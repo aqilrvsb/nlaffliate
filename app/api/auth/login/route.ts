@@ -9,8 +9,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Email and password required." }, { status: 400 });
   }
 
-  const row = db
-    .prepare("SELECT id, name, email, password_hash, role FROM users WHERE email = ?")
+  const row = await db.prepare("SELECT id, name, email, password_hash, role FROM users WHERE email = ?")
     .get(email) as any;
 
   if (!row || !bcrypt.compareSync(String(password), row.password_hash)) {

@@ -18,8 +18,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     );
   }
 
-  const info = db
-    .prepare("UPDATE bookings SET post_url = ? WHERE id = ? AND user_id = ?")
+  const info = await db.prepare("UPDATE bookings SET post_url = ? WHERE id = ? AND user_id = ?")
     .run(url || null, params.id, user.id);
 
   if (info.changes === 0)
@@ -28,9 +27,9 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   // Saving a link auto-transfers the live to Done Post, as long as the
   // screenshot (the results proof) is already there. Clearing the link
   // sends it back to Pending.
-  const { hasResult, ready } = readiness(params.id);
+  const { hasResult, ready } = await readiness(params.id);
   const status = ready ? "completed" : "pending";
-  db.prepare("UPDATE bookings SET status = ? WHERE id = ?").run(status, params.id);
+  await db.prepare("UPDATE bookings SET status = ? WHERE id = ?").run(status, params.id);
 
   return NextResponse.json({
     ok: true,

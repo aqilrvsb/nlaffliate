@@ -7,8 +7,8 @@ export async function GET() {
   if (!user || user.role !== "admin")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const cfg = getGrsaiConfig();
-  const savedKey = getSetting("grsai_key");
+  const cfg = await getGrsaiConfig();
+  const savedKey = await getSetting("grsai_key");
   return NextResponse.json({
     // never send the raw key back — just whether one is set + a masked hint
     key_set: !!cfg.key,

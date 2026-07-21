@@ -93,7 +93,7 @@ export async function readImageJson(
   imageBase64DataUrl: string,
   systemPrompt: string
 ): Promise<Record<string, any>> {
-  const { key, base, model } = getGrsaiConfig();
+  const { key, base, model } = await getGrsaiConfig();
   if (!key) throw new Error("GRSAI_API_KEY not set.");
 
   const res = await fetch(`${base}/chat/completions`, {
@@ -122,7 +122,7 @@ export async function readImageJson(
 export async function readAnalyticsTable(
   imageBase64DataUrl: string
 ): Promise<AnalyticsRow[]> {
-  const { key, base, model } = getGrsaiConfig();
+  const { key, base, model } = await getGrsaiConfig();
   if (!key) throw new Error("GRSAI_API_KEY not set — cannot read bulk analytics.");
 
   const res = await fetch(`${base}/chat/completions`, {
@@ -171,7 +171,7 @@ export async function readLiveScreenshot(
   // Admin-entered key/model (from the DB) take precedence over env.
   // GRSAI chat endpoint is OpenAI-compatible and MUST include /v1
   // (https://grsaiapi.com/v1/chat/completions) — verified against HCKCREA P4.
-  const { key, base, model } = getGrsaiConfig();
+  const { key, base, model } = await getGrsaiConfig();
 
   if (!key) {
     return {

@@ -44,10 +44,10 @@ export async function POST(req: Request) {
   }
 
   // Replace any existing rows for this date (idempotent re-import).
-  db.prepare("DELETE FROM product_gmv WHERE marketer_id = ? AND report_date = ?")
+  await db.prepare("DELETE FROM product_gmv WHERE marketer_id = ? AND report_date = ?")
     .run(user.id, reportDate);
 
-  const insert = db.prepare(
+  const insert = await db.prepare(
     `INSERT INTO product_gmv
        (marketer_id, report_date, campaign_id, campaign_name, spend, sku_orders,
         cost_per_order, gross_revenue, roi)

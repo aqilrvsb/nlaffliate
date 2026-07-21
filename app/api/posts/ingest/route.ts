@@ -28,7 +28,7 @@ import { getSetting } from "@/lib/settings";
  * tiktok_url starts NULL and status starts 'pending'.
  */
 export async function POST(req: Request) {
-  const key = getSetting("ingest_key") || process.env.INGEST_API_KEY || "";
+  const key = await getSetting("ingest_key") || process.env.INGEST_API_KEY || "";
   if (!key) {
     return NextResponse.json(
       { error: "Ingest key not configured. Set it in Admin → Integrations." },
@@ -65,9 +65,9 @@ export async function POST(req: Request) {
 
   // Resolve the affiliate.
   const affiliate = affiliate_id
-    ? db.prepare("SELECT id FROM users WHERE id = ? AND role = 'affiliate'").get(affiliate_id)
+    ? await db.prepare("SELECT id FROM users WHERE id = ? AND role = 'affiliate'").get(affiliate_id)
     : affiliate_email
-      ? db.prepare("SELECT id FROM users WHERE email = ? AND role = 'affiliate'").get(affiliate_email)
+      ? await db.prepare("SELECT id FROM users WHERE email = ? AND role = 'affiliate'").get(affiliate_email)
       : null;
 
   if (!affiliate) {
@@ -79,8 +79,7 @@ export async function POST(req: Request) {
 
   // Idempotent on source_id so a retry from PeningLab can't double-post.
   if (source_id) {
-    const dupe = db
-      .prepare("SELECT id FROM posts WHERE source_id = ?")
+    const dupe = await db.prepare("SELECT id FROM posts WHERE source_id = ?")
       .get(source_id) as any;
     if (dupe) {
       return NextResponse.json({ ok: true, id: dupe.id, duplicate: true });
@@ -92,12 +91,11 @@ export async function POST(req: Request) {
     year: "numeric", month: "2-digit", day: "2-digit",
   }).format(new Date());
 
-  const info = db
-    .prepare(
+  const info = await db.prepare(
       `INSERT INTO posts
          (user_id, post_date, video_url, caption, cover_title, cover_subtitle,
           cover_thumbnail_url, tiktok_url, status, source_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'pending', ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'pending', ?) RETURNING id`
     )
     .run(
       (affiliate as any).id,

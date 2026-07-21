@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
-import path from "path";
-import fs from "fs";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { readLiveScreenshot } from "@/lib/grsai";
 import { demoteIfIncomplete } from "@/lib/status";
+import { uploadImage } from "@/lib/storage";
 
 export const runtime = "nodejs";
-
-const uploadDir = path.join(process.cwd(), "public", "uploads");
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   const user = await getSession();
@@ -41,21 +39,25 @@ export async function POST(req: Request) {
   }
 
   // verify booking ownership
-  const booking = db
-    .prepare("SELECT id FROM bookings WHERE id = ? AND user_id = ?")
+  const booking = await db.prepare("SELECT id FROM bookings WHERE id = ? AND user_id = ?")
     .get(bookingId, user.id);
   if (!booking) return NextResponse.json({ error: "Booking not found." }, { status: 404 });
 
-  // save file
-  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+  // store the screenshot in Supabase Storage (Vercel's fs is ephemeral)
   const bytes = Buffer.from(await file.arrayBuffer());
+  const mime = file.type || "image/png";
   const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const fname = `live_${user.id}_${bookingId}_${bytes.length}.${ext}`;
-  fs.writeFileSync(path.join(uploadDir, fname), bytes);
-  const publicPath = `/uploads/${fname}`;
+  let publicPath: string;
+  try {
+    publicPath = await uploadImage(`live_${user.id}_${bookingId}.${ext}`, bytes, mime);
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: e?.message || "Could not store the screenshot." },
+      { status: 502 }
+    );
+  }
 
   // run AI extraction (Gemini 2.5 Flash via GRSAI)
-  const mime = file.type || "image/png";
   const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
 
   let stats;
@@ -68,16 +70,15 @@ export async function POST(req: Request) {
   }
 
   // upsert result for this booking
-  const existing = db
-    .prepare("SELECT id FROM live_results WHERE booking_id = ?")
+  const existing = await db.prepare("SELECT id FROM live_results WHERE booking_id = ?")
     .get(bookingId) as any;
 
   if (existing) {
-    db.prepare(
+    await db.prepare(
       `UPDATE live_results SET screenshot_path=?, live_title=?, gmv=?, viewers=?, items_sold=?, duration_live=?, ai_raw=? WHERE id=?`
     ).run(publicPath, stats.live_title, stats.gmv, stats.viewers, stats.items_sold, stats.duration_live, stats.raw, existing.id);
   } else {
-    db.prepare(
+    await db.prepare(
       `INSERT INTO live_results (booking_id, user_id, screenshot_path, live_title, gmv, viewers, items_sold, duration_live, ai_raw)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(bookingId, user.id, publicPath, stats.live_title, stats.gmv, stats.viewers, stats.items_sold, stats.duration_live, stats.raw);
@@ -102,8 +103,7 @@ export async function PUT(req: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { booking_id, gmv, viewers, items_sold, duration_live } = await req.json();
-  const info = db
-    .prepare(
+  const info = await db.prepare(
       `UPDATE live_results SET gmv=?, viewers=?, items_sold=?, duration_live=?
        WHERE booking_id=? AND user_id=?`
     )

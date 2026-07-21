@@ -22,8 +22,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
   const status = url ? "done" : "pending";
 
-  const info = db
-    .prepare(
+  const info = await db.prepare(
       "UPDATE posts SET tiktok_url = ?, status = ? WHERE id = ? AND user_id = ?"
     )
     .run(url || null, status, params.id, user.id);

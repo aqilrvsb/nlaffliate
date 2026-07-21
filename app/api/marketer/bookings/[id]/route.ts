@@ -17,8 +17,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   // Booking must belong to an affiliate assigned to this marketer.
-  const owns = db
-    .prepare(
+  const owns = await db.prepare(
       `SELECT b.id FROM bookings b
        JOIN users u ON u.id = b.user_id
        WHERE b.id = ? AND u.marketer_id = ?`
@@ -66,13 +65,12 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
 
   args.push(params.id);
-  db.prepare(`UPDATE bookings SET ${sets.join(", ")} WHERE id = ?`).run(...args);
+  await db.prepare(`UPDATE bookings SET ${sets.join(", ")} WHERE id = ?`).run(...args);
 
   // A live auto-completes only when Budget + Spend + Gross + ROI are all set.
   const status = completeIfReady(params.id);
 
-  const row = db
-    .prepare("SELECT ads_budget, affiliate_can_edit FROM bookings WHERE id = ?")
+  const row = await db.prepare("SELECT ads_budget, affiliate_can_edit FROM bookings WHERE id = ?")
     .get(params.id) as any;
   return NextResponse.json({
     ok: true,

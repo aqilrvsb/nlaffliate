@@ -7,14 +7,14 @@ export type Readiness = {
 };
 
 /** What a live still needs before it can be transferred to Done Post. */
-export function readiness(bookingId: number | string): Readiness {
-  const row = db
+export async function readiness(bookingId: number | string): Promise<Readiness> {
+  const row = await db
     .prepare(
       `SELECT b.post_url,
-              (SELECT COUNT(*) FROM live_results r WHERE r.booking_id = b.id) AS has_result
+              (SELECT COUNT(*)::int FROM live_results r WHERE r.booking_id = b.id) AS has_result
        FROM bookings b WHERE b.id = ?`
     )
-    .get(bookingId) as any;
+    .get<{ post_url: string | null; has_result: number }>(bookingId);
 
   if (!row) return { hasResult: false, hasLink: false, ready: false };
 
@@ -24,21 +24,16 @@ export function readiness(bookingId: number | string): Readiness {
 }
 
 /**
- * Completion is an explicit action (the "transfer to Done Post" button), so
- * we never auto-promote here. But a live that has lost its link or its
- * screenshot must not stay in Done Post — demote it back to pending.
- */
-/**
  * A live auto-moves to Success only when the marketer has all four:
  * Budget + Spend + Gross Revenue + ROI. Promote-only — never demotes an
  * already-completed live.
  */
-export function completeIfReady(bookingId: number | string): string {
-  const row = db
+export async function completeIfReady(bookingId: number | string): Promise<string> {
+  const row = await db
     .prepare(
       "SELECT ads_budget, ad_spend, gross_revenue, roi, status FROM bookings WHERE id = ?"
     )
-    .get(bookingId) as any;
+    .get<any>(bookingId);
   if (!row) return "pending";
 
   const ready =
@@ -48,21 +43,25 @@ export function completeIfReady(bookingId: number | string): string {
     row.roi != null;
 
   if (ready && row.status !== "completed") {
-    db.prepare("UPDATE bookings SET status = 'completed' WHERE id = ?").run(bookingId);
+    await db.prepare("UPDATE bookings SET status = 'completed' WHERE id = ?").run(bookingId);
     return "completed";
   }
   return row.status;
 }
 
-export function demoteIfIncomplete(bookingId: number | string): string {
-  const { ready } = readiness(bookingId);
-  const row = db
+/**
+ * Completion is an explicit action, so we never auto-promote here. But a live
+ * that has lost its link or its screenshot must not stay in Done Post.
+ */
+export async function demoteIfIncomplete(bookingId: number | string): Promise<string> {
+  const { ready } = await readiness(bookingId);
+  const row = await db
     .prepare("SELECT status FROM bookings WHERE id = ?")
-    .get(bookingId) as any;
+    .get<{ status: string }>(bookingId);
   if (!row) return "pending";
 
   if (row.status === "completed" && !ready) {
-    db.prepare("UPDATE bookings SET status = 'pending' WHERE id = ?").run(bookingId);
+    await db.prepare("UPDATE bookings SET status = 'pending' WHERE id = ?").run(bookingId);
     return "pending";
   }
   return row.status;

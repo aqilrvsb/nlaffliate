@@ -50,8 +50,7 @@ export async function POST(req: Request) {
 
   // 2) Pending lives for this marketer's affiliates that have a captured
   //    live title (uploaded screenshot) to match against.
-  const candidates = db
-    .prepare(
+  const candidates = await db.prepare(
       `SELECT b.id AS booking_id, b.live_date, b.start_time,
               r.live_title, r.duration_live
        FROM bookings b
@@ -67,10 +66,10 @@ export async function POST(req: Request) {
 
   // Fill the ad columns; completion is decided by completeIfReady (needs a
   // budget too), so a matched row without a budget stays pending with data.
-  const updateStmt = db.prepare(
+  const updateStmt = await db.prepare(
     "UPDATE bookings SET ad_spend=?, gross_revenue=?, roi=? WHERE id=?"
   );
-  const unknownStmt = db.prepare(
+  const unknownStmt = await db.prepare(
     `INSERT INTO unknown_lives (marketer_id, live_name, live_date, live_time, duration, ad_spend, gross_revenue, roi)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   );

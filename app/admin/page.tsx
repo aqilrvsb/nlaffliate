@@ -33,13 +33,11 @@ export default async function AdminPage({
   const plain = <T,>(rows: T[]): T[] => rows.map((r) => ({ ...r }));
 
   const marketers = plain(
-    db
-      .prepare("SELECT id, name, email FROM users WHERE role = 'marketer' ORDER BY name")
+    await db.prepare("SELECT id, name, email FROM users WHERE role = 'marketer' ORDER BY name")
       .all() as any[]
   );
 
-  const affiliates = plain(db
-    .prepare(
+  const affiliates = plain(await db.prepare(
       `SELECT u.id, u.name, u.email, u.phone, u.marketer_id,
               m.name AS marketer_name,
               COUNT(b.id) AS lives,
@@ -57,8 +55,7 @@ export default async function AdminPage({
     )
     .all(...dateArgs) as any[]);
 
-  const rows = plain(db
-    .prepare(
+  const rows = plain(await db.prepare(
       `SELECT b.id AS booking_id, u.name AS affiliate, m.name AS marketer,
               p.label AS profile_label, p.url AS profile_url,
               b.live_date, b.start_time, b.end_time, b.status,

@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
-import path from "path";
-import fs from "fs";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { readImageJson } from "@/lib/grsai";
+import { uploadImage } from "@/lib/storage";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-const uploadDir = path.join(process.cwd(), "public", "uploads");
 
 const OVERVIEW_PROMPT = `You read a TikTok GMV Max "Overview" panel. Return ONLY JSON:
 {"cost": number, "sku_orders": number, "cost_per_order": number, "gross_revenue": number, "roi": number}
@@ -25,12 +22,11 @@ const num = (v: any) => {
 };
 
 async function saveImg(file: File, name: string) {
-  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
   const bytes = Buffer.from(await file.arrayBuffer());
+  const mime = file.type || "image/png";
   const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const fname = `${name}.${ext}`;
-  fs.writeFileSync(path.join(uploadDir, fname), bytes);
-  return { publicPath: `/uploads/${fname}`, dataUrl: `data:${file.type || "image/png"};base64,${bytes.toString("base64")}` };
+  const publicPath = await uploadImage(`${name}.${ext}`, bytes, mime);
+  return { publicPath, dataUrl: `data:${mime};base64,${bytes.toString("base64")}` };
 }
 
 export async function POST(req: Request) {
@@ -66,10 +62,10 @@ export async function POST(req: Request) {
   }
 
   // Replace this date's report for the marketer.
-  db.prepare("DELETE FROM overall_reports WHERE marketer_id = ? AND report_date = ?")
+  await db.prepare("DELETE FROM overall_reports WHERE marketer_id = ? AND report_date = ?")
     .run(user.id, reportDate);
 
-  db.prepare(
+  await db.prepare(
     `INSERT INTO overall_reports
        (marketer_id, report_date, cost, sku_orders, cost_per_order, gross_revenue, roi,
         gmv, visitors, product_impressions, product_clicks, img1_path, img2_path)

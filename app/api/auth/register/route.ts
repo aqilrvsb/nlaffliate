@@ -16,15 +16,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Password must be at least 6 characters." }, { status: 400 });
   }
 
-  const existing = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+  const existing = await db.prepare("SELECT id FROM users WHERE email = ?").get(email);
   if (existing) {
     return NextResponse.json({ error: "Email already registered." }, { status: 409 });
   }
 
   const hash = bcrypt.hashSync(String(password), 10);
-  const info = db
-    .prepare(
-      "INSERT INTO users (name, email, phone, address, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)"
+  const info = await db.prepare(
+      "INSERT INTO users (name, email, phone, address, password_hash, role) VALUES (?, ?, ?, ?, ?, ?) RETURNING id"
     )
     .run(name, email, phone, address, hash, role);
 

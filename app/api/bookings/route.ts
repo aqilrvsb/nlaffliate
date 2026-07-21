@@ -6,8 +6,7 @@ export async function GET() {
   const user = await getSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const rows = db
-    .prepare(
+  const rows = await db.prepare(
       `SELECT b.*, p.label AS profile_label, p.url AS profile_url,
               r.id AS result_id, r.live_title, r.gmv, r.viewers, r.items_sold,
               r.duration_live, r.screenshot_path
@@ -34,17 +33,15 @@ export async function POST(req: Request) {
   }
 
   // ensure the profile belongs to this user
-  const owns = db
-    .prepare("SELECT id FROM tiktok_profiles WHERE id = ? AND user_id = ?")
+  const owns = await db.prepare("SELECT id FROM tiktok_profiles WHERE id = ? AND user_id = ?")
     .get(profile_id, user.id);
   if (!owns) return NextResponse.json({ error: "Invalid profile." }, { status: 400 });
 
   // Status is set explicitly (not left to the column default) so existing
   // databases created before the pending/completed rename behave correctly.
-  const info = db
-    .prepare(
+  const info = await db.prepare(
       `INSERT INTO bookings (user_id, profile_id, live_date, start_time, end_time, note, status)
-       VALUES (?, ?, ?, ?, ?, ?, 'pending')`
+       VALUES (?, ?, ?, ?, ?, ?, 'pending') RETURNING id`
     )
     .run(user.id, profile_id, live_date, start_time, end_time || null, note || null);
   return NextResponse.json({ id: Number(info.lastInsertRowid) });

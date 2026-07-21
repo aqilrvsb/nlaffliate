@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   UserRound, Phone, MapPin, Mail, Lock, Link2, Plus, Trash2,
-  Check, AlertCircle, ExternalLink, Loader2, ArrowLeft,
+  Check, AlertCircle, ExternalLink, Loader2, ArrowLeft, MessageCircle,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -46,6 +46,9 @@ export default function ProfileSettings({ role }: { role: string }) {
       </div>
 
       <AccountCard me={me} reload={load} refresh={() => router.refresh()} />
+      {role === "marketer" && (
+        <WaGroupCard me={me} reload={load} refresh={() => router.refresh()} />
+      )}
       <PasswordCard />
       {role === "affiliate" && <TikTokProfilesCard />}
     </div>
@@ -125,6 +128,84 @@ function AccountCard({ me, reload, refresh }: { me: any; reload: () => void; ref
           <button className="btn" disabled={saving}>
             {saving ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Saving…</> : "Save changes"}
           </button>
+          {ok && (
+            <span className="flex items-center gap-1 text-sm font-medium text-emerald-600">
+              <Check className="h-4 w-4" aria-hidden="true" />Saved
+            </span>
+          )}
+          {error && (
+            <span className="flex items-center gap-1 text-sm text-danger">
+              <AlertCircle className="h-4 w-4" aria-hidden="true" />{error}
+            </span>
+          )}
+        </div>
+      </form>
+    </section>
+  );
+}
+
+/* ── WhatsApp group link (marketer only) ──────────── */
+
+/**
+ * The marketer sets one group link here; every affiliate assigned to them
+ * sees it in their sidebar automatically — no per-affiliate sharing needed.
+ */
+function WaGroupCard({ me, reload, refresh }: { me: any; reload: () => void; refresh: () => void }) {
+  const [url, setUrl] = useState(me.wa_group_url || "");
+  const [saving, setSaving] = useState(false);
+  const [ok, setOk] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true); setOk(false); setError("");
+    const res = await fetch("/api/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: me.name, phone: me.phone, address: me.address,
+        wa_group_url: url,
+      }),
+    });
+    const data = await res.json();
+    setSaving(false);
+    if (!res.ok) return setError(data.error || "Update failed");
+    setOk(true); reload(); refresh();
+  }
+
+  return (
+    <section className="card">
+      <h2 className="mb-1 flex items-center gap-2 font-bold text-ink">
+        <MessageCircle className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+        WhatsApp Group Link
+      </h2>
+      <p className="mb-4 text-xs text-muted-fg">
+        Every affiliate assigned to you sees this link in their sidebar. Leave
+        it blank to hide it.
+      </p>
+
+      <form onSubmit={save} className="space-y-4">
+        <div>
+          <label className="label" htmlFor="wa-group">Group invite link</label>
+          <div className="relative">
+            <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-fg"
+              aria-hidden="true" />
+            <input id="wa-group" className="input pl-9" type="url"
+              placeholder="https://chat.whatsapp.com/…"
+              value={url} onChange={(e) => setUrl(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button className="btn" disabled={saving}>
+            {saving ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Saving…</> : "Save link"}
+          </button>
+          {url && (
+            <a href={url} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1 text-sm font-semibold text-accent hover:underline">
+              Open <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+            </a>
+          )}
           {ok && (
             <span className="flex items-center gap-1 text-sm font-medium text-emerald-600">
               <Check className="h-4 w-4" aria-hidden="true" />Saved

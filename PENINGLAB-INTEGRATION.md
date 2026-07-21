@@ -27,7 +27,7 @@ PeningLab's native shape is accepted as-is:
 
 ```json
 {
-  "email": "ida@test.com",
+  "email": "ida@nlaffliate.com",
   "output_url": "https://peninglab-content.s3.../ugc/abc123.mp4",
   "caption": "Serum ni memang laku masa live semalam 🔥",
   "metadata": {
@@ -87,8 +87,8 @@ to a real account before pushing:
   "ok": true,
   "spec": { ... },
   "affiliates": [
-    { "id": 4, "name": "Ida", "email": "ida@test.com" },
-    { "id": 5, "name": "Nadia", "email": "nadia@test.com" }
+    { "id": 4, "name": "Ida", "email": "ida@nlaffliate.com" },
+    { "id": 5, "name": "Nadia", "email": "nadia@nlaffliate.com" }
   ]
 }
 ```
@@ -104,7 +104,7 @@ curl -X POST https://www.nlaffliatearmy.com/api/posts/ingest \
   -H "Authorization: Bearer nlaff_ingest_9d2b7c41ae085f3610b4d7e29c86af53" \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "ida@test.com",
+    "email": "ida@nlaffliate.com",
     "output_url": "https://example.com/video.mp4",
     "caption": "Test dari PeningLab",
     "metadata": { "cover_title": "TEST", "cover_subtitle": "ingest" },

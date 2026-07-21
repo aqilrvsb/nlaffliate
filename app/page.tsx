@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
+import UgcVideo from "@/components/UgcVideo";
 import {
   Radio, ArrowRight, Wallet, BarChart3, Sparkles, CalendarClock,
   ShieldCheck, Users, TrendingUp, Video, CheckCircle2, Star,
@@ -54,6 +55,8 @@ const CDN =
   "https://peninglab-content.s3.us-east-005.backblazeb2.com/users/f0fd6781-ed5f-4aa8-a5b9-eec943229092";
 
 const HERO_VIDEO = `${CDN}/ugc/93e75e1e-4994-4692-9e74-208388e16d0b.mp4`;
+const SUPPLY_VIDEO =
+  "https://s.apipod.ai/videos/2026/07/21/21396d1b-98cc-42af-89b8-17fc8e0c2542.mp4";
 
 const UGC_COVERS = [
   { t: "RAMAI BELI?", s: "PATUTLAH RAMBUT DAH TAK GUGUR", src: `${CDN}/image/39ea995e-dce7-495c-aee3-9e8e3b142595.png` },
@@ -165,20 +168,11 @@ export default async function Home() {
 
           {/* Sample AI video + dashboard preview */}
           <div className="grid gap-4 sm:grid-cols-[minmax(0,190px)_1fr]">
-            <div className="relative mx-auto aspect-[9/16] w-full max-w-[190px] overflow-hidden rounded-2xl shadow-glass">
-              <video
-                src={HERO_VIDEO}
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="metadata"
-                className="h-full w-full object-cover"
-              />
-              <span className="absolute left-2 top-2 rounded-lg bg-black/55 px-2 py-1 text-[10px] font-bold text-white backdrop-blur">
-                Contoh video AI
-              </span>
-            </div>
+            <UgcVideo
+              src={HERO_VIDEO}
+              label="Contoh video AI"
+              className="mx-auto aspect-[9/16] w-full max-w-[190px]"
+            />
 
           <div className="card">
             <div className="mb-3 flex items-center justify-between">
@@ -273,7 +267,7 @@ export default async function Home() {
 
       {/* ── AI video supply ───────────────────────────── */}
       <section className="mx-auto max-w-6xl px-4 py-14">
-        <div className="card grid items-center gap-8 lg:grid-cols-2">
+        <div className="card grid items-center gap-8 lg:grid-cols-[1fr_minmax(0,380px)]">
           <div>
             <span className="chip mb-3 bg-accent/10 text-accent">
               <Video className="h-3 w-3" aria-hidden="true" />Video AI Percuma
@@ -301,8 +295,16 @@ export default async function Home() {
             </ul>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            {UGC_COVERS.map(({ t, s, src }) => (
+          {/* One live clip + three covers. Capped width so this column's
+              height stays near the copy's — a full-width 2×2 of 9:16 tiles
+              ran ~950px tall and left the text stranded in dead space. */}
+          <div className="mx-auto grid w-full max-w-[380px] grid-cols-2 gap-3">
+            <UgcVideo
+              src={SUPPLY_VIDEO}
+              label="Video AI kami"
+              className="aspect-[9/16] w-full"
+            />
+            {UGC_COVERS.slice(1).map(({ t, s, src }) => (
               <div key={t} className="relative aspect-[9/16] overflow-hidden rounded-xl shadow-lift">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover" />

@@ -48,6 +48,51 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     args.push(body.allow_edit ? 1 : 0);
   }
 
+  // Reschedule: the marketer sets ad budgets against a slot, so they need to
+  // move it without going through the affiliate.
+  if ("live_date" in body) {
+    const d = String(body.live_date || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      return NextResponse.json({ error: "Pick a valid date." }, { status: 400 });
+    }
+    sets.push("live_date = ?");
+    args.push(d);
+  }
+  for (const k of ["start_time", "end_time"] as const) {
+    if (k in body) {
+      const t = String(body[k] || "").trim();
+      if (k === "start_time" && !t) {
+        return NextResponse.json({ error: "Start time is required." }, { status: 400 });
+      }
+      if (t && !/^\d{2}:\d{2}$/.test(t)) {
+        return NextResponse.json({ error: "Times must be HH:MM." }, { status: 400 });
+      }
+      sets.push(`${k} = ?`);
+      args.push(t || null);
+    }
+  }
+
+  // Re-tag the live against a different brand — must be one of the
+  // marketer's own, so a live cannot be moved to someone else's brand.
+  if ("brand_id" in body) {
+    const raw = String(body.brand_id ?? "").trim();
+    if (!raw) {
+      sets.push("brand_id = ?");
+      args.push(null);
+    } else {
+      const n = Number(raw);
+      const owned = Number.isFinite(n)
+        ? await db.prepare("SELECT id FROM brands WHERE id = ? AND marketer_id = ?")
+            .get(n, user.id)
+        : null;
+      if (!owned) {
+        return NextResponse.json({ error: "That brand is not yours." }, { status: 403 });
+      }
+      sets.push("brand_id = ?");
+      args.push(n);
+    }
+  }
+
   // Manually entered ad results.
   const num = (v: any) => (v === "" || v == null ? null : Number(v));
   for (const k of ["ad_spend", "gross_revenue", "roi"] as const) {

@@ -66,6 +66,35 @@ export function fmtDuration(totalSeconds: number): string {
   return `${s}s`;
 }
 
+/**
+ * Split a stored duration into hours/minutes/seconds for editing.
+ * Anything unparseable comes back as zeros rather than throwing.
+ */
+export function splitDuration(d?: string | null): { h: number; m: number; s: number } {
+  const total = durationToSeconds(d);
+  return {
+    h: Math.floor(total / 3600),
+    m: Math.floor((total % 3600) / 60),
+    s: total % 60,
+  };
+}
+
+/**
+ * Build the stored form from parts: always "Xh Ym Zs".
+ *
+ * Kept full even when a part is zero — the recap screenshots read "2h 0m 25s",
+ * and durationToSeconds round-trips it exactly. Returns "" for a zero
+ * duration so an untouched field stores NULL instead of "0h 0m 0s".
+ */
+export function joinDuration(h: number, m: number, s: number): string {
+  const total = (h || 0) * 3600 + (m || 0) * 60 + (s || 0);
+  if (total <= 0) return "";
+  const hh = Math.floor(total / 3600);
+  const mm = Math.floor((total % 3600) / 60);
+  const ss = total % 60;
+  return `${hh}h ${mm}m ${ss}s`;
+}
+
 /** Sum a list of duration strings and format the total. */
 export function sumDurations(list: (string | null | undefined)[]): string {
   return fmtDuration(list.reduce((acc, d) => acc + durationToSeconds(d), 0));

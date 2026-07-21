@@ -12,6 +12,7 @@ import {
 import TabBar from "@/components/TabBar";
 import SampleTab from "./SampleTab";
 import ExampleHint from "@/components/ExampleHint";
+import DurationInput from "@/components/DurationInput";
 import PostGrid, { PostItem } from "./PostGrid";
 import ImageModal from "@/components/ImageModal";
 import { compressScreenshot, fmtBytes, MAX_UPLOAD_BYTES } from "@/lib/image";
@@ -727,7 +728,11 @@ function ResultView({ b, reload }: { b: Booking; reload: () => void }) {
             <EditStat label="GMV" value={gmv} setValue={setGmv} />
             <EditStat label="Viewers" value={viewers} setValue={setViewers} />
             <EditStat label="Items" value={items} setValue={setItems} />
-            <EditStat label="Duration" value={dur} setValue={setDur} text />
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold text-muted-fg"
+                htmlFor={`rdur-${b.id}-h`}>Duration</label>
+              <DurationInput idPrefix={`rdur-${b.id}`} value={dur} onChange={setDur} />
+            </div>
           </div>
         )}
 

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
 import ExampleHint from "@/components/ExampleHint";
+import DurationInput from "@/components/DurationInput";
 import { compressScreenshot } from "@/lib/image";
 import PillarCreate from "./PillarCreate";
 import PillarReport from "./PillarReport";
@@ -550,6 +551,30 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
   const [savedMsg, setSavedMsg] = useState("");
 
   // Manual ad-results editor (pending only) — saving moves the live to Success.
+  // Reschedule / re-tag (pending only).
+  const [editWhen, setEditWhen] = useState(false);
+  const [eDate, setEDate] = useState(l.live_date);
+  const [eStart, setEStart] = useState(l.start_time || "");
+  const [eEnd, setEEnd] = useState(l.end_time || "");
+  const [eBrand, setEBrand] = useState(l.brand_id != null ? String(l.brand_id) : "");
+  const [whenErr, setWhenErr] = useState("");
+
+  async function saveWhen() {
+    setWhenErr("");
+    const res = await fetch(`/api/marketer/bookings/${l.booking_id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        live_date: eDate, start_time: eStart, end_time: eEnd || null,
+        brand_id: eBrand,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) return setWhenErr(data.error || "Could not save.");
+    setEditWhen(false);
+    router.refresh();
+  }
+
   const [resultsOpen, setResultsOpen] = useState(false);
   const [spend, setSpend] = useState(l.ad_spend != null ? String(l.ad_spend) : "");
   const [gross, setGross] = useState(l.gross_revenue != null ? String(l.gross_revenue) : "");
@@ -615,14 +640,62 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
           {l.live_title && (
             <p className="mt-1 text-sm font-bold text-ink">{l.live_title}</p>
           )}
-          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-fg">
-            <a href={l.profile_url} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1 font-medium text-accent hover:underline">
-              {l.profile_label}<ExternalLink className="h-3 w-3" aria-hidden="true" />
-            </a>
-            <span className="flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />{fmtDate(l.live_date)}</span>
-            <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" aria-hidden="true" />{fmtTimeRange(l.start_time, l.end_time)}</span>
-          </p>
+
+          {editWhen ? (
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-4">
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
+                  htmlFor={`ed-${l.booking_id}`}>Date</label>
+                <input id={`ed-${l.booking_id}`} type="date" className="input cursor-pointer !py-1.5 text-sm"
+                  value={eDate} onChange={(e) => setEDate(e.target.value)} />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
+                  htmlFor={`es-${l.booking_id}`}>Start</label>
+                <input id={`es-${l.booking_id}`} type="time" className="input cursor-pointer !py-1.5 text-sm"
+                  value={eStart} onChange={(e) => setEStart(e.target.value)} />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
+                  htmlFor={`ee-${l.booking_id}`}>End</label>
+                <input id={`ee-${l.booking_id}`} type="time" className="input cursor-pointer !py-1.5 text-sm"
+                  value={eEnd} onChange={(e) => setEEnd(e.target.value)} />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
+                  htmlFor={`eb-${l.booking_id}`}>Brand</label>
+                <BrandSelect id={`eb-${l.booking_id}`} value={eBrand} onChange={setEBrand}
+                  className="!py-1.5 text-sm" />
+              </div>
+              <div className="flex items-center gap-2 sm:col-span-4">
+                <button className="btn !py-1.5 text-xs" onClick={saveWhen}>
+                  <Check className="h-3.5 w-3.5" aria-hidden="true" />Save
+                </button>
+                <button className="btn-ghost !py-1.5 text-xs" onClick={() => {
+                  setEditWhen(false); setWhenErr("");
+                  setEDate(l.live_date); setEStart(l.start_time || "");
+                  setEEnd(l.end_time || "");
+                  setEBrand(l.brand_id != null ? String(l.brand_id) : "");
+                }}>Cancel</button>
+                {whenErr && <span className="text-xs text-danger">{whenErr}</span>}
+              </div>
+            </div>
+          ) : (
+            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-fg">
+              <a href={l.profile_url} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1 font-medium text-accent hover:underline">
+                {l.profile_label}<ExternalLink className="h-3 w-3" aria-hidden="true" />
+              </a>
+              <span className="flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />{fmtDate(l.live_date)}</span>
+              <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" aria-hidden="true" />{fmtTimeRange(l.start_time, l.end_time)}</span>
+              {!done && (
+                <button onClick={() => setEditWhen(true)}
+                  className="flex cursor-pointer items-center gap-1 text-xs font-semibold text-accent hover:underline">
+                  <Pencil className="h-3 w-3" aria-hidden="true" />Edit
+                </button>
+              )}
+            </p>
+          )}
           {l.note && <p className="mt-1 text-xs text-muted-fg">{l.note}</p>}
         </div>
       </div>
@@ -691,9 +764,10 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
               value={roi} onChange={(e) => setRoi(e.target.value)} />
           </div>
           <div>
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg">Duration</label>
-            <input className="input !py-1.5 text-sm" placeholder="e.g. 2h 0m 25s"
-              value={dur} onChange={(e) => setDur(e.target.value)} />
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
+              htmlFor={`dur-${l.booking_id}-h`}>Duration</label>
+            <DurationInput idPrefix={`dur-${l.booking_id}`} value={dur}
+              onChange={setDur} compact />
           </div>
           <div className="flex items-end gap-2">
             <button className="btn !py-1.5 text-xs" onClick={saveResults} disabled={busy}>

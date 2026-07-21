@@ -1,0 +1,125 @@
+import { NextResponse } from "next/server";
+import db from "@/lib/db";
+import { getSession } from "@/lib/session";
+import { getPillar } from "@/lib/pillars";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const COLS = ["problem", "solution", "planning", "execution"] as const;
+
+/** Admin sees everyone's entries; a marketer sees only their own. */
+async function scope() {
+  const user = await getSession();
+  if (!user) return null;
+  if (user.role !== "marketer" && user.role !== "admin") return null;
+  return user;
+}
+
+/**
+ * GET /api/pillars?level=1&date=2026-07-22   → one level on one date (editing)
+ * GET /api/pillars?from=…&to=…               → everything in range (reporting)
+ */
+export async function GET(req: Request) {
+  const user = await scope();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+
+  const url = new URL(req.url);
+  const level = url.searchParams.get("level");
+  const date = url.searchParams.get("date");
+  const from = url.searchParams.get("from");
+  const to = url.searchParams.get("to");
+
+  const where: string[] = [];
+  const args: any[] = [];
+
+  if (user.role === "marketer") {
+    where.push("marketer_id = ?");
+    args.push(user.id);
+  }
+  if (level) { where.push("level = ?"); args.push(Number(level)); }
+  if (date)  { where.push("entry_date = ?"); args.push(date); }
+  if (from)  { where.push("entry_date >= ?"); args.push(from); }
+  if (to)    { where.push("entry_date <= ?"); args.push(to); }
+
+  const sql =
+    `SELECT id, marketer_id, level, item_no, entry_date,
+            problem, solution, planning, execution, updated_at
+       FROM pillar_entries
+      ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+      ORDER BY entry_date DESC, level, item_no`;
+
+  const entries = await db.prepare(sql).all(...args);
+  return NextResponse.json({ entries });
+}
+
+/**
+ * POST /api/pillars — save one level for one date.
+ *
+ * Body: { level, date, rows: { [item_no]: {problem, solution, planning, execution} } }
+ *
+ * Every row is upserted; a row whose four columns are all blank is deleted, so
+ * clearing a field actually removes it instead of leaving an empty record that
+ * would inflate the "filled" count in reporting.
+ */
+export async function POST(req: Request) {
+  const user = await scope();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  if (user.role !== "marketer") {
+    return NextResponse.json({ error: "Marketers only." }, { status: 403 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const level = Number(body.level);
+  const date = String(body.date || "");
+  const rows = body.rows || {};
+
+  const pillar = getPillar(level);
+  if (!pillar) return NextResponse.json({ error: "Unknown level." }, { status: 400 });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return NextResponse.json({ error: "A valid date is required." }, { status: 400 });
+  }
+
+  const valid = new Set(pillar.items.map((i) => i.no));
+  let saved = 0;
+  let cleared = 0;
+
+  for (const [key, raw] of Object.entries(rows)) {
+    const no = Number(key);
+    if (!valid.has(no)) continue; // ignore anything not in the catalogue
+
+    const v = (raw || {}) as Record<string, unknown>;
+    const vals = COLS.map((c) => {
+      const s = String(v[c] ?? "").trim();
+      return s || null;
+    });
+
+    if (vals.every((x) => x === null)) {
+      const res = await db
+        .prepare(
+          `DELETE FROM pillar_entries
+            WHERE marketer_id = ? AND level = ? AND item_no = ? AND entry_date = ?`
+        )
+        .run(user.id, level, no, date);
+      cleared += res.changes || 0;
+      continue;
+    }
+
+    await db
+      .prepare(
+        `INSERT INTO pillar_entries
+           (marketer_id, level, item_no, entry_date, problem, solution, planning, execution)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (marketer_id, level, item_no, entry_date) DO UPDATE
+           SET problem = EXCLUDED.problem,
+               solution = EXCLUDED.solution,
+               planning = EXCLUDED.planning,
+               execution = EXCLUDED.execution,
+               updated_at = now()`
+      )
+      .run(user.id, level, no, date, ...vals);
+    saved += 1;
+  }
+
+  return NextResponse.json({ ok: true, saved, cleared });
+}

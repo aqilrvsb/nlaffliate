@@ -8,8 +8,10 @@ import {
   Mail, Phone, MapPin, Link2, Menu, ChevronDown, List, Check, Loader2, Wallet,
   HelpCircle, Upload, ImagePlus, TrendingDown, Pencil, BarChart3,
   PackageSearch, FileSpreadsheet, ShoppingCart, Layers, Eye, MousePointerClick,
-  Send,
+  Send, Boxes, ClipboardList,
 } from "lucide-react";
+import PillarCreate from "./PillarCreate";
+import PillarReport from "./PillarReport";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import Pagination from "@/components/Pagination";
 import ImageModal from "@/components/ImageModal";
@@ -67,7 +69,14 @@ const AFFILIATE_CHILDREN = [
   { key: "unknown", label: "Unknown Affiliate", icon: HelpCircle },
 ] as const;
 
+const PILLAR_CHILDREN = [
+  { key: "pillar-create", label: "Create Pillar", icon: ClipboardList },
+  { key: "pillar-report", label: "Reporting Pillar", icon: BarChart3 },
+] as const;
+
 const TAB_LABELS: Record<string, string> = {
+  "pillar-create": "Create Pillar",
+  "pillar-report": "Reporting Pillar",
   dashboard: "Dashboard",
   affiliates: "List Affiliate",
   pending: "Pending Affiliate",
@@ -92,6 +101,8 @@ export default function MarketerShell({
   const active = params.get("tab") || "dashboard";
   const inAffiliateGroup = AFFILIATE_CHILDREN.some((c) => c.key === active);
   const [groupOpen, setGroupOpen] = useState(true);
+  const inPillarGroup = PILLAR_CHILDREN.some((c) => c.key === active);
+  const [pillarOpen, setPillarOpen] = useState(true);
 
   function go(key: string) {
     const next = new URLSearchParams(params.toString());
@@ -206,6 +217,36 @@ export default function MarketerShell({
               <Layers className="h-4 w-4 shrink-0" aria-hidden="true" />
               Overall
             </button>
+
+            {/* Pillar group */}
+            <button onClick={() => setPillarOpen((o) => !o)}
+              className={`mt-1 flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
+                inPillarGroup ? "text-primary" : "text-ink hover:bg-primary/10"
+              }`}
+              aria-expanded={pillarOpen}>
+              <Boxes className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="flex-1 text-left">Pillar</span>
+              <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${pillarOpen ? "" : "-rotate-90"}`}
+                aria-hidden="true" />
+            </button>
+
+            {pillarOpen && (
+              <div className="ml-4 flex flex-col gap-1 border-l border-line pl-3">
+                {PILLAR_CHILDREN.map((c) => {
+                  const Icon = c.icon;
+                  const on = c.key === active;
+                  return (
+                    <button key={c.key} onClick={() => go(c.key)}
+                      className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200 ${
+                        on ? "bg-primary text-primary-fg shadow-lift" : "text-muted-fg hover:bg-primary/10 hover:text-ink"
+                      }`}>
+                      <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </nav>
 
           <div className="mt-4 border-t border-line pt-4">
@@ -268,6 +309,8 @@ export default function MarketerShell({
           {active === "unknown" && <UnknownTab rows={unknowns} />}
           {active === "product-gmv" && <ProductGmvTab products={products} />}
           {active === "overall" && <OverallTab overall={overall} />}
+          {active === "pillar-create" && <PillarCreate />}
+          {active === "pillar-report" && <PillarReport />}
         </div>
       </main>
     </div>

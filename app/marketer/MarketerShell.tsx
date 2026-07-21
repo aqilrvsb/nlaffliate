@@ -34,6 +34,7 @@ type Live = {
   note: string | null; status: string; post_url: string | null;
   ads_budget: number | null; affiliate_can_edit: number;
   ad_spend: number | null; gross_revenue: number | null; roi: number | null;
+  brand_id: number | null; brand_name: string | null;
   live_title: string | null;
   gmv: number | null; viewers: number | null; items_sold: number | null;
   duration_live: string | null; screenshot_path: string | null;
@@ -338,17 +339,21 @@ function DashboardTab({ affiliates, inRange, pending, success, products, overall
   affiliates: Affiliate[]; inRange: Live[]; pending: Live[]; success: Live[];
   products: Product[]; overall: Overall[]; from: string; to: string;
 }) {
-  const t = aggregate(success);
   const rm = (n: number, has: boolean) => (has ? `RM${n.toFixed(2)}` : "—");
 
-  // "" = All Brands, the default. Only the brand-scoped summaries (Overall and
-  // Product GMV Max) respond to it — lives belong to affiliates, not brands.
+  // "" = All Brands, the default. Every summary respects it — a scheduled
+  // live now carries the brand it was booked against.
   const [brand, setBrand] = useState("");
   const inBrand = (id: number | null) => !brand || String(id ?? "") === brand;
 
   const within = (d: string) => (!from || d >= from) && (!to || d <= to);
   const prod = products.filter((p) => within(p.report_date) && inBrand(p.brand_id));
   const ovr = overall.filter((o) => within(o.report_date) && inBrand(o.brand_id));
+
+  const livesB = inRange.filter((l) => inBrand(l.brand_id));
+  const pendingB = pending.filter((l) => inBrand(l.brand_id));
+  const successB = success.filter((l) => inBrand(l.brand_id));
+  const t = aggregate(successB);
 
   const pSpend = prod.reduce((s, r) => s + (r.spend || 0), 0);
   const pGross = prod.reduce((s, r) => s + (r.gross_revenue || 0), 0);
@@ -373,9 +378,7 @@ function DashboardTab({ affiliates, inRange, pending, success, products, overall
             allowAll className="!py-2 text-sm" />
         </div>
         <p className="pb-2 text-xs text-muted-fg">
-          {brand
-            ? "Overall & Product GMV Max ditapis ikut brand ini. Success Live ikut affiliate, tidak terikat brand."
-            : "Menunjukkan semua brand."}
+          {brand ? "Semua ringkasan ditapis ikut brand ini." : "Menunjukkan semua brand."}
         </p>
       </div>
 
@@ -395,8 +398,8 @@ function DashboardTab({ affiliates, inRange, pending, success, products, overall
       <section>
         <h2 className="section-title mb-2">Summary — Success Live</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          <Kpi Icon={CheckCircle2} label="Total Live" value={inRange.length}
-            sub={`${pending.length} pending · ${success.length} done`} />
+          <Kpi Icon={CheckCircle2} label="Total Live" value={livesB.length}
+            sub={`${pendingB.length} pending · ${successB.length} done`} />
           <Kpi Icon={TrendingUp} label="Affiliate Sales" value={`RM${t.gmv.toFixed(2)}`} fill="yellow" />
           <Kpi Icon={Users} label="Affiliate Viewers" value={t.viewers} />
           <Kpi Icon={ShoppingBag} label="Affiliate Items" value={t.items} />

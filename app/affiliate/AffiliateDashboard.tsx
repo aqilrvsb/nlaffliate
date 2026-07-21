@@ -22,8 +22,10 @@ import { fmtDate, fmtTimeRange, sumDurations } from "@/lib/format";
 import { resolveRange } from "@/lib/daterange";
 
 type Profile = { id: number; label: string; url: string };
+type Brand = { id: number; name: string };
 type Booking = {
   id: number; profile_id: number; profile_label: string; profile_url: string;
+  brand_id: number | null; brand_name: string | null;
   live_date: string; start_time: string; end_time: string | null;
   note: string | null; status: string; post_url: string | null;
   ads_budget: number | null; affiliate_can_edit: number; live_title: string | null;
@@ -43,20 +45,25 @@ export default function AffiliateDashboard({
   waGroupUrl?: string | null;
 }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  // "" = All Brands, the default.
+  const [brandFilter, setBrandFilter] = useState("");
 
   const load = useCallback(async () => {
-    const [p, b, po] = await Promise.all([
+    const [p, b, po, br] = await Promise.all([
       fetch("/api/profiles").then((r) => r.json()),
       fetch("/api/bookings").then((r) => r.json()),
       fetch("/api/posts").then((r) => r.json()),
+      fetch("/api/brands").then((r) => r.json()),
     ]);
     setProfiles(p.profiles || []);
     setBookings(b.bookings || []);
     setPosts(po.posts || []);
+    setBrands(br.brands || []);
     setLoading(false);
   }, []);
 
@@ -75,6 +82,7 @@ export default function AffiliateDashboard({
       if (from && b.live_date < from) return false;
       if (to && b.live_date > to) return false;
       if (profileFilter && String(b.profile_id) !== profileFilter) return false;
+      if (brandFilter && String(b.brand_id ?? "") !== brandFilter) return false;
       return true;
     })
     // Always newest first (by date, then start time).
@@ -145,6 +153,22 @@ export default function AffiliateDashboard({
       </div>
 
       <DateRangeFilter count={filtered.length} profiles={profiles} />
+
+      <div className="card flex flex-wrap items-end gap-3">
+        <div className="min-w-[220px]">
+          <label className="label" htmlFor="aff-brand">Brand</label>
+          <select id="aff-brand" className="input cursor-pointer !py-2 text-sm"
+            value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)}>
+            <option value="">All Brands</option>
+            {brands.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+        </div>
+        <p className="pb-2 text-xs text-muted-fg">
+          {brandFilter ? "Menunjukkan satu brand sahaja." : "Menunjukkan semua brand."}
+        </p>
+      </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi Icon={CalendarDays} label="Total Live" value={filtered.length} />
@@ -235,6 +259,7 @@ export default function AffiliateDashboard({
         open={scheduleOpen}
         onClose={() => setScheduleOpen(false)}
         profiles={profiles}
+        brands={brands}
         reload={load}
       />
     </div>
@@ -290,10 +315,12 @@ function Kpi({ Icon, label, value, accent, tone, fill, sub, className = "" }: {
 
 /* ── Schedule modal ───────────────────────────────────── */
 
-function ScheduleModal({ open, onClose, profiles, reload }: {
-  open: boolean; onClose: () => void; profiles: Profile[]; reload: () => void;
+function ScheduleModal({ open, onClose, profiles, brands, reload }: {
+  open: boolean; onClose: () => void;
+  profiles: Profile[]; brands: Brand[]; reload: () => void;
 }) {
   const [profileId, setProfileId] = useState("");
+  const [brandId, setBrandId] = useState("");
   const [date, setDate] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
@@ -302,7 +329,7 @@ function ScheduleModal({ open, onClose, profiles, reload }: {
   const [saving, setSaving] = useState(false);
 
   function reset() {
-    setProfileId(""); setDate(""); setStart(""); setEnd(""); setNote(""); setError("");
+    setProfileId(""); setBrandId(""); setDate(""); setStart(""); setEnd(""); setNote(""); setError("");
   }
 
   async function submit(e: React.FormEvent) {
@@ -312,7 +339,7 @@ function ScheduleModal({ open, onClose, profiles, reload }: {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        profile_id: Number(profileId), live_date: date,
+        profile_id: Number(profileId), brand_id: brandId, live_date: date,
         start_time: start, end_time: end || null, note,
       }),
     });
@@ -344,6 +371,23 @@ function ScheduleModal({ open, onClose, profiles, reload }: {
               <option key={p.id} value={p.id}>{p.label} — {p.url}</option>
             ))}
           </select>
+        </div>
+
+        {/* Brands come from the marketer this affiliate is assigned to. */}
+        <div className="sm:col-span-2">
+          <label className="label" htmlFor="m-brand">Brand</label>
+          <select id="m-brand" className="input cursor-pointer" value={brandId}
+            onChange={(e) => setBrandId(e.target.value)} required>
+            <option value="">Select a brand…</option>
+            {brands.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+          {brands.length === 0 && (
+            <p className="mt-1 text-xs text-muted-fg">
+              Marketer anda belum tambah brand — hubungi mereka dahulu.
+            </p>
+          )}
         </div>
         <div>
           <label className="label" htmlFor="m-date">Date</label>
@@ -469,6 +513,9 @@ function BookingCard({ b, reload }: { b: Booking; reload: () => void }) {
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-bold text-ink">{b.profile_label}</span>
             <StatusBadge status={b.status} />
+            {b.brand_name && (
+              <span className="chip bg-primary/10 text-primary">{b.brand_name}</span>
+            )}
             {b.ads_budget != null && (
               <span className="chip bg-accent/10 text-accent">Budget RM{b.ads_budget}</span>
             )}

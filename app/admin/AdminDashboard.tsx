@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   TrendingUp, Users, ShoppingBag, UserRound, Bot, Check, ExternalLink,
   Loader2, KeyRound, Clock, AlertTriangle, CalendarDays, Timer,
-  LayoutDashboard, Package, Boxes,
+  LayoutDashboard, Package, Boxes, Link2, Trash2, Plus, AlertCircle,
 } from "lucide-react";
+import Modal from "@/components/Modal";
 import TabBar from "@/components/TabBar";
 import ProductsTab from "./ProductsTab";
 import SamplesTab from "./SamplesTab";
@@ -35,6 +36,7 @@ export default function AdminDashboard({
 }: { marketers: Marketer[]; affiliates: Affiliate[]; rows: Row[] }) {
   const router = useRouter();
   const [savingId, setSavingId] = useState<number | null>(null);
+  const [linksFor, setLinksFor] = useState<Affiliate | null>(null);
 
   async function assign(affiliateId: number, marketerId: string) {
     setSavingId(affiliateId);
@@ -142,6 +144,11 @@ export default function AdminDashboard({
                   )}
                 </div>
               </div>
+
+              <button className="btn-ghost !py-2" onClick={() => setLinksFor(a)}>
+                <Link2 className="h-4 w-4" aria-hidden="true" />
+                TikTok links
+              </button>
             </div>
           ))}
           {affiliates.length === 0 && (
@@ -212,7 +219,113 @@ export default function AdminDashboard({
       </section>
       </>
       )}
+
+      <TikTokLinksModal affiliate={linksFor} onClose={() => setLinksFor(null)} />
     </div>
+  );
+}
+
+/* ── Admin-managed TikTok links ─────────────────────── */
+
+/**
+ * Affiliates own their links, but they often need help getting them right,
+ * so admin can add and remove them on any affiliate's behalf.
+ */
+function TikTokLinksModal({
+  affiliate, onClose,
+}: { affiliate: Affiliate | null; onClose: () => void }) {
+  const [links, setLinks] = useState<any[]>([]);
+  const [label, setLabel] = useState("");
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    if (!affiliate) return;
+    const d = await fetch(`/api/profiles?user_id=${affiliate.id}`).then((r) => r.json());
+    setLinks(d.profiles || []);
+  }, [affiliate]);
+
+  useEffect(() => {
+    if (!affiliate) return;
+    setLabel(""); setUrl(""); setError("");
+    load();
+  }, [affiliate, load]);
+
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    if (!affiliate) return;
+    setBusy(true); setError("");
+    const res = await fetch("/api/profiles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: affiliate.id, label, url }),
+    });
+    const data = await res.json();
+    setBusy(false);
+    if (!res.ok) return setError(data.error || "Could not add.");
+    setLabel(""); setUrl(""); load();
+  }
+
+  async function remove(id: number, name: string) {
+    if (!confirm(`Delete "${name}"?`)) return;
+    setError("");
+    const res = await fetch(`/api/profiles/${id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) return setError(data.error || "Delete failed.");
+    load();
+  }
+
+  return (
+    <Modal open={!!affiliate} onClose={onClose}
+      title={affiliate ? `TikTok links — ${affiliate.name}` : "TikTok links"}
+      subtitle="Maximum 4 links per affiliate.">
+      <div className="space-y-2">
+        {links.map((p) => (
+          <div key={p.id}
+            className="flex items-center justify-between gap-3 rounded-xl border border-line bg-white/60 px-3 py-2.5">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-ink">{p.label}</p>
+              <a href={p.url} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1 truncate text-xs text-accent hover:underline">
+                <span className="truncate">{p.url}</span>
+                <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+              </a>
+            </div>
+            <button onClick={() => remove(p.id, p.label)}
+              className="shrink-0 cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger"
+              aria-label={`Delete ${p.label}`}>
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        ))}
+        {links.length === 0 && (
+          <p className="rounded-xl border border-dashed border-line py-6 text-center text-sm text-muted-fg">
+            No TikTok links yet.
+          </p>
+        )}
+      </div>
+
+      {links.length < 4 && (
+        <form onSubmit={add} className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_2fr_auto]">
+          <input className="input" placeholder="Label (e.g. Main)" value={label}
+            onChange={(e) => setLabel(e.target.value)} required aria-label="Profile label" />
+          <input className="input" type="url" placeholder="https://www.tiktok.com/@username"
+            value={url} onChange={(e) => setUrl(e.target.value)} required aria-label="TikTok URL" />
+          <button className="btn" disabled={busy}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  : <Plus className="h-4 w-4" aria-hidden="true" />}
+            Add
+          </button>
+        </form>
+      )}
+
+      {error && (
+        <p className="mt-2 flex items-center gap-1.5 text-sm text-danger">
+          <AlertCircle className="h-4 w-4" aria-hidden="true" />{error}
+        </p>
+      )}
+    </Modal>
   );
 }
 

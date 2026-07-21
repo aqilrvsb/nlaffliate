@@ -49,10 +49,12 @@ export default async function MarketerPage() {
                 b.live_date, b.start_time, b.end_time, b.note, b.status, b.post_url,
                 b.ads_budget, b.affiliate_can_edit,
                 b.ad_spend, b.gross_revenue, b.roi,
+                b.brand_id, br.name AS brand_name,
                 r.live_title, r.gmv, r.viewers, r.items_sold, r.duration_live, r.screenshot_path
          FROM bookings b
          JOIN users u ON u.id = b.user_id
          JOIN tiktok_profiles p ON p.id = b.profile_id
+         LEFT JOIN brands br ON br.id = b.brand_id
          LEFT JOIN live_results r ON r.booking_id = b.id
          WHERE u.marketer_id = ?
          ORDER BY b.live_date DESC, b.start_time DESC`

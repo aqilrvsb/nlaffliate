@@ -53,15 +53,34 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
     .prepare("SELECT COUNT(*)::int AS n FROM pillar_entries WHERE brand_id = ?")
     .get<{ n: number }>(id);
 
-  const used = (o?.n ?? 0) + (p?.n ?? 0);
+  const g = await db
+    .prepare("SELECT COUNT(*)::int AS n FROM product_gmv WHERE brand_id = ?")
+    .get<{ n: number }>(id);
+  // Lives are the affiliate's own history, so they survive and simply lose
+  // the brand tag (ON DELETE SET NULL) — worth saying, since it differs.
+  const l = await db
+    .prepare("SELECT COUNT(*)::int AS n FROM bookings WHERE brand_id = ?")
+    .get<{ n: number }>(id);
+
+  const used = (o?.n ?? 0) + (p?.n ?? 0) + (g?.n ?? 0) + (l?.n ?? 0);
   const url = new URL(_req.url);
   if (used > 0 && url.searchParams.get("force") !== "1") {
+    const removed = [
+      `${o?.n ?? 0} Overall report(s)`,
+      `${g?.n ?? 0} Product GMV row(s)`,
+      `${p?.n ?? 0} Pillar entr(ies)`,
+    ].join(", ");
+    const kept = (l?.n ?? 0) > 0
+      ? ` ${l!.n} scheduled live(s) will be kept but lose their brand tag.`
+      : "";
     return NextResponse.json(
       {
-        error: `This brand has ${o?.n ?? 0} Overall report(s) and ${p?.n ?? 0} Pillar entr(ies). Deleting it removes them too.`,
+        error: `Deleting this brand removes ${removed}.${kept}`,
         needsConfirm: true,
         overall: o?.n ?? 0,
+        products: g?.n ?? 0,
         pillars: p?.n ?? 0,
+        lives: l?.n ?? 0,
       },
       { status: 409 }
     );

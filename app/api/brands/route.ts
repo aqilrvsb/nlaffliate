@@ -5,20 +5,35 @@ import { getSession } from "@/lib/session";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** A marketer owns their brands; admin can see everyone's. */
+/**
+ * A marketer owns their brands; admin sees everyone's; an affiliate sees the
+ * brands of the marketer they're assigned to, so they can tag a scheduled
+ * live without being able to create or edit brands themselves.
+ */
 export async function GET() {
   const user = await getSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const brands = user.role === "admin"
-    ? await db.prepare(
+  let brands;
+  if (user.role === "admin") {
+    brands = await db.prepare(
         `SELECT b.id, b.name, b.marketer_id, u.name AS marketer_name
            FROM brands b JOIN users u ON u.id = b.marketer_id
           ORDER BY b.name`
-      ).all()
-    : await db.prepare(
+      ).all();
+  } else if (user.role === "marketer") {
+    brands = await db.prepare(
         "SELECT id, name, marketer_id FROM brands WHERE marketer_id = ? ORDER BY name"
       ).all(user.id);
+  } else {
+    brands = await db.prepare(
+        `SELECT b.id, b.name, b.marketer_id
+           FROM brands b
+           JOIN users a ON a.marketer_id = b.marketer_id
+          WHERE a.id = ?
+          ORDER BY b.name`
+      ).all(user.id);
+  }
 
   return NextResponse.json({ brands });
 }

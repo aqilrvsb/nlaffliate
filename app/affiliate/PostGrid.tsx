@@ -3,7 +3,7 @@
 import { useState } from "react";
 import {
   CalendarDays, Check, Loader2, AlertCircle, Image as ImageIcon,
-  Link as LinkIcon, Play, Video, Download,
+  Link as LinkIcon, Play, Download,
 } from "lucide-react";
 import Pagination from "@/components/Pagination";
 import Modal from "@/components/Modal";
@@ -95,14 +95,20 @@ function PostCard({ it, reload }: { it: PostItem; reload: () => void }) {
           <button onClick={() => setPlaying(true)}
             className="group h-full w-full cursor-pointer"
             aria-label="Play video">
-            {it.cover_thumbnail_url ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={it.cover_thumbnail_url} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <span className="flex h-full w-full items-center justify-center">
-                <Video className="h-6 w-6 text-white/40" aria-hidden="true" />
-              </span>
-            )}
+            {/* Preview the video's own first frame rather than relying on a
+                cover image: PeningLab does not always send one, and the ones
+                it does send are sometimes on a host that fails to load — both
+                left the card solid black. `#t=0.1` makes the browser seek and
+                paint a frame during metadata preload. A cover, when present,
+                is the poster; if it 404s the frame still shows through. */}
+            <video
+              src={`${it.video_url}#t=0.1`}
+              poster={it.cover_thumbnail_url || undefined}
+              preload="metadata"
+              muted
+              playsInline
+              className="pointer-events-none h-full w-full object-cover"
+            />
             <span className="absolute inset-0 flex items-center justify-center bg-black/25 transition-colors duration-200 group-hover:bg-black/40">
               <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-lift">
                 <Play className="ml-0.5 h-4 w-4 fill-ink text-ink" aria-hidden="true" />

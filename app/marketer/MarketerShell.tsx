@@ -606,6 +606,11 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
               {done ? <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> : <Clock className="h-3 w-3" aria-hidden="true" />}
               {done ? "Completed" : "Pending"}
             </span>
+            {l.brand_name && (
+              <span className="chip bg-primary/10 text-primary">
+                <Tag className="h-3 w-3" aria-hidden="true" />{l.brand_name}
+              </span>
+            )}
           </div>
           {l.live_title && (
             <p className="mt-1 text-sm font-bold text-ink">{l.live_title}</p>

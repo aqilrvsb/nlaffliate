@@ -7,7 +7,7 @@ import {
   Link2, CalendarPlus, CalendarDays, Clock, Camera, Settings,
   Sparkles, Check, AlertCircle, Pencil, TrendingUp, Trash2,
   Users, ShoppingBag, Timer, Loader2, Image as ImageIcon, Send, Lock,
-  MessageCircle, Package,
+  MessageCircle, Package, Tag,
 } from "lucide-react";
 import TabBar from "@/components/TabBar";
 import SampleTab from "./SampleTab";
@@ -515,7 +515,9 @@ function BookingCard({ b, reload }: { b: Booking; reload: () => void }) {
             <span className="font-bold text-ink">{b.profile_label}</span>
             <StatusBadge status={b.status} />
             {b.brand_name && (
-              <span className="chip bg-primary/10 text-primary">{b.brand_name}</span>
+              <span className="chip bg-primary/10 text-primary">
+                <Tag className="h-3 w-3" aria-hidden="true" />{b.brand_name}
+              </span>
             )}
             {b.ads_budget != null && (
               <span className="chip bg-accent/10 text-accent">Budget RM{b.ads_budget}</span>

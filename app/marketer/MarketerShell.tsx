@@ -10,7 +10,7 @@ import {
   PackageSearch, FileSpreadsheet, ShoppingCart, Layers, Eye, MousePointerClick,
   Send, Boxes, ClipboardList, Tag,
 } from "lucide-react";
-import BrandsTab, { BrandSelect } from "./BrandsTab";
+import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
 import PillarCreate from "./PillarCreate";
 import PillarReport from "./PillarReport";
 import DateRangeFilter from "@/components/DateRangeFilter";
@@ -368,19 +368,7 @@ function DashboardTab({ affiliates, inRange, pending, success, products, overall
     <>
       <DateRangeFilter count={inRange.length} defaultMode="month" />
 
-      <div className="card flex flex-wrap items-end gap-3">
-        <div className="min-w-[220px]">
-          <label className="label" htmlFor="dash-brand">
-            <Tag className="mr-1 inline h-3 w-3" aria-hidden="true" />
-            Filter By Brands
-          </label>
-          <BrandSelect id="dash-brand" value={brand} onChange={setBrand}
-            allowAll className="!py-2 text-sm" />
-        </div>
-        <p className="pb-2 text-xs text-muted-fg">
-          {brand ? "Semua ringkasan ditapis ikut brand ini." : "Menunjukkan semua brand."}
-        </p>
-      </div>
+      <BrandFilterCard id="dash-brand" value={brand} onChange={setBrand} />
 
       {/* 1) Overall */}
       <section>
@@ -489,27 +477,33 @@ function ScheduleTab({ title, rows, kind, showUpload, defaultMode = "today" }: {
   defaultMode?: "today" | "month" | "all";
 }) {
   const params = useSearchParams();
+  // "" = All Brands, the default.
+  const [brand, setBrand] = useState("");
+  const shown = rows.filter((l) => !brand || String(l.brand_id ?? "") === brand);
+
   const page = getPage(params.get("page"));
-  const pageRows = paginate(rows, page, 10);
+  const pageRows = paginate(shown, page, 10);
 
   return (
     <>
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-[280px] flex-1">
-          <DateRangeFilter count={rows.length} defaultMode={defaultMode} />
+          <DateRangeFilter count={shown.length} defaultMode={defaultMode} />
         </div>
         {showUpload && <BulkUpload />}
       </div>
 
-      {kind === "success" && <SuccessSummary rows={rows} />}
-      {rows.length === 0 ? (
+      <BrandFilterCard id={`sched-brand-${kind}`} value={brand} onChange={setBrand} />
+
+      {kind === "success" && <SuccessSummary rows={shown} />}
+      {shown.length === 0 ? (
         <p className="card text-center text-sm text-muted-fg">No {title.toLowerCase()} in this range.</p>
       ) : (
         <>
           <div className="space-y-3">
             {pageRows.map((l) => <ScheduleCard key={l.booking_id} l={l} kind={kind} />)}
           </div>
-          <Pagination page={page} total={rows.length} size={10} />
+          <Pagination page={page} total={shown.length} size={10} />
         </>
       )}
     </>
@@ -896,15 +890,27 @@ function aggregate(lives: Live[]) {
 }
 
 function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: Live[] }) {
-  const t = aggregate(lives);
+  // "" = All Brands, the default.
+  const [brand, setBrand] = useState("");
+  const shown = lives.filter((l) => !brand || String(l.brand_id ?? "") === brand);
+
+  const t = aggregate(shown);
   const rm = (n: number, has: boolean) => (has ? `RM${n.toFixed(2)}` : "—");
+
+  // Narrowing to a brand should also drop affiliates who ran nothing for it,
+  // otherwise the table fills with all-zero rows.
+  const active = brand
+    ? affiliates.filter((a) => shown.some((l) => l.affiliate_id === a.id))
+    : affiliates;
 
   return (
     <>
-      <DateRangeFilter count={lives.length} defaultMode="month" />
+      <DateRangeFilter count={shown.length} defaultMode="month" />
+
+      <BrandFilterCard id="rep-brand" value={brand} onChange={setBrand} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Kpi Icon={Users} label="Total Affiliate" value={affiliates.length} />
+        <Kpi Icon={Users} label="Total Affiliate" value={active.length} />
         <Kpi Icon={TrendingUp} label="Affiliate Sales" value={`RM${t.gmv.toFixed(2)}`} fill="yellow" />
         <Kpi Icon={Users} label="Affiliate Viewers" value={t.viewers} />
         <Kpi Icon={ShoppingBag} label="Affiliate Items" value={t.items} />
@@ -932,8 +938,8 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
             </tr>
           </thead>
           <tbody>
-            {affiliates.map((a) => {
-              const r = aggregate(lives.filter((l) => l.affiliate_id === a.id));
+            {active.map((a) => {
+              const r = aggregate(shown.filter((l) => l.affiliate_id === a.id));
               return (
                 <tr key={a.id} className="border-t border-line/60 hover:bg-white/50">
                   <td className="px-4 py-3">
@@ -952,8 +958,12 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
                 </tr>
               );
             })}
-            {affiliates.length === 0 && (
-              <tr><td colSpan={9} className="px-4 py-12 text-center text-muted-fg">No affiliates assigned to you yet.</td></tr>
+            {active.length === 0 && (
+              <tr><td colSpan={9} className="px-4 py-12 text-center text-muted-fg">
+                {affiliates.length === 0
+                  ? "No affiliates assigned to you yet."
+                  : "No affiliate ran a live for this brand in this range."}
+              </td></tr>
             )}
           </tbody>
         </table>
@@ -1082,16 +1092,7 @@ function ProductGmvTab({ products }: { products: Product[] }) {
       <DateRangeFilter count={rows.length} countNoun={["campaign", "campaigns"]}
         defaultMode="month" />
 
-      <div className="card flex flex-wrap items-end gap-3">
-        <div className="min-w-[220px]">
-          <label className="label" htmlFor="pg-filter-brand">Brand</label>
-          <BrandSelect id="pg-filter-brand" value={brand} onChange={setBrand}
-            allowAll className="!py-2 text-sm" />
-        </div>
-        <p className="pb-2 text-xs text-muted-fg">
-          {brand ? "Menunjukkan satu brand sahaja." : "Menunjukkan semua brand."}
-        </p>
-      </div>
+      <BrandFilterCard id="pg-filter-brand" value={brand} onChange={setBrand} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Kpi Icon={PackageSearch} label="Product Campaigns" value={rows.length} />
@@ -1263,16 +1264,7 @@ function OverallTab({ overall }: { overall: Overall[] }) {
       <DateRangeFilter count={rows.length} countNoun={["report", "reports"]}
         defaultMode="month" />
 
-      <div className="card flex flex-wrap items-end gap-3">
-        <div className="min-w-[220px]">
-          <label className="label" htmlFor="ov-filter-brand">Brand</label>
-          <BrandSelect id="ov-filter-brand" value={brand} onChange={setBrand}
-            allowAll className="!py-2 text-sm" />
-        </div>
-        <p className="pb-2 text-xs text-muted-fg">
-          {brand ? "Menunjukkan satu brand sahaja." : "Menunjukkan semua brand."}
-        </p>
-      </div>
+      <BrandFilterCard id="ov-filter-brand" value={brand} onChange={setBrand} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Kpi Icon={TrendingUp} label="Overall GMV" value={money(gmv)} fill="yellow" />

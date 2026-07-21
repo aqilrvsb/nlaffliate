@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Tag, Plus, Pencil, Trash2, Loader2, AlertCircle, Check,
 } from "lucide-react";
+// Tag doubles as the brand-filter icon below.
 import Modal from "@/components/Modal";
 
 export type Brand = { id: number; name: string };
@@ -166,6 +167,30 @@ function BrandModal({
 }
 
 /* ── Shared brand picker ─────────────────────────────── */
+
+/**
+ * The standard "filter this tab by brand" card. Every tab that reports
+ * brand-scoped data shows the same control, defaulting to All Brands.
+ */
+export function BrandFilterCard({
+  value, onChange, id,
+}: { value: string; onChange: (v: string) => void; id: string }) {
+  return (
+    <div className="card flex flex-wrap items-end gap-3">
+      <div className="min-w-[220px]">
+        <label className="label" htmlFor={id}>
+          <Tag className="mr-1 inline h-3 w-3" aria-hidden="true" />
+          Brand
+        </label>
+        <BrandSelect id={id} value={value} onChange={onChange} allowAll
+          className="!py-2 text-sm" />
+      </div>
+      <p className="pb-2 text-xs text-muted-fg">
+        {value ? "Menunjukkan satu brand sahaja." : "Menunjukkan semua brand."}
+      </p>
+    </div>
+  );
+}
 
 /** Dropdown of the marketer's brands. `allowAll` adds an "All Brands" option. */
 export function BrandSelect({

@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  Loader2, ChevronDown, Tag,
+  Loader2, ChevronDown,
 } from "lucide-react";
-import { BrandSelect } from "./BrandsTab";
+import { BrandFilterCard } from "./BrandsTab";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import { resolveRange } from "@/lib/daterange";
 import { fmtDate } from "@/lib/format";
@@ -105,19 +105,7 @@ export default function PillarReport() {
       <DateRangeFilter count={entries.length} countNoun={["entri", "entri"]}
         defaultMode="month" />
 
-      <div className="card flex flex-wrap items-end gap-3">
-        <div className="min-w-[220px]">
-          <label className="label" htmlFor="pr-brand">
-            <Tag className="mr-1 inline h-3 w-3" aria-hidden="true" />
-            Brand
-          </label>
-          <BrandSelect id="pr-brand" value={brand} onChange={setBrand}
-            allowAll className="!py-2 text-sm" />
-        </div>
-        <p className="pb-2 text-xs text-muted-fg">
-          {brand ? "Menunjukkan satu brand sahaja." : "Menunjukkan semua brand."}
-        </p>
-      </div>
+      <BrandFilterCard id="pr-brand" value={brand} onChange={setBrand} />
 
       {loading ? (
         <p className="flex items-center gap-2 text-sm text-muted-fg">

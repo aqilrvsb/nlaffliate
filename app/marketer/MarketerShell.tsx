@@ -74,7 +74,9 @@ const AFFILIATE_CHILDREN = [
   { key: "success", label: "Success Affiliate", icon: CheckCircle2 },
   { key: "posting", label: "Posting Affiliate", icon: Send },
   { key: "reporting", label: "Reporting Affiliate", icon: BarChart3 },
-  { key: "unknown", label: "Unknown Affiliate", icon: HelpCircle },
+  // "unknown" is intentionally absent from the sidebar — unmatched bulk rows
+  // are still collected and the ?tab=unknown route still renders, so nothing
+  // is lost, but it is not a place marketers need to visit day to day.
 ] as const;
 
 const PILLAR_CHILDREN = [
@@ -558,6 +560,18 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
   const [eEnd, setEEnd] = useState(l.end_time || "");
   const [eBrand, setEBrand] = useState(l.brand_id != null ? String(l.brand_id) : "");
   const [whenErr, setWhenErr] = useState("");
+  const [brandMsg, setBrandMsg] = useState("");
+
+  async function saveBrand(next: string) {
+    setEBrand(next);
+    setBrandMsg("");
+    const d = await patch({ brand_id: next });
+    if (d) {
+      setBrandMsg("Saved");
+      setTimeout(() => setBrandMsg(""), 1500);
+      router.refresh();
+    }
+  }
 
   async function saveWhen() {
     setWhenErr("");
@@ -566,7 +580,6 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         live_date: eDate, start_time: eStart, end_time: eEnd || null,
-        brand_id: eBrand,
       }),
     });
     const data = await res.json();
@@ -631,18 +644,21 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
               {done ? <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> : <Clock className="h-3 w-3" aria-hidden="true" />}
               {done ? "Completed" : "Pending"}
             </span>
-            {l.brand_name && (
-              <span className="chip bg-primary/10 text-primary">
-                <Tag className="h-3 w-3" aria-hidden="true" />{l.brand_name}
-              </span>
-            )}
+            {/* Always show the brand slot — an unset brand is a gap to fix,
+                not something to hide. */}
+            <span className={`chip ${
+              l.brand_name ? "bg-primary/10 text-primary" : "bg-muted text-muted-fg"
+            }`}>
+              <Tag className="h-3 w-3" aria-hidden="true" />
+              {l.brand_name || "Tiada brand"}
+            </span>
           </div>
           {l.live_title && (
             <p className="mt-1 text-sm font-bold text-ink">{l.live_title}</p>
           )}
 
           {editWhen ? (
-            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-4">
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
               <div>
                 <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
                   htmlFor={`ed-${l.booking_id}`}>Date</label>
@@ -661,13 +677,7 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
                 <input id={`ee-${l.booking_id}`} type="time" className="input cursor-pointer !py-1.5 text-sm"
                   value={eEnd} onChange={(e) => setEEnd(e.target.value)} />
               </div>
-              <div>
-                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
-                  htmlFor={`eb-${l.booking_id}`}>Brand</label>
-                <BrandSelect id={`eb-${l.booking_id}`} value={eBrand} onChange={setEBrand}
-                  className="!py-1.5 text-sm" />
-              </div>
-              <div className="flex items-center gap-2 sm:col-span-4">
+              <div className="flex items-center gap-2 sm:col-span-3">
                 <button className="btn !py-1.5 text-xs" onClick={saveWhen}>
                   <Check className="h-3.5 w-3.5" aria-hidden="true" />Save
                 </button>
@@ -675,7 +685,6 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
                   setEditWhen(false); setWhenErr("");
                   setEDate(l.live_date); setEStart(l.start_time || "");
                   setEEnd(l.end_time || "");
-                  setEBrand(l.brand_id != null ? String(l.brand_id) : "");
                 }}>Cancel</button>
                 {whenErr && <span className="text-xs text-danger">{whenErr}</span>}
               </div>
@@ -743,6 +752,23 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
           </button>
         </div>
       )}
+
+      {/* Brand is editable on Pending AND Success. Re-tagging does not touch
+          the figures, and lives booked before brands existed can only be
+          categorised after the fact — which is often once they're complete. */}
+      <div className={`flex flex-wrap items-end gap-3 ${
+        done ? "mt-4 border-t border-line pt-4" : "mt-3"
+      }`}>
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
+            htmlFor={`br-${l.booking_id}`}>Brand</label>
+          <div className="flex items-center gap-2">
+            <BrandSelect id={`br-${l.booking_id}`} value={eBrand}
+              onChange={saveBrand} className="!py-1.5 text-sm sm:w-48" />
+            {brandMsg && <span className="text-xs font-medium text-emerald-600">{brandMsg}</span>}
+          </div>
+        </div>
+      </div>
 
       {/* Manual ad-results entry — Spend / Gross Revenue / ROI. Saving
           moves the live to Success. */}

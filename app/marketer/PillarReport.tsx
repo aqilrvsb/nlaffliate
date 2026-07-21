@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  Layers, Loader2, ListChecks, Target, TrendingUp, ChevronDown, Percent,
+  Loader2, ChevronDown,
 } from "lucide-react";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import { resolveRange } from "@/lib/daterange";
@@ -31,7 +31,10 @@ const COL_BAR: Record<PillarColumnKey, string> = {
 export default function PillarReport() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState<number | null>(null);
+  // Every level starts expanded — the report is for reading, not hunting.
+  // We track what's been collapsed rather than what's open so newly
+  // populated levels are visible without another click.
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
 
   const params = useSearchParams();
   const { from, to } = resolveRange(
@@ -82,14 +85,7 @@ export default function PillarReport() {
       ])
     ) as Record<PillarColumnKey, number>;
 
-    return {
-      perLevel,
-      covered: unique.length,
-      updates: entries.length,
-      colTotals,
-      pct: Math.round((unique.length / TOTAL_PILLAR_ITEMS) * 100),
-      activeLevels: perLevel.filter((l) => l.covered > 0).length,
-    };
+    return { perLevel, colTotals };
   }, [entries]);
 
   return (
@@ -110,29 +106,6 @@ export default function PillarReport() {
         </p>
       ) : (
         <>
-          {/* Headline */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl bg-gradient-to-br from-primary to-primary-hover p-5 text-white shadow-lift sm:col-span-2">
-              <Percent className="mb-2 h-4 w-4 text-white/80" aria-hidden="true" />
-              <p className="text-3xl font-extrabold leading-tight">{stats.pct}%</p>
-              <p className="text-sm text-white/90">Liputan keseluruhan pillar</p>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/25">
-                <div className="h-full rounded-full bg-white transition-all duration-500"
-                  style={{ width: `${stats.pct}%` }} />
-              </div>
-              <p className="mt-2 text-xs text-white/75">
-                {stats.covered} daripada {TOTAL_PILLAR_ITEMS} item diisi
-              </p>
-            </div>
-
-            <Stat Icon={Layers} label="Level aktif" value={`${stats.activeLevels}/10`} />
-            <Stat Icon={ListChecks} label="Item diisi" value={stats.covered} />
-            <Stat Icon={TrendingUp} label="Jumlah kemaskini" value={stats.updates}
-              sub="termasuk kemaskini berulang" className="sm:col-span-2" />
-            <Stat Icon={Target} label="Item belum disentuh"
-              value={TOTAL_PILLAR_ITEMS - stats.covered} className="sm:col-span-2" />
-          </div>
-
           {/* Column coverage */}
           <div className="card">
             <h3 className="mb-3 font-bold text-ink">Liputan mengikut kolum</h3>
@@ -165,7 +138,12 @@ export default function PillarReport() {
             {stats.perLevel.map((l) => (
               <div key={l.level} className="card !p-0 overflow-hidden">
                 <button
-                  onClick={() => setOpen(open === l.level ? null : l.level)}
+                  onClick={() => setCollapsed((cur) => {
+                    const next = new Set(cur);
+                    next.has(l.level) ? next.delete(l.level) : next.add(l.level);
+                    return next;
+                  })}
+                  aria-expanded={!collapsed.has(l.level)}
                   className="flex w-full cursor-pointer items-center gap-3 p-4 text-left transition-colors duration-200 hover:bg-white/50">
                   <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-extrabold ${
                     l.covered > 0 ? "bg-primary text-white" : "bg-muted text-muted-fg"
@@ -188,11 +166,11 @@ export default function PillarReport() {
 
                   <ChevronDown aria-hidden="true"
                     className={`h-4 w-4 shrink-0 text-muted-fg transition-transform duration-200 ${
-                      open === l.level ? "rotate-180" : ""
+                      collapsed.has(l.level) ? "" : "rotate-180"
                     }`} />
                 </button>
 
-                {open === l.level && (
+                {!collapsed.has(l.level) && (
                   <LevelDetail level={l.level} entries={entries.filter((e) => e.level === l.level)} />
                 )}
               </div>
@@ -243,25 +221,6 @@ function LevelDetail({ level, entries }: { level: number; entries: Entry[] }) {
           ))}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function Stat({
-  Icon, label, value, sub, className = "",
-}: {
-  Icon: typeof Layers;
-  label: string;
-  value: React.ReactNode;
-  sub?: string;
-  className?: string;
-}) {
-  return (
-    <div className={`glass rounded-2xl p-4 shadow-lift ${className}`}>
-      <Icon className="mb-2 h-4 w-4 text-muted-fg" aria-hidden="true" />
-      <p className="text-xl font-extrabold leading-tight text-ink">{value}</p>
-      <p className="text-xs text-muted-fg">{label}</p>
-      {sub && <p className="text-[11px] text-muted-fg/70">{sub}</p>}
     </div>
   );
 }

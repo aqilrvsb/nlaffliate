@@ -48,6 +48,20 @@ const BENEFITS = [
   },
 ];
 
+// UGC covers + hero clip generated with PeningLab (nano-banana-pro / gemini)
+// and served from its CDN — the same pipeline that supplies affiliates.
+const CDN =
+  "https://peninglab-content.s3.us-east-005.backblazeb2.com/users/f0fd6781-ed5f-4aa8-a5b9-eec943229092";
+
+const HERO_VIDEO = `${CDN}/ugc/93e75e1e-4994-4692-9e74-208388e16d0b.mp4`;
+
+const UGC_COVERS = [
+  { t: "RAMAI BELI?", s: "PATUTLAH RAMBUT DAH TAK GUGUR", src: `${CDN}/image/39ea995e-dce7-495c-aee3-9e8e3b142595.png` },
+  { t: "GLOW DALAM 7 HARI", s: "Serum viral no.1", src: `${CDN}/image/f1d915eb-cae2-4632-895d-ff8867839560.png` },
+  { t: "STOK NAK HABIS", s: "Restock terhad minggu ni", src: `${CDN}/image/0bf5637d-51fb-4ae3-aee5-702f7ea8caed.png` },
+  { t: "REVIEW JUJUR", s: "Sebelum vs selepas", src: `${CDN}/image/b014accb-0418-4398-b6d6-e3556b0bf826.png` },
+];
+
 const STEPS = [
   { Icon: UserPlus, title: "Daftar", body: "Isi nama, WhatsApp, email dan alamat. Ambil masa bawah 1 minit." },
   { Icon: Link2, title: "Letak Link TikTok", body: "Masukkan sampai 4 link profil TikTok anda dalam Profile Settings." },
@@ -149,7 +163,23 @@ export default async function Home() {
             </ul>
           </div>
 
-          {/* Dashboard preview card */}
+          {/* Sample AI video + dashboard preview */}
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,190px)_1fr]">
+            <div className="relative mx-auto aspect-[9/16] w-full max-w-[190px] overflow-hidden rounded-2xl shadow-glass">
+              <video
+                src={HERO_VIDEO}
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+                className="h-full w-full object-cover"
+              />
+              <span className="absolute left-2 top-2 rounded-lg bg-black/55 px-2 py-1 text-[10px] font-bold text-white backdrop-blur">
+                Contoh video AI
+              </span>
+            </div>
+
           <div className="card">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-sm font-bold text-ink">Live Results</span>
@@ -186,6 +216,7 @@ export default async function Home() {
               <Sparkles className="h-3 w-3 text-accent" aria-hidden="true" />
               Angka dibaca automatik dari screenshot oleh AI
             </p>
+          </div>
           </div>
         </div>
       </section>
@@ -271,15 +302,16 @@ export default async function Home() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            {[
-              { t: "RAMAI BELI?", s: "PATUTLAH RAMBUT DAH TAK GUGUR", g: "from-rose-400 to-pink-600" },
-              { t: "GLOW DALAM 7 HARI", s: "Serum viral no.1", g: "from-amber-400 to-orange-500" },
-              { t: "STOK NAK HABIS", s: "Restock terhad", g: "from-violet-500 to-purple-600" },
-              { t: "REVIEW JUJUR", s: "Sebelum vs selepas", g: "from-emerald-500 to-teal-600" },
-            ].map(({ t, s, g }) => (
-              <div key={t} className={`flex aspect-[9/16] flex-col justify-end rounded-xl bg-gradient-to-br ${g} p-3 text-white shadow-lift`}>
-                <p className="text-sm font-extrabold leading-tight">{t}</p>
-                <p className="mt-1 text-[10px] leading-tight opacity-90">{s}</p>
+            {UGC_COVERS.map(({ t, s, src }) => (
+              <div key={t} className="relative aspect-[9/16] overflow-hidden rounded-xl shadow-lift">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                {/* Gradient scrim so the caption stays legible over any frame */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+                <div className="absolute inset-x-0 bottom-0 p-3 text-white">
+                  <p className="text-sm font-extrabold leading-tight drop-shadow">{t}</p>
+                  <p className="mt-1 text-[10px] leading-tight opacity-90 drop-shadow">{s}</p>
+                </div>
               </div>
             ))}
           </div>

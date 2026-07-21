@@ -27,8 +27,69 @@ import { getSetting } from "@/lib/settings";
  * cover_title/cover_subtitle/cover_thumbnail_url, post_date.
  * tiktok_url starts NULL and status starts 'pending'.
  */
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+async function ingestKey() {
+  return (await getSetting("ingest_key")) || process.env.INGEST_API_KEY || "";
+}
+
+function bearer(req: Request) {
+  return (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+}
+
+/**
+ * GET /api/posts/ingest
+ *
+ * Without a key: returns the contract, so PeningLab can self-serve the spec.
+ * With a valid key: also returns the affiliate roster (id + email + name) so
+ * PeningLab can map a video to the right account before pushing it.
+ */
+export async function GET(req: Request) {
+  const spec = {
+    endpoint: "POST /api/posts/ingest",
+    auth: "Authorization: Bearer <INGEST_API_KEY>",
+    content_type: "application/json",
+    body: {
+      email: "affiliate@example.com  (required — or affiliate_id)",
+      output_url: "https://.../video.mp4  (required)",
+      caption: "TikTok caption (optional)",
+      metadata: {
+        cover_title: "RAMAI BELI? (optional)",
+        cover_subtitle: "PATUTLAH RAMBUT DAH TAK GUGUR (optional)",
+        cover_thumbnail_url: "https://.../cover.png (optional)",
+      },
+      date: "YYYY-MM-DD (optional, defaults to today in Asia/Kuala_Lumpur)",
+      source_id: "peninglab history id (optional but recommended — makes retries idempotent)",
+    },
+    responses: {
+      "200": '{ "ok": true, "id": 123 }  — or { "ok": true, "id": 123, "duplicate": true }',
+      "400": "video link missing",
+      "401": "bad ingest key",
+      "404": "affiliate not found for that email/id",
+      "503": "ingest key not configured",
+    },
+    notes: [
+      "The post lands in the affiliate's Pending Post tab with status 'pending'.",
+      "Once the affiliate pastes the TikTok link, it moves itself to Done Post.",
+      "Send source_id so a network retry cannot create a duplicate post.",
+    ],
+  };
+
+  const key = await ingestKey();
+  if (!key || bearer(req) !== key) {
+    return NextResponse.json({ ok: true, spec });
+  }
+
+  const affiliates = await db
+    .prepare("SELECT id, name, email FROM users WHERE role = 'affiliate' ORDER BY name")
+    .all();
+
+  return NextResponse.json({ ok: true, spec, affiliates });
+}
+
 export async function POST(req: Request) {
-  const key = await getSetting("ingest_key") || process.env.INGEST_API_KEY || "";
+  const key = await ingestKey();
   if (!key) {
     return NextResponse.json(
       { error: "Ingest key not configured. Set it in Admin → Integrations." },
@@ -36,9 +97,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const auth = req.headers.get("authorization") || "";
-  const token = auth.replace(/^Bearer\s+/i, "").trim();
-  if (token !== key) {
+  if (bearer(req) !== key) {
     return NextResponse.json({ error: "Invalid ingest key." }, { status: 401 });
   }
 

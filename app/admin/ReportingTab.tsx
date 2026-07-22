@@ -3,8 +3,9 @@
 import { Fragment, useState } from "react";
 import { ChevronDown, Link2, TrendingUp, TrendingDown, Users, ShoppingBag, Timer, Wallet, CheckCircle2 } from "lucide-react";
 import DateRangeFilter from "@/components/DateRangeFilter";
+import SortTh, { useTableSort } from "@/components/SortableTable";
 import {
-  sumDurations, durationHours, commissionFor,
+  sumDurations, durationHours, commissionFor, durationToSeconds,
 } from "@/lib/format";
 import { profileName } from "@/lib/tiktok";
 
@@ -45,6 +46,10 @@ function aggregate(lives: AdminLive[]) {
     duration: sumDurations(
       lives.filter((l) => l.status === "completed").map((l) => l.duration_live)
     ),
+    // "6h 30m" sorts alphabetically as nonsense, so keep the raw seconds.
+    durationSecs: lives
+      .filter((l) => l.status === "completed")
+      .reduce((sum, l) => sum + durationToSeconds(l.duration_live), 0),
     roi: spend > 0 ? Math.round((gross / spend) * 100) / 100 : null,
     hasBudget: lives.some((l) => l.ads_budget != null),
     hasSpend: lives.some((l) => l.ad_spend != null),
@@ -98,9 +103,26 @@ export default function AdminReportingTab({
   }
 
   const totals = aggregate(rows.filter((l) => active.some((a) => a.id === l.affiliate_id)));
-  const totalCommission = active.reduce(
-    (s, a) => s + subsFor(a).reduce((x, sub) => x + sub.commission, 0), 0
-  );
+
+  // One flat row per affiliate so every column can sort — the sort key has to
+  // sit beside the formatted value, hence durationSecs beside duration.
+  const unsorted = active.map((a) => {
+    const r = aggregate(rows.filter((l) => l.affiliate_id === a.id));
+    const subs = subsFor(a);
+    const income = subs.reduce((s, x) => s + x.commission, 0);
+    return {
+      a, r, subs, income,
+      name: a.name, marketer: a.marketer_name,
+      gmv: r.gmv, viewers: r.viewers, items: r.items,
+      durationSecs: r.durationSecs,
+      budget: r.hasBudget ? r.budget : null,
+      spend: r.hasSpend ? r.spend : null,
+      gross: r.hasGross ? r.gross : null,
+      roi: r.roi,
+    };
+  });
+  const { sorted: tableRows, sort, toggleSort } = useTableSort(unsorted);
+  const totalCommission = tableRows.reduce((s, x) => s + x.income, 0);
   const rm = (n: number, has: boolean) => (has ? `RM${n.toFixed(2)}` : "—");
 
   return (
@@ -154,26 +176,23 @@ export default function AdminReportingTab({
         <table className="w-full min-w-[1180px] text-sm">
           <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
             <tr>
-              <th className="px-4 py-3 font-semibold">Affiliate</th>
-              <th className="px-4 py-3 font-semibold">Marketer</th>
-              <th className="px-4 py-3 text-right font-semibold">Sales</th>
-              <th className="px-4 py-3 text-right font-semibold">Viewers</th>
-              <th className="px-4 py-3 text-right font-semibold">Items</th>
-              <th className="px-4 py-3 font-semibold">Duration</th>
-              <th className="px-4 py-3 text-right font-semibold">Budget</th>
-              <th className="px-4 py-3 text-right font-semibold">Spend</th>
-              <th className="px-4 py-3 text-right font-semibold">Gross Rev.</th>
-              <th className="px-4 py-3 text-right font-semibold">ROI</th>
+              <SortTh k="name" sort={sort} on={toggleSort}>Affiliate</SortTh>
+              <SortTh k="marketer" sort={sort} on={toggleSort}>Marketer</SortTh>
+              <SortTh k="gmv" sort={sort} on={toggleSort} right>Sales</SortTh>
+              <SortTh k="viewers" sort={sort} on={toggleSort} right>Viewers</SortTh>
+              <SortTh k="items" sort={sort} on={toggleSort} right>Items</SortTh>
+              <SortTh k="durationSecs" sort={sort} on={toggleSort}>Duration</SortTh>
+              <SortTh k="budget" sort={sort} on={toggleSort} right>Budget</SortTh>
+              <SortTh k="spend" sort={sort} on={toggleSort} right>Spend</SortTh>
+              <SortTh k="gross" sort={sort} on={toggleSort} right>Gross Rev.</SortTh>
+              <SortTh k="roi" sort={sort} on={toggleSort} right>ROI</SortTh>
               <th className="px-4 py-3 font-semibold">Jenis Komisyen</th>
               <th className="px-4 py-3 text-right font-semibold">Rate</th>
-              <th className="px-4 py-3 text-right font-semibold">Komisyen</th>
+              <SortTh k="income" sort={sort} on={toggleSort} right>Komisyen</SortTh>
             </tr>
           </thead>
           <tbody>
-            {active.map((a) => {
-              const r = aggregate(rows.filter((l) => l.affiliate_id === a.id));
-              const subs = subsFor(a);
-              const income = subs.reduce((s, x) => s + x.commission, 0);
+            {tableRows.map(({ a, r, subs, income }) => {
               return (
                 <Fragment key={a.id}>
                   <tr className="border-t border-line bg-white/40">

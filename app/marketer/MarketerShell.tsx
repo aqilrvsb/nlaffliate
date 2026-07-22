@@ -18,6 +18,7 @@ import ProfileBrandPicker from "@/components/ProfileBrandPicker";
 import AddProfileLink, { DeleteProfileLink } from "@/components/AddProfileLink";
 import ProductsTab from "@/app/admin/ProductsTab";
 import AffiliatePosts from "./AffiliatePosts";
+import SortTh, { useTableSort } from "@/components/SortableTable";
 import Modal from "@/components/Modal";
 import ExampleHint from "@/components/ExampleHint";
 import CommissionEditor, { commissionLabel } from "@/components/CommissionEditor";
@@ -31,7 +32,7 @@ import ImageModal from "@/components/ImageModal";
 import { getPage, paginate } from "@/lib/pagination";
 import {
   fmtDate, fmtTime, fmtTimeRange, sumDurations,
-  durationHours, commissionFor,
+  durationHours, commissionFor, durationToSeconds,
 } from "@/lib/format";
 import { resolveRange } from "@/lib/daterange";
 import { useNavigate } from "@/lib/useNavigate";
@@ -1430,14 +1431,20 @@ function aggregate(lives: Live[]) {
   const budget = lives.reduce((s, l) => s + (l.ads_budget || 0), 0);
   const spend = lives.reduce((s, l) => s + (l.ad_spend || 0), 0);
   const gross = lives.reduce((s, l) => s + (l.gross_revenue || 0), 0);
-  const duration = sumDurations(
-    lives.filter((l) => l.status === "completed").map((l) => l.duration_live)
+  const completed = lives.filter((l) => l.status === "completed");
+  const duration = sumDurations(completed.map((l) => l.duration_live));
+  // "6h 30m" sorts alphabetically as nonsense, so keep the raw seconds too.
+  const durationSecs = completed.reduce(
+    (sum, l) => sum + durationToSeconds(l.duration_live), 0
   );
   const roi = spend > 0 ? Math.round((gross / spend) * 100) / 100 : null;
   const hasBudget = lives.some((l) => l.ads_budget != null);
   const hasSpend = lives.some((l) => l.ad_spend != null);
   const hasGross = lives.some((l) => l.gross_revenue != null);
-  return { gmv, viewers, items, budget, spend, gross, duration, roi, hasBudget, hasSpend, hasGross };
+  return {
+    gmv, viewers, items, budget, spend, gross, duration, durationSecs, roi,
+    hasBudget, hasSpend, hasGross,
+  };
 }
 
 function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: Live[] }) {
@@ -1484,11 +1491,28 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
     });
   }
 
+  // One flat row per affiliate, so the table can be sorted by any column.
+  // Sorting the derived figures means the sort key has to exist alongside the
+  // formatted value — hence durationSecs beside duration.
+  const unsorted = active.map((a) => {
+    const r = aggregate(shown.filter((l) => l.affiliate_id === a.id));
+    const subs = subsFor(a);
+    const income = subs.reduce((x, sub) => x + sub.commission, 0);
+    return {
+      a, r, subs, income,
+      name: a.name,
+      gmv: r.gmv, viewers: r.viewers, items: r.items,
+      durationSecs: r.durationSecs,
+      budget: r.hasBudget ? r.budget : null,
+      spend: r.hasSpend ? r.spend : null,
+      gross: r.hasGross ? r.gross : null,
+      roi: r.roi,
+    };
+  });
+  const { sorted: rows, sort, toggleSort } = useTableSort(unsorted);
+
   // What every affiliate is owed in this range, together.
-  const totalCommission = active.reduce(
-    (s, a) => s + subsFor(a).reduce((x, sub) => x + sub.commission, 0),
-    0
-  );
+  const totalCommission = rows.reduce((s, x) => s + x.income, 0);
 
   return (
     <>
@@ -1523,26 +1547,22 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
         <table className="w-full min-w-[1040px] text-sm">
           <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
             <tr>
-              <th className="px-4 py-3 font-semibold">Affiliate</th>
-              <th className="px-4 py-3 text-right font-semibold">Affiliate Sales</th>
-              <th className="px-4 py-3 text-right font-semibold">Affiliate Viewers</th>
-              <th className="px-4 py-3 text-right font-semibold">Affiliate Items</th>
-              <th className="px-4 py-3 font-semibold">Affiliate Duration</th>
-              <th className="px-4 py-3 text-right font-semibold">Affiliate Budget</th>
-              <th className="px-4 py-3 text-right font-semibold">Affiliate Spend</th>
-              <th className="px-4 py-3 text-right font-semibold">Affiliate Gross Rev.</th>
-              <th className="px-4 py-3 text-right font-semibold">Affiliate ROI</th>
+              <SortTh k="name" sort={sort} on={toggleSort}>Affiliate</SortTh>
+              <SortTh k="gmv" sort={sort} on={toggleSort} right>Affiliate Sales</SortTh>
+              <SortTh k="viewers" sort={sort} on={toggleSort} right>Affiliate Viewers</SortTh>
+              <SortTh k="items" sort={sort} on={toggleSort} right>Affiliate Items</SortTh>
+              <SortTh k="durationSecs" sort={sort} on={toggleSort}>Affiliate Duration</SortTh>
+              <SortTh k="budget" sort={sort} on={toggleSort} right>Affiliate Budget</SortTh>
+              <SortTh k="spend" sort={sort} on={toggleSort} right>Affiliate Spend</SortTh>
+              <SortTh k="gross" sort={sort} on={toggleSort} right>Affiliate Gross Rev.</SortTh>
+              <SortTh k="roi" sort={sort} on={toggleSort} right>Affiliate ROI</SortTh>
               <th className="px-4 py-3 font-semibold">Jenis Komisyen</th>
               <th className="px-4 py-3 text-right font-semibold">Rate</th>
-              <th className="px-4 py-3 text-right font-semibold">Komisyen</th>
+              <SortTh k="income" sort={sort} on={toggleSort} right>Komisyen</SortTh>
             </tr>
           </thead>
           <tbody>
-            {active.map((a) => {
-              const r = aggregate(shown.filter((l) => l.affiliate_id === a.id));
-              const subs = subsFor(a);
-              const totalIncome = subs.reduce((s, x) => s + x.commission, 0);
-
+            {rows.map(({ a, r, subs, income: totalIncome }) => {
               return (
                 <Fragment key={a.id}>
                   <tr className="border-t border-line bg-white/40">
@@ -2213,63 +2233,6 @@ function NavIcon({ Icon, busy }: { Icon: typeof Users; busy: boolean }) {
 }
 
 /** Clickable table header: asc -> desc -> back to the default order. */
-/**
- * Click-to-sort for a table. Third click clears back to the tab's own default
- * order, so sorting is always escapable. Nulls sink to the bottom in both
- * directions — an empty cell is not a value, and floating them to the top
- * buries the rows you asked to see.
- */
-function useTableSort<T>(rows: T[]) {
-  const [sort, setSort] = useState<{ k: string; dir: 1 | -1 } | null>(null);
-
-  const sorted = sort
-    ? [...rows].sort((a: any, b: any) => {
-        const x = a[sort.k], y = b[sort.k];
-        if (x == null && y == null) return 0;
-        if (x == null) return 1;
-        if (y == null) return -1;
-        return (typeof x === "number" && typeof y === "number"
-          ? x - y
-          : String(x).localeCompare(String(y))) * sort.dir;
-      })
-    : rows;
-
-  function toggleSort(k: string) {
-    setSort((cur) =>
-      cur && cur.k === k ? (cur.dir === 1 ? { k, dir: -1 } : null) : { k, dir: 1 }
-    );
-  }
-
-  return { sorted, sort, toggleSort };
-}
-
-function SortTh({
-  k, sort, on, right, children,
-}: {
-  k: string;
-  sort: { k: string; dir: 1 | -1 } | null;
-  on: (k: string) => void;
-  right?: boolean;
-  children: React.ReactNode;
-}) {
-  const active = sort?.k === k;
-  return (
-    <th className={`px-4 py-3 font-semibold ${right ? "text-right" : ""}`}>
-      <button onClick={() => on(k)}
-        aria-sort={active ? (sort!.dir === 1 ? "ascending" : "descending") : "none"}
-        className={`inline-flex cursor-pointer items-center gap-1 uppercase tracking-wide transition-colors duration-200 hover:text-ink ${
-          active ? "text-ink" : ""
-        } ${right ? "flex-row-reverse" : ""}`}>
-        {children}
-        <ChevronDown aria-hidden="true"
-          className={`h-3 w-3 shrink-0 transition-transform duration-200 ${
-            active ? (sort!.dir === 1 ? "rotate-180" : "") : "opacity-25"
-          }`} />
-      </button>
-    </th>
-  );
-}
-
 /* ── shared bits ───────────────────────────────────────── */
 
 function Kpi({ Icon, label, value, tone, fill, sub, className = "" }: {

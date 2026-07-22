@@ -10,11 +10,13 @@ import {
   HelpCircle, Upload, ImagePlus, TrendingDown, Pencil, BarChart3,
   PackageSearch, FileSpreadsheet, ShoppingCart, Layers, Eye, MousePointerClick,
   Send, Boxes, ClipboardList, Tag, CalendarPlus, Trash2, AlertCircle, Settings, Plus,
+  Package,
 } from "lucide-react";
 import { AffiliateModal, AffiliateActions, type ManagedAffiliate } from "./AffiliateManager";
 import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
 import ProfileBrandPicker from "@/components/ProfileBrandPicker";
 import AddProfileLink from "@/components/AddProfileLink";
+import ProductsTab from "@/app/admin/ProductsTab";
 import Modal from "@/components/Modal";
 import ExampleHint from "@/components/ExampleHint";
 import CommissionEditor, { commissionLabel } from "@/components/CommissionEditor";
@@ -112,6 +114,7 @@ const TAB_LABELS: Record<string, string> = {
   posting: "Posting Affiliate",
   reporting: "Reporting Affiliate",
   unknown: "Unknown Affiliate",
+  product: "Product",
   "product-gmv": "Product GMV",
   overall: "Overall",
 };
@@ -244,6 +247,17 @@ export default function MarketerShell({
               Brand
             </button>
 
+            {/* Product — the same shared catalogue admin maintains. Products
+                belong to no single marketer, so this is one list both roles
+                edit; a marketer filling it in when admin is busy is the point. */}
+            <button onClick={() => go("product")}
+              className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
+                active === "product" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
+              }`}>
+              <NavIcon Icon={Package} busy={navPending && navKey === "product"} />
+              Product
+            </button>
+
             {/* Product GMV — its own main category */}
             <button onClick={() => go("product-gmv")}
               className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
@@ -362,6 +376,7 @@ export default function MarketerShell({
           {active === "unknown" && <UnknownTab rows={unknowns} />}
           {active === "product-gmv" && <ProductGmvTab products={products} />}
           {active === "brand" && <BrandsTab />}
+          {active === "product" && <ProductsTab />}
           {active === "overall" && <OverallTab overall={overall} />}
           {active === "pillar-create" && <PillarCreate />}
           {active === "pillar-report" && <PillarReport />}

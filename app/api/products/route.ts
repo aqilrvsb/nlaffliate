@@ -6,7 +6,7 @@ import { uploadImage } from "@/lib/storage";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Catalogue is readable by any signed-in user; only admin can change it. */
+/** Readable by any signed-in user; admin and marketers can change it. */
 
 /** Products hang off a marketer's brand — a catalogue row has no affiliates. */
 async function assignableBrand(raw: string): Promise<number | null | "bad"> {
@@ -47,8 +47,13 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const user = await getSession();
-  if (!user || user.role !== "admin") {
-    return NextResponse.json({ error: "Admin only." }, { status: 403 });
+  // The catalogue is shared: a marketer filling it in when admin is busy is
+  // the point, not an exception. Affiliates stay read-only.
+  if (!user || (user.role !== "admin" && user.role !== "marketer")) {
+    return NextResponse.json(
+      { error: "Only admin or a marketer can edit products." },
+      { status: 403 }
+    );
   }
 
   const form = await req.formData();

@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 
 async function requireAdmin() {
   const user = await getSession();
-  return user && user.role === "admin" ? user : null;
+  // Shared catalogue — admin and marketers maintain it together.
+  return user && (user.role === "admin" || user.role === "marketer") ? user : null;
 }
 
 
@@ -25,7 +26,10 @@ async function assignableBrand(raw: string): Promise<number | null | "bad"> {
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   if (!(await requireAdmin())) {
-    return NextResponse.json({ error: "Admin only." }, { status: 403 });
+    return NextResponse.json(
+      { error: "Only admin or a marketer can edit products." },
+      { status: 403 }
+    );
   }
   const id = Number(params.id);
 
@@ -90,7 +94,10 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   if (!(await requireAdmin())) {
-    return NextResponse.json({ error: "Admin only." }, { status: 403 });
+    return NextResponse.json(
+      { error: "Only admin or a marketer can edit products." },
+      { status: 403 }
+    );
   }
   const id = Number(params.id);
 

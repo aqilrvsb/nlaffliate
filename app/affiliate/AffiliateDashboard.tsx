@@ -72,10 +72,8 @@ function affiliateStatus(b: Booking) {
 
 export default function AffiliateDashboard({
   userName,
-  marketerName,
 }: {
   userName: string;
-  marketerName?: string | null;
 }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -172,12 +170,6 @@ export default function AffiliateDashboard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-ink">Hi {userName}</h1>
-          <p className="text-sm text-muted-fg">
-            Schedule your lives and upload your results.
-            {marketerName && (
-              <> Marketer anda: <span className="font-semibold text-ink">{marketerName}</span>.</>
-            )}
-          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* The group link moved onto each TikTok profile, where it is scoped

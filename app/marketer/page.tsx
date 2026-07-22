@@ -45,7 +45,10 @@ export default async function MarketerPage() {
                     (SELECT json_agg(json_build_object(
                               'id', xb.id, 'name', xb.name,
                               'commission_type', x.commission_type,
-                              'commission_value', x.commission_value
+                              'commission_value', x.commission_value,
+                              'lives', (SELECT COUNT(*)::int FROM bookings bk
+                                         WHERE bk.profile_id = p.id
+                                           AND bk.brand_id = xb.id)
                             ) ORDER BY xb.name)
                        FROM tiktok_profile_brands x
                        JOIN brands xb ON xb.id = x.brand_id

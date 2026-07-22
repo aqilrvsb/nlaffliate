@@ -97,6 +97,38 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       }
     }
 
+    /**
+     * A brand carrying lives on this link cannot be dropped: those bookings
+     * are filed against the pair, and removing it would strand their brand
+     * tag and the commission that pays them. Refuse and name the brand, so
+     * the marketer can see what is holding it.
+     */
+    const current = (await db
+      .prepare("SELECT brand_id FROM tiktok_profile_brands WHERE profile_id = ?")
+      .all(params.id)) as { brand_id: number }[];
+    const removing = current.map((r) => r.brand_id).filter((b) => !ids.includes(b));
+
+    for (const gone of removing) {
+      const used = await db
+        .prepare(
+          "SELECT COUNT(*)::int AS n FROM bookings WHERE profile_id = ? AND brand_id = ?"
+        )
+        .get<{ n: number }>(params.id, gone);
+      if ((used?.n ?? 0) > 0) {
+        const b = await db
+          .prepare("SELECT name FROM brands WHERE id = ?")
+          .get<{ name: string }>(gone);
+        return NextResponse.json(
+          {
+            error: `"${b?.name ?? "Brand"}" ada ${used!.n} jadual live pada link ini — tidak boleh dibuang.`,
+            brand_id: gone,
+            lives: used!.n,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     await db.prepare("DELETE FROM tiktok_profile_brands WHERE profile_id = ?").run(params.id);
     for (const n of ids) {
       await db

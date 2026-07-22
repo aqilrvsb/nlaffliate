@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Tag, Loader2, Check, AlertCircle, ChevronDown } from "lucide-react";
+import { Tag, Loader2, Check, AlertCircle, ChevronDown, Lock } from "lucide-react";
 
 type Brand = { id: number; name: string };
+/** Brands already on this link, with how many lives are booked on each. */
+export type LockedBrand = { id: number; lives?: number };
 
 /**
  * Add brands to a TikTok link.
@@ -18,11 +20,20 @@ type Brand = { id: number; name: string };
 export default function ProfileBrandPicker({
   profileId,
   initial,
+  onLink,
 }: {
   profileId: number;
   /** Brand ids already on this link. */
   initial: number[];
+  /** Brands on this link and their live counts, to lock the ones in use. */
+  onLink?: LockedBrand[];
 }) {
+  // A brand carrying lives cannot be unticked — those bookings are filed
+  // against the pair, so dropping it would strand them. Shown as locked
+  // rather than failing on save.
+  const locked = new Set(
+    (onLink ?? []).filter((b) => (b.lives ?? 0) > 0).map((b) => b.id)
+  );
   const [brands, setBrands] = useState<Brand[]>([]);
   const [saved, setSaved] = useState<number[]>(initial);
   const [draft, setDraft] = useState<number[]>(initial);
@@ -57,6 +68,7 @@ export default function ProfileBrandPicker({
   }, [open, saved]);
 
   function toggle(id: number) {
+    if (locked.has(id) && draft.includes(id)) return; // in use — cannot drop
     setDraft((d) => (d.includes(id) ? d.filter((x) => x !== id) : [...d, id]));
   }
 
@@ -109,18 +121,23 @@ export default function ProfileBrandPicker({
               ) : (
                 brands.map((b) => {
                   const on = draft.includes(b.id);
+                  const held = on && locked.has(b.id);
                   return (
                     <button key={b.id} type="button" role="option" aria-selected={on}
-                      onClick={() => toggle(b.id)}
-                      className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-colors duration-200 ${
-                        on ? "font-semibold text-primary" : "text-ink hover:bg-primary/5"
-                      }`}>
+                      onClick={() => toggle(b.id)} disabled={held}
+                      title={held ? "Ada jadual live pada brand ini" : undefined}
+                      className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-colors duration-200 ${
+                        held ? "cursor-not-allowed" : "cursor-pointer"
+                      } ${on ? "font-semibold text-primary" : "text-ink hover:bg-primary/5"}`}>
                       <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
                         on ? "border-primary bg-primary text-white" : "border-line"
                       }`}>
                         {on && <Check className="h-2.5 w-2.5" aria-hidden="true" />}
                       </span>
-                      {b.name}
+                      <span className="min-w-0 flex-1 truncate">{b.name}</span>
+                      {held && (
+                        <Lock className="h-3 w-3 shrink-0 text-muted-fg" aria-hidden="true" />
+                      )}
                     </button>
                   );
                 })

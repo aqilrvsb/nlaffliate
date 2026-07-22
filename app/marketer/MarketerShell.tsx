@@ -588,7 +588,8 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
                     </div>
                     {/* The brands decide which WhatsApp groups the affiliate
                         sees against this account, and what each one pays. */}
-                    <ProfileBrandPicker profileId={l.id} initial={l.brand_ids ?? []} />
+                    <ProfileBrandPicker profileId={l.id} initial={l.brand_ids ?? []}
+                      onLink={l.brands ?? []} />
                   </li>
                 ))}
               </ul>

@@ -182,24 +182,6 @@ export default function AffiliateDashboard({
         </div>
       </div>
 
-      <DateRangeFilter count={filtered.length} profiles={profiles} defaultMode="month" />
-
-      <div className="card flex flex-wrap items-end gap-3">
-        <div className="min-w-[220px]">
-          <label className="label" htmlFor="aff-brand">Brand</label>
-          <select id="aff-brand" className="input cursor-pointer !py-2 text-sm"
-            value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)}>
-            <option value="">All Brands</option>
-            {brands.map((b) => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
-          </select>
-        </div>
-        <p className="pb-2 text-xs text-muted-fg">
-          {brandFilter ? "Menunjukkan satu brand sahaja." : "Menunjukkan semua brand."}
-        </p>
-      </div>
-
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi Icon={CalendarDays} label="Total Live" value={filtered.length} />
         <Kpi Icon={Clock} label="Total Pending Live" value={totals.pending} tone="amber" />
@@ -235,6 +217,24 @@ export default function AffiliateDashboard({
         { key: "brand",    label: "Brand",              icon: Tag },
         { key: "sample",   label: "Sample",             icon: Package },
       ]} />
+
+      <DateRangeFilter count={filtered.length} profiles={profiles} defaultMode="month" />
+
+      <div className="card flex flex-wrap items-end gap-3">
+        <div className="min-w-[220px]">
+          <label className="label" htmlFor="aff-brand">Brand</label>
+          <select id="aff-brand" className="input cursor-pointer !py-2 text-sm"
+            value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)}>
+            <option value="">All Brands</option>
+            {brands.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+        </div>
+        <p className="pb-2 text-xs text-muted-fg">
+          {brandFilter ? "Menunjukkan satu brand sahaja." : "Menunjukkan semua brand."}
+        </p>
+      </div>
 
       <section>
         {tab === "schedule" && (

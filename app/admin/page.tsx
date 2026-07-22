@@ -58,9 +58,11 @@ export default async function AdminPage({
     .all(...dateArgs) as any[]);
 
   const rows = plain(await db.prepare(
-      `SELECT b.id AS booking_id, u.name AS affiliate, m.name AS marketer,
-              p.label AS profile_label, p.url AS profile_url,
+      `SELECT b.id AS booking_id, b.user_id AS affiliate_id,
+              u.name AS affiliate, m.name AS marketer,
+              b.profile_id, p.label AS profile_label, p.url AS profile_url,
               b.live_date, b.start_time, b.end_time, b.status,
+              b.ads_budget, b.ad_spend, b.gross_revenue, b.roi,
               r.gmv, r.viewers, r.items_sold, r.duration_live, r.screenshot_path
        FROM bookings b
        JOIN users u ON u.id = b.user_id
@@ -72,11 +74,22 @@ export default async function AdminPage({
     )
     .all(...dateArgs) as any[]);
 
+  // Every affiliate's links, so the reporting tab can break commission down
+  // per link exactly as the marketer console does.
+  const links = plain(await db.prepare(
+      `SELECT p.id, p.user_id, p.label, p.url, p.commission_type, p.commission_value
+         FROM tiktok_profiles p
+         JOIN users u ON u.id = p.user_id
+        WHERE u.role = 'affiliate'
+        ORDER BY p.id`
+    ).all() as any[]);
+
   return (
     <div className="min-h-screen">
       <Header user={user} />
       <main className="mx-auto max-w-6xl px-4 py-8">
-        <AdminDashboard marketers={marketers} affiliates={affiliates} rows={rows} />
+        <AdminDashboard marketers={marketers} affiliates={affiliates}
+          rows={rows} links={links} />
       </main>
     </div>
   );

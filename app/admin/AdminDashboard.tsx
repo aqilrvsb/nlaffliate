@@ -5,13 +5,14 @@ import { useCallback, useEffect, useState } from "react";
 import {
   TrendingUp, Users, ShoppingBag, UserRound, Bot, Check, ExternalLink,
   Loader2, KeyRound, Clock, AlertTriangle, CalendarDays, Timer,
-  LayoutDashboard, Package, Boxes, Link2, Trash2, Plus, AlertCircle,
+  LayoutDashboard, Package, Boxes, Link2, Trash2, Plus, AlertCircle, BarChart3,
 } from "lucide-react";
 import Modal from "@/components/Modal";
 import CommissionEditor, { commissionLabel } from "@/components/CommissionEditor";
 import TabBar from "@/components/TabBar";
 import ProductsTab from "./ProductsTab";
 import SamplesTab from "./SamplesTab";
+import AdminReportingTab, { type AdminLive, type AdminLink } from "./ReportingTab";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import Pagination from "@/components/Pagination";
 import { getPage, paginate } from "@/lib/pagination";
@@ -33,8 +34,10 @@ type Row = {
 };
 
 export default function AdminDashboard({
-  marketers, affiliates, rows,
-}: { marketers: Marketer[]; affiliates: Affiliate[]; rows: Row[] }) {
+  marketers, affiliates, rows, links,
+}: {
+  marketers: Marketer[]; affiliates: Affiliate[]; rows: Row[]; links: AdminLink[];
+}) {
   const router = useRouter();
   const [savingId, setSavingId] = useState<number | null>(null);
   const [linksFor, setLinksFor] = useState<Affiliate | null>(null);
@@ -80,11 +83,16 @@ export default function AdminDashboard({
       <TabBar active={tab} tabs={[
         { key: "overview", label: "Overview", icon: LayoutDashboard },
         { key: "product",  label: "Product",  icon: Package },
+        { key: "reporting", label: "Reporting Affiliate", icon: BarChart3 },
         { key: "sample",   label: "Sample",   icon: Boxes },
       ]} />
 
       {tab === "product" && <ProductsTab />}
       {tab === "sample" && <SamplesTab />}
+      {tab === "reporting" && (
+        <AdminReportingTab affiliates={affiliates}
+          rows={rows as unknown as AdminLive[]} links={links} />
+      )}
       {tab !== "overview" ? null : (
       <>
       <DateRangeFilter count={rows.length} />

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   UserRound, Phone, MapPin, Mail, Lock, Link2, Plus, Trash2,
-  Check, AlertCircle, ExternalLink, Loader2, ArrowLeft, MessageCircle,
+  Check, AlertCircle, ExternalLink, Loader2, ArrowLeft, MessageCircle, Pencil,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -294,6 +294,90 @@ function PasswordCard() {
   );
 }
 
+/**
+ * One TikTok link, editable in place.
+ *
+ * A mistyped handle used to mean delete-and-re-add, which is refused once
+ * lives are booked against the link — so the only fix was to leave it wrong.
+ */
+function ProfileRow({
+  p, reload, onRemove,
+}: { p: Profile; reload: () => void; onRemove: () => void }) {
+  const [edit, setEdit] = useState(false);
+  const [label, setLabel] = useState(p.label);
+  const [url, setUrl] = useState(p.url);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    setBusy(true); setError("");
+    const res = await fetch(`/api/profiles/${p.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label, url }),
+    });
+    const data = await res.json();
+    setBusy(false);
+    if (!res.ok) return setError(data.error || "Could not save.");
+    setEdit(false);
+    reload();
+  }
+
+  if (edit) {
+    return (
+      <div className="rounded-xl border border-primary/40 bg-white/70 p-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_2fr]">
+          <input className="input !py-2 text-sm" value={label} aria-label="Label"
+            onChange={(e) => setLabel(e.target.value)} placeholder="Label (e.g. Main)" />
+          <input className="input !py-2 text-sm" type="url" value={url} aria-label="TikTok URL"
+            onChange={(e) => setUrl(e.target.value)} placeholder="https://www.tiktok.com/@username" />
+        </div>
+        {error && (
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-danger">
+            <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />{error}
+          </p>
+        )}
+        <div className="mt-2 flex items-center gap-2">
+          <button className="btn !py-1.5 text-xs" onClick={save} disabled={busy || !label || !url}>
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  : <Check className="h-3.5 w-3.5" aria-hidden="true" />}
+            Save
+          </button>
+          <button className="btn-ghost !py-1.5 text-xs"
+            onClick={() => { setEdit(false); setLabel(p.label); setUrl(p.url); setError(""); }}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-white/60 px-3 py-2.5">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-ink">{p.label}</p>
+        <a href={p.url} target="_blank" rel="noopener noreferrer"
+          className="flex items-center gap-1 truncate text-xs text-accent hover:underline">
+          <span className="truncate">{p.url}</span>
+          <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+        </a>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <button onClick={() => setEdit(true)}
+          className="cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-accent/10 hover:text-accent"
+          aria-label={`Edit ${p.label}`}>
+          <Pencil className="h-4 w-4" aria-hidden="true" />
+        </button>
+        <button onClick={onRemove}
+          className="cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger"
+          aria-label={`Delete ${p.label}`}>
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ── TikTok profiles (moved here from the dashboard) ── */
 
 function TikTokProfilesCard() {
@@ -349,22 +433,7 @@ function TikTokProfilesCard() {
         <>
           <div className="space-y-2">
             {profiles.map((p) => (
-              <div key={p.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-line bg-white/60 px-3 py-2.5">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-ink">{p.label}</p>
-                  <a href={p.url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1 truncate text-xs text-accent hover:underline">
-                    <span className="truncate">{p.url}</span>
-                    <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
-                  </a>
-                </div>
-                <button onClick={() => remove(p.id)}
-                  className="shrink-0 cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger"
-                  aria-label={`Delete ${p.label}`}>
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </div>
+              <ProfileRow key={p.id} p={p} reload={load} onRemove={() => remove(p.id)} />
             ))}
             {profiles.length === 0 && (
               <p className="rounded-xl border border-dashed border-line py-6 text-center text-sm text-muted-fg">

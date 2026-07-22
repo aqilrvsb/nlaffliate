@@ -43,7 +43,7 @@ import { useNavigate } from "@/lib/useNavigate";
 import { useSearchParams } from "next/navigation";
 import type { SessionUser } from "@/lib/session";
 import { confirmDialog } from "@/lib/swal";
-import { profileName, handleFromUrl } from "@/lib/tiktok";
+import { handleFromUrl } from "@/lib/tiktok";
 
 type TikTokLink = {
   brand_id?: number | null;
@@ -1044,7 +1044,9 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
             <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-fg">
               <a href={l.profile_url} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-1 font-medium text-accent hover:underline">
-                {profileName(l.profile_brand, l.profile_url)}
+                {/* The account the live runs on. Its brand is shown as the
+                    live's own chip, which may differ from the link's first. */}
+                {handleFromUrl(l.profile_url)}
                 <ExternalLink className="h-3 w-3" aria-hidden="true" />
               </a>
               <span className="flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />{fmtDate(l.live_date)}</span>

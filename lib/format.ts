@@ -55,13 +55,15 @@ export function durationToSeconds(d?: string | null): number {
   return 0;
 }
 
-/** 7225 -> "2h 0m". Under an hour -> "45m 10s". Under a minute -> "25s". */
+/** 7225 -> "2h 0m 25s". Under an hour -> "45m 10s". Under a minute -> "25s". */
 export function fmtDuration(totalSeconds: number): string {
   const sec = Math.max(0, Math.floor(totalSeconds));
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   const s = sec % 60;
-  if (h) return `${h}h ${m}m`;
+  // Seconds are kept at every scale: hourly commission bills them, so a total
+  // that silently drops them cannot be reconciled against what is paid.
+  if (h) return `${h}h ${m}m ${s}s`;
   if (m) return `${m}m ${s}s`;
   return `${s}s`;
 }
@@ -95,14 +97,6 @@ export function joinDuration(h: number, m: number, s: number): string {
   return `${hh}h ${mm}m ${ss}s`;
 }
 
-/**
- * Hours in a booked slot, from the schedule rather than the streamed
- * duration: an hourly rate pays for the time booked, so 9:00 PM - 11:00 PM
- * is 2 hours regardless of whether the stream ran 1h57m or 2h03m.
- *
- * Not rounded — 90 minutes bills as 1.5 hours. Returns 0 when the slot has
- * no end time, since there is no range to pay for.
- */
 /**
  * Hours actually streamed, from the recorded duration ("2h 0m 25s").
  *

@@ -25,7 +25,7 @@ import { getPage, paginate } from "@/lib/pagination";
 import { fmtDate, fmtTimeRange, sumDurations } from "@/lib/format";
 import { resolveRange } from "@/lib/daterange";
 import { confirmDialog } from "@/lib/swal";
-import { profileName } from "@/lib/tiktok";
+import { handleFromUrl } from "@/lib/tiktok";
 
 type ProfileBrand = { id: number; name: string };
 type Profile = {
@@ -594,9 +594,13 @@ function BookingCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-bold text-ink">{profileName(b.profile_brand, b.profile_url)}</span>
+            {/* The account this live runs on, then the brand it runs for.
+                Titling the card with the LINK's own brand showed a name that
+                had nothing to do with this live — a Lavabelle live on an
+                account whose first brand is Candyta read as "Candyta". */}
+            <span className="font-bold text-ink">{handleFromUrl(b.profile_url)}</span>
             <StatusBadge status={affiliateStatus(b)} />
-            {b.brand_name && b.brand_name !== profileName(b.profile_brand, b.profile_url) && (
+            {b.brand_name && (
               <span className="chip bg-primary/10 text-primary">
                 <Tag className="h-3 w-3" aria-hidden="true" />{b.brand_name}
               </span>

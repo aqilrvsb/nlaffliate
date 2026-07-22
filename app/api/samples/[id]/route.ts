@@ -123,8 +123,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
           WHERE i.request_id = ? ORDER BY p.name`
       ).all(id)) as { name: string; product_url: string | null }[];
 
+    let notified: boolean | null = null;
+    let notify_note: string | null = null;
     if (info) {
-      await sendWhatsApp(
+      const wa = await sendWhatsApp(
         info.phone,
         sampleShippedMessage({
           brand: info.brand,
@@ -134,9 +136,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
           link: items.find((x) => x.product_url)?.product_url ?? null,
         })
       );
+      notified = wa.ok;
+      notify_note = wa.skipped || wa.error || null;
+      if (!wa.ok) console.error("[whatsapp] sample-shipped failed:", notify_note);
     }
 
-    return NextResponse.json({ ok: true, status: "shipped" });
+    return NextResponse.json({ ok: true, status: "shipped", notified, notify_note });
   }
 
   return NextResponse.json({ error: "Unknown action." }, { status: 400 });

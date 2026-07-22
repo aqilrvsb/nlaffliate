@@ -75,7 +75,7 @@ export default function AdminDashboard({
 
   async function assign(affiliateId: number, marketerId: string) {
     setSavingId(affiliateId);
-    await fetch("/api/admin/assign", {
+    const res = await fetch("/api/admin/assign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -83,7 +83,15 @@ export default function AdminDashboard({
         marketer_id: marketerId ? Number(marketerId) : null,
       }),
     });
+    const data = await res.json().catch(() => ({}));
     setSavingId(null);
+    // Assigning is what unlocks the account, and the affiliate only learns
+    // that from the welcome message — so say so when it did not send.
+    if (data.notified === false && data.notify_note) {
+      alert(`Assigned, but the welcome WhatsApp was not sent:
+
+${data.notify_note}`);
+    }
     router.refresh();
   }
 

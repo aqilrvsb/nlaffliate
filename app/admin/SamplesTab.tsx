@@ -331,6 +331,13 @@ function TrackingModal({
     const data = await res.json();
     setSaving(false);
     if (!res.ok) return setError(data.error || "Could not save.");
+    // The affiliate is told their parcel shipped by WhatsApp — if that failed,
+    // they have no idea it is on the way, so surface it rather than swallow it.
+    if (data.notified === false && data.notify_note) {
+      alert(`Marked as shipped, but the WhatsApp was not sent:
+
+${data.notify_note}`);
+    }
     onClose(); onSaved();
   }
 

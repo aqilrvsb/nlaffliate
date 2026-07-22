@@ -8,7 +8,6 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { confirmDialog } from "@/lib/swal";
-import { handleFromUrl } from "@/lib/tiktok";
 import { CommissionButton, CommissionSummary } from "@/components/BrandCommission";
 
 type ProfileBrand = {
@@ -365,17 +364,20 @@ function ProfileRow({
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-white/60 px-3 py-2.5">
       <div className="min-w-0">
-        <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-ink">
-          {handleFromUrl(p.url)}
-          {(p.brands ?? []).map((b) => (
-            <span key={b.id} className="chip bg-primary/10 text-primary">{b.name}</span>
-          ))}
-        </p>
+        {/* The URL is the account — a name derived from it just repeated the
+            same string in a shorter form. */}
         <a href={p.url} target="_blank" rel="noopener noreferrer"
-          className="flex items-center gap-1 truncate text-xs text-accent hover:underline">
+          className="flex items-center gap-1 truncate text-sm font-semibold text-accent hover:underline">
           <span className="truncate">{p.url}</span>
           <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
         </a>
+        {(p.brands ?? []).length > 0 && (
+          <span className="mt-1 flex flex-wrap gap-1">
+            {(p.brands ?? []).map((b) => (
+              <span key={b.id} className="chip bg-primary/10 text-primary">{b.name}</span>
+            ))}
+          </span>
+        )}
         {/* The WhatsApp groups live on the Brand tab now — grouped by brand
             rather than repeated under every link that carries it. */}
       </div>
@@ -385,12 +387,12 @@ function ProfileRow({
         <CommissionButton onClick={() => setRates(true)} />
         <button onClick={() => setEdit(true)}
           className="cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-accent/10 hover:text-accent"
-          aria-label={`Edit ${handleFromUrl(p.url)}`}>
+          aria-label={`Edit ${p.url}`}>
           <Pencil className="h-4 w-4" aria-hidden="true" />
         </button>
         <button onClick={onRemove}
           className="cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger"
-          aria-label={`Delete ${handleFromUrl(p.url)}`}>
+          aria-label={`Delete ${p.url}`}>
           <Trash2 className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>

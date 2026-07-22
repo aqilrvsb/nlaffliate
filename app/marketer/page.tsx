@@ -67,6 +67,14 @@ export default async function MarketerPage() {
                   u.name AS affiliate, u.email AS affiliate_email,
                   b.profile_id, p.label AS profile_label, p.url AS profile_url,
                   pb.name AS profile_brand,
+                  COALESCE(
+                    (SELECT json_agg(json_build_object('id', lb.id, 'name', lb.name)
+                              ORDER BY lb.name)
+                       FROM tiktok_profile_brands x
+                       JOIN brands lb ON lb.id = x.brand_id
+                      WHERE x.profile_id = b.profile_id),
+                    '[]'::json
+                  ) AS link_brands,
                   b.live_date, b.start_time, b.end_time, b.note, b.status, b.post_url,
                   b.ads_budget, b.affiliate_can_edit,
                   b.ad_spend, b.gross_revenue, b.roi,

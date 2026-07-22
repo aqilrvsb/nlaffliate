@@ -32,8 +32,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Pick a valid date." }, { status: 400 });
   if (!/^\d{2}:\d{2}$/.test(startTime))
     return NextResponse.json({ error: "Pick a start time." }, { status: 400 });
-  if (endTime && !/^\d{2}:\d{2}$/.test(endTime))
-    return NextResponse.json({ error: "End time must be HH:MM." }, { status: 400 });
+  // End time is required: hourly commission and the booked slot both depend
+  // on knowing when the live finishes.
+  if (!/^\d{2}:\d{2}$/.test(endTime))
+    return NextResponse.json({ error: "Pick an end time." }, { status: 400 });
 
   // The profile identifies the affiliate, and must be one of this marketer's
   // own. "inhouse" is a sentinel rather than a real id: the bucket account is
@@ -65,6 +67,21 @@ export async function POST(req: Request) {
   if (!brand)
     return NextResponse.json({ error: "That brand is not yours." }, { status: 403 });
 
+  // The brand must be registered on this link. A live is paid at the rate set
+  // for the (link, brand) pair, so a mismatch books a live nothing can pay.
+  // Inhouse is the exception: it is a bucket account with no brand set-up.
+  if (String(body.profile_id) !== "inhouse") {
+    const onLink = await db
+      .prepare("SELECT 1 AS ok FROM tiktok_profile_brands WHERE profile_id = ? AND brand_id = ?")
+      .get(profile.id, Number(brandRaw));
+    if (!onLink) {
+      return NextResponse.json(
+        { error: "Brand itu tidak didaftarkan pada link profile ini." },
+        { status: 400 }
+      );
+    }
+  }
+
   const budget = body.ads_budget === "" || body.ads_budget == null
     ? null : Number(body.ads_budget);
   if (budget != null && (!Number.isFinite(budget) || budget < 0))
@@ -80,7 +97,7 @@ export async function POST(req: Request) {
        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, 1, ?) RETURNING id`
     ).run(
       profile.user_id, profile.id, Number(brandRaw), liveDate, startTime,
-      endTime || null, note || null,
+      endTime, note || null,
       String(body.profile_id) === "inhouse" ? "inhouse" : "affiliate",
       budget
     );

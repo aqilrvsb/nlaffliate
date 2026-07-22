@@ -62,6 +62,7 @@ type Live = {
   booking_id: number; affiliate_id: number; affiliate: string; affiliate_email: string;
   profile_id: number; profile_label: string; profile_url: string;
   profile_brand: string | null;
+  link_brands?: LinkBrand[] | null;
   live_date: string; start_time: string; end_time: string | null;
   note: string | null; status: string; post_url: string | null;
   ads_budget: number | null; affiliate_can_edit: number;
@@ -561,7 +562,6 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
                             are chips beside it, since a link can carry
                             several and only the first would otherwise show. */}
                         <span className="flex flex-wrap items-center gap-1 text-xs font-semibold text-ink">
-                          {handleFromUrl(l.url)}
                           {/* Each brand chip opens that brand's rate — one
                               account can run four brands on four different
                               deals, so the rate hangs off the pair. */}
@@ -586,7 +586,7 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
                       <span className="flex shrink-0 items-center gap-1">
                         <CommissionButton
                           onClick={() => setRatesFor({ pid: l.id, brands: l.brands ?? [] })} />
-                        <DeleteProfileLink id={l.id} name={handleFromUrl(l.url)} />
+                        <DeleteProfileLink id={l.id} name={l.url} />
                       </span>
                     </div>
                     {/* The brands decide which WhatsApp groups the affiliate
@@ -685,7 +685,6 @@ function AddScheduleModal({
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [budget, setBudget] = useState("");
-  const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -694,7 +693,7 @@ function AddScheduleModal({
   useEffect(() => {
     if (!open) return;
     setAffId(""); setProfileId(""); setBrand(""); setDate(""); setStart("");
-    setEnd(""); setBudget(""); setNote(""); setError("");
+    setEnd(""); setBudget(""); setError("");
   }, [open]);
 
   // Pick the person first, then which of their accounts. One combined list
@@ -704,8 +703,13 @@ function AddScheduleModal({
   const people = affiliates.filter((a) => a.name !== "Inhouse");
   const chosen = people.find((a) => String(a.id) === affId);
   const links = chosen?.links ?? [];
+  const pickedLink = links.find((l) => String(l.id) === profileId);
+  const pickedLinkBrands = pickedLink?.brands ?? [];
 
   async function save() {
+    if (!brand) {
+      return setError("Pilih brand untuk link ini dahulu.");
+    }
     setBusy(true); setError("");
     const res = await fetch("/api/marketer/bookings", {
       method: "POST",
@@ -714,7 +718,7 @@ function AddScheduleModal({
         profile_id: affId === "inhouse" ? "inhouse" : profileId,
         brand_id: brand, live_date: date,
         start_time: start, end_time: end || null,
-        ads_budget: budget, note,
+        ads_budget: budget,
       }),
     });
     const d = await res.json();
@@ -743,14 +747,13 @@ function AddScheduleModal({
           <div className="sm:col-span-2">
             <label className="label" htmlFor="as-profile">2. Link profile</label>
             <select id="as-profile" className="input cursor-pointer" value={profileId}
-              onChange={(e) => setProfileId(e.target.value)} required disabled={!affId}>
+              onChange={(e) => { setProfileId(e.target.value); setBrand(""); }}
+              required disabled={!affId}>
               <option value="">
                 {!affId ? "— Pilih affiliate dahulu —" : "— Pilih profile —"}
               </option>
               {links.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {profileName(p.brand_name, p.url)} — {p.url}
-                </option>
+                <option key={p.id} value={p.id}>{p.url}</option>
               ))}
             </select>
             {affId && links.length === 0 && (
@@ -761,35 +764,54 @@ function AddScheduleModal({
           </div>
         )}
 
+        {/* Only the brands registered on the chosen link. A live is paid at
+            the rate set for the (link, brand) pair, so a brand the link does
+            not run would book a live nothing can pay. */}
         <div className="sm:col-span-2">
           <label className="label" htmlFor="as-brand">3. Brand</label>
-          <BrandSelect id="as-brand" value={brand} onChange={setBrand} />
+          {affId === "inhouse" ? (
+            <BrandSelect id="as-brand" value={brand} onChange={setBrand} />
+          ) : (
+            <>
+              <select id="as-brand" className="input cursor-pointer" value={brand}
+                onChange={(e) => setBrand(e.target.value)} required
+                disabled={!profileId || pickedLinkBrands.length === 0}>
+                <option value="">
+                  {!profileId ? "— Pilih link profile dahulu —" : "— Pilih brand —"}
+                </option>
+                {pickedLinkBrands.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+              {profileId && pickedLinkBrands.length === 0 && (
+                <p className="mt-1 text-xs text-danger">
+                  Link ini belum ada brand. Daftar brand pada link itu di List Affiliate dahulu.
+                </p>
+              )}
+            </>
+          )}
         </div>
         <div>
           <label className="label" htmlFor="as-date">Date</label>
           <input id="as-date" type="date" className="input cursor-pointer"
-            value={date} onChange={(e) => setDate(e.target.value)} />
+            value={date} onChange={(e) => setDate(e.target.value)} required />
         </div>
         <div>
           <label className="label" htmlFor="as-start">Start</label>
           <input id="as-start" type="time" className="input cursor-pointer"
-            value={start} onChange={(e) => setStart(e.target.value)} />
+            value={start} onChange={(e) => setStart(e.target.value)} required />
         </div>
         <div>
           <label className="label" htmlFor="as-end">End</label>
           <input id="as-end" type="time" className="input cursor-pointer"
-            value={end} onChange={(e) => setEnd(e.target.value)} />
+            value={end} onChange={(e) => setEnd(e.target.value)} required />
         </div>
         <div>
           <label className="label" htmlFor="as-budget">Budget Ads (RM)</label>
           <input id="as-budget" type="number" min="0" step="any" className="input"
             value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="0.00" />
         </div>
-        <div>
-          <label className="label" htmlFor="as-note">Nota</label>
-          <input id="as-note" className="input" value={note}
-            onChange={(e) => setNote(e.target.value)} placeholder="optional" />
-        </div>
+
       </div>
 
       {error && (
@@ -1099,8 +1121,16 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
             htmlFor={`br-${l.booking_id}`}>Brand</label>
           <div className="flex items-center gap-2">
-            <BrandSelect id={`br-${l.booking_id}`} value={eBrand}
-              onChange={saveBrand} className="!py-1.5 text-sm sm:w-48" />
+            {/* Only the brands registered on the link that runs this live —
+                re-tagging it to a brand the link does not carry would leave
+                the live with no rate to pay it. */}
+            <select id={`br-${l.booking_id}`} className="input cursor-pointer !py-1.5 text-sm sm:w-48"
+              value={eBrand} onChange={(e) => saveBrand(e.target.value)}>
+              <option value="">— Pilih brand —</option>
+              {(l.link_brands ?? []).map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
             {brandMsg && <span className="text-xs font-medium text-emerald-600">{brandMsg}</span>}
           </div>
         </div>

@@ -66,11 +66,17 @@ export async function GET(req: Request) {
            FROM brands WHERE marketer_id = ? ORDER BY name`
       ).all(user.id);
   } else {
+    /**
+     * An affiliate works the brands registered on their own TikTok links —
+     * not everything their marketer happens to hold. Grouped, because one
+     * brand can sit on several of their links.
+     */
     brands = await db.prepare(
-        `SELECT b.id, b.name, b.marketer_id
-           FROM brands b
-           JOIN users a ON a.marketer_id = b.marketer_id
-          WHERE a.id = ?
+        `SELECT DISTINCT b.id, b.name, b.marketer_id, b.wa_group_url
+           FROM tiktok_profile_brands pb
+           JOIN tiktok_profiles p ON p.id = pb.profile_id
+           JOIN brands b ON b.id = pb.brand_id
+          WHERE p.user_id = ?
           ORDER BY b.name`
       ).all(user.id);
   }

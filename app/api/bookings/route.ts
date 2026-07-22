@@ -31,9 +31,11 @@ export async function POST(req: Request) {
 
   const body = await req.json();
   const { profile_id, live_date, start_time, end_time, note } = body;
-  if (!profile_id || !live_date || !start_time) {
+  // End time is required: hourly commission and the booked slot both depend
+  // on knowing when the live finishes.
+  if (!profile_id || !live_date || !start_time || !end_time) {
     return NextResponse.json(
-      { error: "Profile, date and start time are required." },
+      { error: "Profile, date, start time and end time are required." },
       { status: 400 }
     );
   }
@@ -62,13 +64,27 @@ export async function POST(req: Request) {
     );
   }
 
+
+  // The brand must actually be registered on this link. A live is paid at the
+  // rate set for the (link, brand) pair, so a mismatch books a live that
+  // nothing can pay and that reporting cannot group.
+  const onLink = await db
+    .prepare("SELECT 1 AS ok FROM tiktok_profile_brands WHERE profile_id = ? AND brand_id = ?")
+    .get(profile_id, brandId);
+  if (!onLink) {
+    return NextResponse.json(
+      { error: "Brand itu tidak didaftarkan pada link profile ini." },
+      { status: 400 }
+    );
+  }
+
   // Status is set explicitly (not left to the column default) so existing
   // databases created before the pending/completed rename behave correctly.
   const info = await db.prepare(
       `INSERT INTO bookings (user_id, profile_id, brand_id, live_date, start_time, end_time, note, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending') RETURNING id`
     )
-    .run(user.id, profile_id, brandId, live_date, start_time, end_time || null, note || null);
+    .run(user.id, profile_id, brandId, live_date, start_time, end_time, note || null);
 
   const id = Number(info.lastInsertRowid);
   // The marketer plans budgets around a schedule they do not own, so a new

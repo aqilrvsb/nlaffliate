@@ -27,7 +27,12 @@ import { resolveRange } from "@/lib/daterange";
 import { confirmDialog } from "@/lib/swal";
 import { profileName } from "@/lib/tiktok";
 
-type Profile = { id: number; label: string; url: string; brand_name?: string | null };
+type ProfileBrand = { id: number; name: string };
+type Profile = {
+  id: number; label: string; url: string;
+  brand_name?: string | null;
+  brands?: ProfileBrand[];
+};
 type Brand = { id: number; name: string };
 type Booking = {
   id: number; profile_id: number; profile_label: string; profile_url: string;
@@ -380,23 +385,28 @@ function ScheduleModal({ open, onClose, profiles, brands, reload }: {
   const [date, setDate] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
-  const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const chosen = profiles.find((p) => String(p.id) === profileId);
+  const linkBrands = chosen?.brands ?? [];
+
   function reset() {
-    setProfileId(""); setBrandId(""); setDate(""); setStart(""); setEnd(""); setNote(""); setError("");
+    setProfileId(""); setBrandId(""); setDate(""); setStart(""); setEnd(""); setError("");
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!brandId) {
+      return setError("Pilih brand untuk link ini dahulu.");
+    }
     setError(""); setSaving(true);
     const res = await fetch("/api/bookings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         profile_id: Number(profileId), brand_id: brandId, live_date: date,
-        start_time: start, end_time: end || null, note,
+        start_time: start, end_time: end,
       }),
     });
     const data = await res.json();
@@ -421,27 +431,32 @@ function ScheduleModal({ open, onClose, profiles, brands, reload }: {
         <div className="sm:col-span-2">
           <label className="label" htmlFor="m-profile">TikTok profile</label>
           <select id="m-profile" className="input cursor-pointer" value={profileId}
-            onChange={(e) => setProfileId(e.target.value)} required>
+            onChange={(e) => { setProfileId(e.target.value); setBrandId(""); }} required>
             <option value="">Select a profile…</option>
             {profiles.map((p) => (
-              <option key={p.id} value={p.id}>{profileName(p.brand_name, p.url)} — {p.url}</option>
+              <option key={p.id} value={p.id}>{p.url}</option>
             ))}
           </select>
         </div>
 
-        {/* Brands come from the marketer this affiliate is assigned to. */}
+        {/* Only the brands the marketer registered on THIS link. A live is
+            paid at the rate set for the (link, brand) pair, so offering a
+            brand the link does not run would book a live nothing can pay. */}
         <div className="sm:col-span-2">
           <label className="label" htmlFor="m-brand">Brand</label>
           <select id="m-brand" className="input cursor-pointer" value={brandId}
-            onChange={(e) => setBrandId(e.target.value)} required>
-            <option value="">Select a brand…</option>
-            {brands.map((b) => (
+            onChange={(e) => setBrandId(e.target.value)} required
+            disabled={!profileId || linkBrands.length === 0}>
+            <option value="">
+              {!profileId ? "Pilih link profile dahulu…" : "Select a brand…"}
+            </option>
+            {linkBrands.map((b) => (
               <option key={b.id} value={b.id}>{b.name}</option>
             ))}
           </select>
-          {brands.length === 0 && (
-            <p className="mt-1 text-xs text-muted-fg">
-              Marketer anda belum tambah brand — hubungi mereka dahulu.
+          {profileId && linkBrands.length === 0 && (
+            <p className="mt-1 text-xs text-danger">
+              Marketer belum daftar brand untuk link ini. Hubungi marketer anda dahulu.
             </p>
           )}
         </div>
@@ -456,15 +471,11 @@ function ScheduleModal({ open, onClose, profiles, brands, reload }: {
             onChange={(e) => setStart(e.target.value)} required />
         </div>
         <div>
-          <label className="label" htmlFor="m-end">End time (optional)</label>
+          <label className="label" htmlFor="m-end">End time</label>
           <input id="m-end" className="input cursor-pointer" type="time" value={end}
-            onChange={(e) => setEnd(e.target.value)} />
+            onChange={(e) => setEnd(e.target.value)} required />
         </div>
-        <div>
-          <label className="label" htmlFor="m-note">Note (optional)</label>
-          <input id="m-note" className="input" placeholder="e.g. PROMO GLOW campaign"
-            value={note} onChange={(e) => setNote(e.target.value)} />
-        </div>
+
 
         <div className="mt-1 flex items-center justify-end gap-2 sm:col-span-2">
           <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
@@ -484,7 +495,6 @@ function BookingCard({
 }: { b: Booking; reload: () => void; readOnly?: boolean }) {
   const [uploading, setUploading] = useState(false);
   const [aiError, setAiError] = useState("");
-  const [note, setNote] = useState("");
 
   // Inline editing (date / time / name). Allowed while pending, UNLESS the
   // marketer has set a budget and left the "affiliate can edit" toggle off.
@@ -499,6 +509,8 @@ function BookingCard({
   const [eNote, setENote] = useState(b.note || "");
   const [savingWhen, setSavingWhen] = useState(false);
   const [whenError, setWhenError] = useState("");
+  // Compression result for the screenshot upload below.
+  const [note, setNote] = useState("");
 
   async function saveWhen() {
     if (!eDate || !eStart) {

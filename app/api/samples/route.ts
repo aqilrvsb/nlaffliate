@@ -96,16 +96,20 @@ export async function POST(req: Request) {
     );
   }
 
-  // The brand must be one of this affiliate's own marketer's — admin packs
-  // against it, so a sample cannot be requested for someone else's brand.
+  // The brand must be one this affiliate actually works — that is, registered
+  // on one of their own TikTok links. Their marketer may hold brands this
+  // affiliate has nothing to do with, and a sample for one of those has
+  // nobody to run it.
   const brandRaw = String(body.brand_id ?? "").trim();
   if (!brandRaw) {
     return NextResponse.json({ error: "Pilih brand." }, { status: 400 });
   }
   const brand = await db.prepare(
-      `SELECT b.id FROM brands b
-         JOIN users a ON a.marketer_id = b.marketer_id
-        WHERE b.id = ? AND a.id = ?`
+      `SELECT DISTINCT b.id
+         FROM tiktok_profile_brands pb
+         JOIN tiktok_profiles p ON p.id = pb.profile_id
+         JOIN brands b ON b.id = pb.brand_id
+        WHERE b.id = ? AND p.user_id = ?`
     ).get(Number(brandRaw), user.id);
   if (!brand) {
     return NextResponse.json(

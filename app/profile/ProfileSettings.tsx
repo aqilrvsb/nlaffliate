@@ -9,8 +9,13 @@ import {
 import Link from "next/link";
 import { confirmDialog } from "@/lib/swal";
 import { handleFromUrl } from "@/lib/tiktok";
+import { CommissionButton, CommissionSummary } from "@/components/BrandCommission";
 
-type ProfileBrand = { id: number; name: string; wa_group_url: string | null };
+type ProfileBrand = {
+  id: number; name: string; wa_group_url: string | null;
+  commission_type?: "percent" | "hour" | null;
+  commission_value?: number | string | null;
+};
 type Profile = {
   id: number; label: string; url: string;
   brand_name?: string | null;
@@ -316,6 +321,7 @@ function ProfileRow({
   const [url, setUrl] = useState(p.url);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [rates, setRates] = useState(false);
 
   async function save() {
     setBusy(true); setError("");
@@ -374,6 +380,9 @@ function ProfileRow({
             rather than repeated under every link that carries it. */}
       </div>
       <div className="flex shrink-0 items-center gap-1">
+        {/* What each brand on this link pays — read-only, since the rate is
+            the marketer's to set. */}
+        <CommissionButton onClick={() => setRates(true)} />
         <button onClick={() => setEdit(true)}
           className="cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-accent/10 hover:text-accent"
           aria-label={`Edit ${handleFromUrl(p.url)}`}>
@@ -385,6 +394,9 @@ function ProfileRow({
           <Trash2 className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
+
+      <CommissionSummary open={rates} brands={p.brands ?? []}
+        onClose={() => setRates(false)} />
     </div>
   );
 }

@@ -51,7 +51,7 @@ export function BrandCommissionModal({
     setError("");
   }, [open, brand]);
 
-  async function save(clear = false) {
+  async function save() {
     if (!brand) return;
     setBusy(true); setError("");
     const res = await fetch(`/api/profiles/${profileId}`, {
@@ -59,8 +59,8 @@ export function BrandCommissionModal({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         brand_id: brand.id,
-        commission_type: clear ? "" : type,
-        commission_value: clear ? null : value,
+        commission_type: type,
+        commission_value: value,
       }),
     });
     const d = await res.json().catch(() => ({}));
@@ -112,12 +112,8 @@ export function BrandCommissionModal({
         )}
 
         <div className="flex flex-wrap justify-end gap-2">
-          <button type="button" className="btn-ghost !py-2" onClick={() => save(true)}
-            disabled={busy}>
-            Kosongkan
-          </button>
           <button type="button" className="btn-ghost !py-2" onClick={onClose}>Cancel</button>
-          <button type="button" className="btn !py-2" onClick={() => save()}
+          <button type="button" className="btn !py-2" onClick={save}
             disabled={busy || !type || value === ""}>
             {busy
               ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Saving…</>
@@ -130,17 +126,17 @@ export function BrandCommissionModal({
 }
 
 /**
- * Every brand on this link and what each pays — the whole picture in one
- * place, since the per-brand rates are otherwise only visible one chip at a
- * time.
+ * Every brand on this link and what each pays.
+ *
+ * A read-only view: rates are edited from the brand chip on the link row, so
+ * having a second way in here would just be two paths to the same modal.
  */
 export function CommissionSummary({
-  open, brands, onClose, onPick,
+  open, brands, onClose,
 }: {
   open: boolean;
   brands: LinkBrand[];
   onClose: () => void;
-  onPick: (b: LinkBrand) => void;
 }) {
   return (
     <Modal open={open} onClose={onClose} title="Komisyen"
@@ -152,22 +148,28 @@ export function CommissionSummary({
       ) : (
         <ul className="space-y-2">
           {brands.map((b) => (
-            <li key={b.id}>
-              <button type="button"
-                onClick={() => { onClose(); onPick(b); }}
-                className="flex w-full cursor-pointer items-center gap-2 rounded-xl border border-line bg-white/60 px-3 py-2 text-left transition-colors duration-200 hover:border-primary/40">
-                <Tag className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
-                  {b.name}
-                </span>
-                {rateLabel(b) ? (
+            <li key={b.id}
+              className="flex items-center gap-2 rounded-xl border border-line bg-white/60 px-3 py-2">
+              <Tag className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
+                {b.name}
+              </span>
+              {b.commission_type ? (
+                <>
+                  <span className="chip shrink-0 bg-muted text-muted-fg">
+                    {b.commission_type === "percent" ? (
+                      <><Percent className="h-3 w-3" aria-hidden="true" />Percent</>
+                    ) : (
+                      <><Clock className="h-3 w-3" aria-hidden="true" />Hour</>
+                    )}
+                  </span>
                   <span className="chip shrink-0 bg-emerald-100 text-emerald-700">
                     {rateLabel(b)}
                   </span>
-                ) : (
-                  <span className="shrink-0 text-xs text-muted-fg">Belum set</span>
-                )}
-              </button>
+                </>
+              ) : (
+                <span className="shrink-0 text-xs text-muted-fg">Belum set</span>
+              )}
             </li>
           ))}
         </ul>

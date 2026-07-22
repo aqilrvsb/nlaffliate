@@ -605,8 +605,7 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
       <AffiliateModal open={open} affiliate={editing} onClose={() => setOpen(false)} />
 
       <CommissionSummary open={!!ratesFor} brands={ratesFor?.brands ?? []}
-        onClose={() => setRatesFor(null)}
-        onPick={(b) => setRateFor({ pid: ratesFor!.pid, brand: b })} />
+        onClose={() => setRatesFor(null)} />
       <BrandCommissionModal open={!!rateFor} profileId={rateFor?.pid ?? 0}
         brand={rateFor?.brand ?? null} onClose={() => setRateFor(null)} />
     </div>

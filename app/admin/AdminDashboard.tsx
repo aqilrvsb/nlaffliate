@@ -434,8 +434,7 @@ function TikTokLinksModal({
         )}
 
         <CommissionSummary open={!!ratesFor} brands={ratesFor?.brands ?? []}
-          onClose={() => setRatesFor(null)}
-          onPick={(b) => setRateFor({ pid: ratesFor!.pid, brand: b })} />
+          onClose={() => setRatesFor(null)} />
         <BrandCommissionModal open={!!rateFor} profileId={rateFor?.pid ?? 0}
           brand={rateFor?.brand ?? null}
           onClose={() => { setRateFor(null); load(); }} />

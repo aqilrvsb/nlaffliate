@@ -3,6 +3,7 @@ import db from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { readLiveScreenshot } from "@/lib/grsai";
 import { demoteIfIncomplete } from "@/lib/status";
+import { notifyResults } from "@/lib/notify";
 import { uploadImage } from "@/lib/storage";
 
 export const runtime = "nodejs";
@@ -87,6 +88,13 @@ export async function POST(req: Request) {
   // Uploading a screenshot never auto-completes a live — the affiliate must
   // add the post link and press "transfer to Done Post" explicitly.
   const status = await demoteIfIncomplete(bookingId as string);
+
+  // Tell the marketer the figures landed — this is the moment they can act on
+  // the live. Best-effort, and never blocks the upload.
+  await notifyResults(bookingId as string, {
+    gmv: stats.gmv, viewers: stats.viewers, items_sold: stats.items_sold,
+    duration: stats.duration_live, title: stats.live_title,
+  });
 
   return NextResponse.json({
     ok: true,

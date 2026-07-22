@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { liveSummary, notifyScheduleChange } from "@/lib/notify";
 
 export async function GET() {
   const user = await getSession();
@@ -68,5 +69,11 @@ export async function POST(req: Request) {
        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending') RETURNING id`
     )
     .run(user.id, profile_id, brandId, live_date, start_time, end_time || null, note || null);
-  return NextResponse.json({ id: Number(info.lastInsertRowid) });
+
+  const id = Number(info.lastInsertRowid);
+  // The marketer plans budgets around a schedule they do not own, so a new
+  // live is news. Best-effort — a failed message must not fail the booking.
+  await notifyScheduleChange("created", await liveSummary(id));
+
+  return NextResponse.json({ id });
 }

@@ -95,6 +95,81 @@ Anda Sudah Boleh Akses kepada Sistem
 https://www.nlaffliatearmy.com/`;
 }
 
+/* ── Marketer alerts ───────────────────────────────────── */
+
+/**
+ * The marketer's phone, looked up from any affiliate of theirs.
+ *
+ * Returned as null when unassigned or when the marketer has no number on
+ * file, so callers can skip quietly rather than guess.
+ */
+export async function marketerContact(affiliateId: number) {
+  const { default: db } = await import("@/lib/db");
+  return db
+    .prepare(
+      `SELECT m.name AS marketer_name, m.phone AS marketer_phone, a.name AS affiliate_name
+         FROM users a JOIN users m ON m.id = a.marketer_id
+        WHERE a.id = ?`
+    )
+    .get<{ marketer_name: string; marketer_phone: string | null; affiliate_name: string }>(
+      affiliateId
+    );
+}
+
+export type LiveSummary = {
+  affiliate: string;
+  brand?: string | null;
+  profile?: string | null;
+  date: string;
+  start?: string | null;
+  end?: string | null;
+  note?: string | null;
+};
+
+function summaryLines(s: LiveSummary): string[] {
+  const lines = [`Affiliate: ${s.affiliate}`];
+  if (s.brand) lines.push(`Brand: ${s.brand}`);
+  if (s.profile) lines.push(`Profile: ${s.profile}`);
+  lines.push(`Tarikh: ${s.date}`);
+  if (s.start) lines.push(`Masa: ${s.start}${s.end ? ` - ${s.end}` : ""}`);
+  if (s.note) lines.push(`Nota: ${s.note}`);
+  return lines;
+}
+
+/** Told to the marketer when an affiliate books, changes or drops a live. */
+export function scheduleAlert(
+  kind: "created" | "updated" | "deleted",
+  s: LiveSummary
+) {
+  const head = {
+    created: "Jadual Live Baru",
+    updated: "Jadual Live Dikemaskini",
+    deleted: "Jadual Live Dipadam",
+  }[kind];
+  return ["Notification NLAffliate", "", head, "", ...summaryLines(s)].join("\n");
+}
+
+/** Told to the marketer when results land, with the figures that arrived. */
+export function resultsAlert(
+  s: LiveSummary,
+  r: {
+    gmv?: number | null;
+    viewers?: number | null;
+    items_sold?: number | null;
+    duration?: string | null;
+    title?: string | null;
+  }
+) {
+  const lines = ["Notification NLAffliate", "", "Screenshot Live Dimuat Naik", ""];
+  if (r.title) lines.push(`Live: ${r.title}`);
+  lines.push(...summaryLines(s), "");
+  lines.push(`GMV: ${r.gmv != null ? `RM${r.gmv}` : "-"}`);
+  lines.push(`Viewers: ${r.viewers ?? "-"}`);
+  lines.push(`Items Sold: ${r.items_sold ?? "-"}`);
+  lines.push(`Duration: ${r.duration || "-"}`);
+  return lines.join("\n");
+}
+
 export function sampleShippedMessage(opts: {
   brand?: string | null;
   products: string[];

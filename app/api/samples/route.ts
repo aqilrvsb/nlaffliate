@@ -44,7 +44,8 @@ export async function GET() {
 
   // Attach granted products in one round-trip rather than N+1.
   const items = (await db.prepare(
-      `SELECT i.request_id, p.id, p.name, p.image_url
+      `SELECT i.request_id, p.id, p.name, p.image_url, p.sku,
+              p.product_url, p.document_url
          FROM sample_request_items i
          JOIN products p ON p.id = i.product_id
         ORDER BY p.name`

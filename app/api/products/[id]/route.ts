@@ -52,6 +52,20 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     await db.prepare("UPDATE products SET attachment_url = ? WHERE id = ?").run(url, id);
   }
 
+  // A downloadable document (PDF) — spec sheet, price list, brief.
+  const doc = form.get("document") as File | null;
+  if (doc && doc.size > 0) {
+    const bytes = Buffer.from(await doc.arrayBuffer());
+    const ext = (doc.name.split(".").pop() || "pdf").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const url = await uploadImage(
+      `product_doc_${id}.${ext}`,
+      bytes,
+      doc.type || "application/pdf"
+    );
+    await db.prepare("UPDATE products SET document_url = ? WHERE id = ?").run(url, id);
+  }
+
+
   return NextResponse.json({ ok: true });
 }
 

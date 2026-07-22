@@ -11,7 +11,7 @@ import { confirmDialog } from "@/lib/swal";
 export type Product = {
   id: number; name: string; image_url: string | null;
   sku: string | null; product_url: string | null;
-  info: string | null; attachment_url: string | null;
+  info: string | null; attachment_url: string | null; document_url: string | null;
   brand_id: number | null; brand_name: string | null;
 };
 
@@ -162,6 +162,7 @@ function ProductModal({
   const [link, setLink] = useState("");
   const [info, setInfo] = useState("");
   const [att, setAtt] = useState<File | null>(null);
+  const [doc, setDoc] = useState<File | null>(null);
   const [brand, setBrand] = useState("");
   const [brands, setBrands] = useState<{ id: number; name: string }[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -176,6 +177,7 @@ function ProductModal({
     setLink(product?.product_url || "");
     setInfo(product?.info || "");
     setAtt(null);
+    setDoc(null);
     setBrand(product?.brand_id != null ? String(product.brand_id) : "");
     setPreview(product?.image_url || null);
     setFile(null);
@@ -211,6 +213,7 @@ function ProductModal({
     fd.append("product_url", link);
     fd.append("info", info);
     if (att) fd.append("attachment", att);
+    if (doc) fd.append("document", doc);
     fd.append("brand_id", brand);
     if (file) fd.append("image", file);
 
@@ -282,6 +285,22 @@ function ProductModal({
             <a href={product.attachment_url} target="_blank" rel="noopener noreferrer"
               className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-accent hover:underline">
               <ExternalLink className="h-3 w-3" aria-hidden="true" />Attachment semasa
+            </a>
+          )}
+        </div>
+
+        <div>
+          <label className="label" htmlFor="pr-doc">Document (PDF)</label>
+          <input id="pr-doc" type="file" accept=".pdf,application/pdf"
+            onChange={(e) => setDoc(e.target.files?.[0] ?? null)}
+            className="block w-full cursor-pointer text-sm text-muted-fg file:mr-3 file:cursor-pointer file:rounded-xl file:border-0 file:bg-muted file:px-4 file:py-2 file:text-sm file:font-semibold file:text-ink" />
+          <p className="mt-1 text-[11px] text-muted-fg">
+            Affiliate boleh muat turun ini bila sample dihantar.
+          </p>
+          {product?.document_url && !doc && (
+            <a href={product.document_url} download target="_blank" rel="noopener noreferrer"
+              className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-accent hover:underline">
+              <ExternalLink className="h-3 w-3" aria-hidden="true" />Document semasa
             </a>
           )}
         </div>

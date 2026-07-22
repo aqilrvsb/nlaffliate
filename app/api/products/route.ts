@@ -18,13 +18,13 @@ export async function GET(req: Request) {
   // filter lives here rather than being done client-side over everything.
   const products = brand
     ? await db.prepare(
-        `SELECT p.id, p.name, p.sku, p.product_url, p.info, p.attachment_url,
+        `SELECT p.id, p.name, p.sku, p.product_url, p.info, p.attachment_url, p.document_url,
                   p.image_url, p.brand_id, b.name AS brand_name, p.created_at
            FROM products p LEFT JOIN brands b ON b.id = p.brand_id
           WHERE p.brand_id = ? ORDER BY p.name`
       ).all(Number(brand))
     : await db.prepare(
-        `SELECT p.id, p.name, p.sku, p.product_url, p.info, p.attachment_url,
+        `SELECT p.id, p.name, p.sku, p.product_url, p.info, p.attachment_url, p.document_url,
                   p.image_url, p.brand_id, b.name AS brand_name, p.created_at
            FROM products p LEFT JOIN brands b ON b.id = p.brand_id
           ORDER BY b.name NULLS LAST, p.name`
@@ -77,6 +77,19 @@ export async function POST(req: Request) {
     const ext = (att.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
     const url = await uploadImage(`product_att_${id}.${ext}`, bytes, mime);
     await db.prepare("UPDATE products SET attachment_url = ? WHERE id = ?").run(url, id);
+  }
+
+  // A downloadable document (PDF) — spec sheet, price list, brief.
+  const doc = form.get("document") as File | null;
+  if (doc && doc.size > 0) {
+    const bytes = Buffer.from(await doc.arrayBuffer());
+    const ext = (doc.name.split(".").pop() || "pdf").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const url = await uploadImage(
+      `product_doc_${id}.${ext}`,
+      bytes,
+      doc.type || "application/pdf"
+    );
+    await db.prepare("UPDATE products SET document_url = ? WHERE id = ?").run(url, id);
   }
 
   return NextResponse.json({ ok: true, id });

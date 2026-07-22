@@ -41,6 +41,34 @@ type Booking = {
 
 const MAX_PROFILES = 10;
 
+/**
+ * A live is finished only when every figure is actually in. Keying this off
+ * "a result row exists" moved lives to Done that the AI had only half read —
+ * the affiliate saw Total Sales, Viewers and Items Sold as dashes with no way
+ * to fix them, because Done is read-only. Anything incomplete stays in
+ * Pending, where it can still be corrected or the screenshot replaced.
+ */
+function isDone(b: Booking) {
+  return (
+    b.result_id != null &&
+    b.gmv != null &&
+    b.viewers != null &&
+    b.items_sold != null &&
+    !!b.duration_live
+  );
+}
+
+/**
+ * What the badge says HERE. The stored status is the marketer's view — it
+ * turns Completed when they finish the ad figures, which has nothing to do
+ * with whether the affiliate has reported their own. Showing it unchanged put
+ * a green "Completed" chip on a card sitting in Pending Schedule.
+ */
+function affiliateStatus(b: Booking) {
+  if (b.status === "missed") return "missed";
+  return isDone(b) ? "completed" : "pending";
+}
+
 export default function AffiliateDashboard({
   userName,
   marketerName,
@@ -104,20 +132,6 @@ export default function AffiliateDashboard({
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading…
       </div>
     );
-
-  /**
-   * A live is finished only when every figure is actually in. Keying this off
-   * "a result row exists" moved lives to Done that the AI had only half read —
-   * the affiliate saw Total Sales, Viewers and Items Sold as dashes with no
-   * way to fix them, because Done is read-only. Anything incomplete stays in
-   * Pending, where it can still be corrected or the screenshot replaced.
-   */
-  const isDone = (b: Booking) =>
-    b.result_id != null &&
-    b.gmv != null &&
-    b.viewers != null &&
-    b.items_sold != null &&
-    !!b.duration_live;
 
   const totals = filtered.reduce(
     (a, b) => ({
@@ -574,7 +588,7 @@ function BookingCard({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-bold text-ink">{profileName(b.profile_brand, b.profile_url)}</span>
-            <StatusBadge status={b.status} />
+            <StatusBadge status={affiliateStatus(b)} />
             {b.brand_name && b.brand_name !== profileName(b.profile_brand, b.profile_url) && (
               <span className="chip bg-primary/10 text-primary">
                 <Tag className="h-3 w-3" aria-hidden="true" />{b.brand_name}

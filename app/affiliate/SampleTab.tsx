@@ -3,13 +3,16 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   PackagePlus, Package, Truck, Check, Clock, Loader2, AlertCircle,
-  Trash2, PackageCheck, MapPin, Phone, UserRound, StickyNote, ExternalLink,
+  Trash2, PackageCheck, MapPin, Phone, UserRound, StickyNote, ExternalLink, FileDown,
 } from "lucide-react";
 import Modal from "@/components/Modal";
 import { fmtDate } from "@/lib/format";
 import { confirmDialog } from "@/lib/swal";
 
-export type SampleProduct = { id: number; name: string; image_url: string | null };
+export type SampleProduct = {
+  id: number; name: string; image_url: string | null;
+  sku?: string | null; product_url?: string | null; document_url?: string | null;
+};
 export type SampleRequest = {
   id: number;
   full_name: string;
@@ -154,16 +157,37 @@ export default function SampleTab() {
                   <div className="flex flex-wrap gap-2">
                     {r.products.map((p) => (
                       <span key={p.id}
-                        className="flex items-center gap-2 rounded-xl border border-line bg-white/60 py-1.5 pl-1.5 pr-3">
+                        className="flex items-start gap-2 rounded-xl border border-line bg-white/60 p-2">
                         {p.image_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={p.image_url} alt="" className="h-8 w-8 rounded-lg object-cover" />
+                          <img src={p.image_url} alt="" className="h-10 w-10 rounded-lg object-cover" />
                         ) : (
-                          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-fg">
+                          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-muted-fg">
                             <Package className="h-4 w-4" aria-hidden="true" />
                           </span>
                         )}
-                        <span className="text-sm font-semibold text-ink">{p.name}</span>
+                        <span className="leading-tight">
+                          <span className="block text-sm font-semibold text-ink">{p.name}</span>
+                          {p.sku && (
+                            <span className="block font-mono text-[10px] text-muted-fg">{p.sku}</span>
+                          )}
+                          <span className="mt-1 flex flex-wrap items-center gap-3">
+                            {p.product_url && (
+                              <a href={p.product_url} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[10px] font-semibold text-accent hover:underline">
+                                Lihat produk <ExternalLink className="h-2.5 w-2.5" aria-hidden="true" />
+                              </a>
+                            )}
+                            {p.document_url && (
+                              // download so a PDF saves rather than opening a
+                              // viewer the affiliate then has to fight with.
+                              <a href={p.document_url} download target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[10px] font-semibold text-accent hover:underline">
+                                <FileDown className="h-2.5 w-2.5" aria-hidden="true" />Document
+                              </a>
+                            )}
+                          </span>
+                        </span>
                       </span>
                     ))}
                   </div>
@@ -271,52 +295,9 @@ function RequestModal({
             )}
           </div>
 
-          {catalogue.length > 0 && (
-            <div>
-              <p className="label">Produk untuk brand ini ({catalogue.length})</p>
-              <div className="space-y-2">
-                {catalogue.map((p: any) => (
-                  <div key={p.id}
-                    className="flex items-start gap-2 rounded-xl border border-line bg-white/60 p-2">
-                    {p.image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.image_url} alt="" className="h-9 w-9 rounded-lg object-cover" />
-                    ) : (
-                      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-fg">
-                        <Package className="h-4 w-4" aria-hidden="true" />
-                      </span>
-                    )}
-                    <span className="leading-tight">
-                      <span className="block text-sm font-semibold text-ink">{p.name}</span>
-                      {p.sku && <span className="block font-mono text-[10px] text-muted-fg">{p.sku}</span>}
-                      {p.info && (
-                        <span className="mt-1 block whitespace-pre-line text-[11px] leading-snug text-muted-fg">
-                          {p.info}
-                        </span>
-                      )}
-                      <span className="mt-1 flex flex-wrap gap-3">
-                        {p.product_url && (
-                          <a href={p.product_url} target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[10px] font-semibold text-accent hover:underline">
-                            Lihat produk <ExternalLink className="h-2.5 w-2.5" aria-hidden="true" />
-                          </a>
-                        )}
-                        {p.attachment_url && (
-                          <a href={p.attachment_url} target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[10px] font-semibold text-accent hover:underline">
-                            Attachment <ExternalLink className="h-2.5 w-2.5" aria-hidden="true" />
-                          </a>
-                        )}
-                      </span>
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-1 text-[11px] text-muted-fg">
-                Admin akan pilih yang mana untuk dihantar.
-              </p>
-            </div>
-          )}
+          {/* No product list here: the affiliate asks for a brand, and admin
+              decides what actually goes in the box. Showing the catalogue
+              implied a choice they do not have. */}
 
           <div>
             <label className="label" htmlFor="s-name">Full Name</label>

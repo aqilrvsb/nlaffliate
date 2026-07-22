@@ -215,7 +215,7 @@ export default function AdminReportingTab({
                       <td className="px-4 py-2">
                         {s.agg.duration}
                         {s.link?.commission_type === "hour" && (
-                          <span className="ml-1 text-[11px] text-muted-fg">({s.hours}j jadual)</span>
+                          <span className="ml-1 text-[11px] text-muted-fg">({s.hours.toFixed(2)}j dibayar)</span>
                         )}
                       </td>
                       <td className="px-4 py-2 text-right">{rm(s.agg.budget, s.agg.hasBudget)}</td>

@@ -1537,7 +1537,7 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
                         {s.agg.duration}
                         {s.link?.commission_type === "hour" && (
                           <span className="ml-1 text-[11px] text-muted-fg">
-                            ({s.hours}j jadual)
+                            ({s.hours.toFixed(2)}j dibayar)
                           </span>
                         )}
                       </td>

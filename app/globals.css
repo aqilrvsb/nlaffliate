@@ -100,3 +100,21 @@
     @apply text-xs font-bold uppercase tracking-widest text-muted-fg;
   }
 }
+
+/* Indeterminate sweep for the navigation bar: the duration of a navigation
+   isn't knowable up front, so it animates rather than filling to a value. */
+@keyframes nav-progress-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.nav-progress-bar {
+  animation: nav-progress-sweep 1s ease-in-out infinite;
+}
+
+/* Respect users who ask for less motion — hold a static bar instead. */
+@media (prefers-reduced-motion: reduce) {
+  .nav-progress-bar {
+    animation: none;
+  }
+}

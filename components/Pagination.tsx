@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useNavigate } from "@/lib/useNavigate";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { PAGE_SIZE } from "@/lib/pagination";
 
@@ -13,7 +14,7 @@ export default function Pagination({
   total: number;
   size?: number;
 }) {
-  const router = useRouter();
+  const { navigate, prefetch, pending } = useNavigate();
   const pathname = usePathname();
   const params = useSearchParams();
 
@@ -27,7 +28,7 @@ export default function Pagination({
     if (p <= 1) next.delete("page");
     else next.set("page", String(p));
     const qs = next.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    navigate(qs ? `${pathname}?${qs}` : pathname);
   }
 
   // Compact window of page numbers around the current page.

@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useNavigate } from "@/lib/useNavigate";
 import { CalendarRange, Link2 } from "lucide-react";
 import { resolveRange, todayKL, monthRangeKL } from "@/lib/daterange";
 
@@ -25,7 +26,7 @@ export default function DateRangeFilter({
   profiles?: ProfileOption[];
   defaultMode?: "today" | "month" | "all";
 }) {
-  const router = useRouter();
+  const { navigate, pending } = useNavigate();
   const pathname = usePathname();
   const params = useSearchParams();
 
@@ -50,7 +51,7 @@ export default function DateRangeFilter({
     if (key !== "profile") next.delete("all");
     next.delete("page");
     const qs = next.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    navigate(qs ? `${pathname}?${qs}` : pathname);
   }
 
   /** Today only. Sets the dates explicitly so it works regardless of the
@@ -62,7 +63,7 @@ export default function DateRangeFilter({
     next.set("to", t);
     next.delete("all");
     next.delete("page");
-    router.push(`${pathname}?${next.toString()}`, { scroll: false });
+    navigate(`${pathname}?${next.toString()}`);
   }
 
   /** Whole of the current month. */
@@ -73,7 +74,7 @@ export default function DateRangeFilter({
     next.set("to", m.to);
     next.delete("all");
     next.delete("page");
-    router.push(`${pathname}?${next.toString()}`, { scroll: false });
+    navigate(`${pathname}?${next.toString()}`);
   }
 
   return (

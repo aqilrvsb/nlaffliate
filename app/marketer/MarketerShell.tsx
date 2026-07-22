@@ -2,13 +2,14 @@
 
 import { Fragment, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Radio, LayoutDashboard, Users, Clock, CheckCircle2, LogOut,
   TrendingUp, ShoppingBag, Timer, CalendarDays, ExternalLink,
   Mail, Phone, MapPin, Link2, Menu, ChevronDown, List, Check, Loader2, Wallet,
   HelpCircle, Upload, ImagePlus, TrendingDown, Pencil, BarChart3,
   PackageSearch, FileSpreadsheet, ShoppingCart, Layers, Eye, MousePointerClick,
-  Send, Boxes, ClipboardList, Tag, CalendarPlus, Trash2, AlertCircle,
+  Send, Boxes, ClipboardList, Tag, CalendarPlus, Trash2, AlertCircle, Settings,
 } from "lucide-react";
 import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
 import Modal from "@/components/Modal";
@@ -27,6 +28,7 @@ import {
   scheduledHours, commissionFor,
 } from "@/lib/format";
 import { resolveRange } from "@/lib/daterange";
+import { useNavigate } from "@/lib/useNavigate";
 import { useSearchParams } from "next/navigation";
 import type { SessionUser } from "@/lib/session";
 
@@ -112,8 +114,10 @@ export default function MarketerShell({
   unknowns: Unknown[]; products: Product[]; overall: Overall[]; posts: Post[];
 }) {
   const router = useRouter();
+  const { navigate, prefetch, pending: navPending } = useNavigate();
   const params = useSearchParams();
   const [navOpen, setNavOpen] = useState(false);
+  const [navKey, setNavKey] = useState<string | null>(null);
 
   const active = params.get("tab") || "dashboard";
   const inAffiliateGroup = AFFILIATE_CHILDREN.some((c) => c.key === active);
@@ -127,7 +131,8 @@ export default function MarketerShell({
     else next.set("tab", key);
     next.delete("page");
     const qs = next.toString();
-    router.push(qs ? `/marketer?${qs}` : "/marketer", { scroll: false });
+    setNavKey(key);
+    navigate(qs ? `/marketer?${qs}` : "/marketer");
     setNavOpen(false);
   }
 
@@ -183,7 +188,7 @@ export default function MarketerShell({
               className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
                 active === "dashboard" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
               }`}>
-              <LayoutDashboard className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <NavIcon Icon={LayoutDashboard} busy={navPending && navKey === "dashboard"} />
               Dashboard
             </button>
 
@@ -206,10 +211,14 @@ export default function MarketerShell({
                   const on = c.key === active;
                   return (
                     <button key={c.key} onClick={() => go(c.key)}
+                      onMouseEnter={() => prefetch(`/marketer?tab=${c.key}`)}
+                      aria-busy={(navPending && navKey === c.key) || undefined}
                       className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200 ${
                         on ? "bg-primary text-primary-fg shadow-lift" : "text-muted-fg hover:bg-primary/10 hover:text-ink"
                       }`}>
-                      <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      {navPending && navKey === c.key
+                        ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+                        : <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
                       {c.label}
                     </button>
                   );
@@ -222,7 +231,7 @@ export default function MarketerShell({
               className={`mt-1 flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
                 active === "brand" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
               }`}>
-              <Tag className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <NavIcon Icon={Tag} busy={navPending && navKey === "brand"} />
               Brand
             </button>
 
@@ -231,7 +240,7 @@ export default function MarketerShell({
               className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
                 active === "product-gmv" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
               }`}>
-              <PackageSearch className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <NavIcon Icon={PackageSearch} busy={navPending && navKey === "product-gmv"} />
               Product GMV
             </button>
 
@@ -240,7 +249,7 @@ export default function MarketerShell({
               className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
                 active === "overall" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
               }`}>
-              <Layers className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <NavIcon Icon={Layers} busy={navPending && navKey === "overall"} />
               Overall
             </button>
 
@@ -263,10 +272,14 @@ export default function MarketerShell({
                   const on = c.key === active;
                   return (
                     <button key={c.key} onClick={() => go(c.key)}
+                      onMouseEnter={() => prefetch(`/marketer?tab=${c.key}`)}
+                      aria-busy={(navPending && navKey === c.key) || undefined}
                       className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200 ${
                         on ? "bg-primary text-primary-fg shadow-lift" : "text-muted-fg hover:bg-primary/10 hover:text-ink"
                       }`}>
-                      <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      {navPending && navKey === c.key
+                        ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+                        : <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
                       {c.label}
                     </button>
                   );
@@ -276,15 +289,20 @@ export default function MarketerShell({
           </nav>
 
           <div className="mt-4 border-t border-line pt-4">
-            <div className="mb-2 flex items-center gap-2 px-2">
+            {/* The whole identity block is the way into settings — clicking
+                your own name is where people look for it. */}
+            <Link href="/profile"
+              className="mb-2 flex cursor-pointer items-center gap-2 rounded-xl px-2 py-1.5 transition-colors duration-200 hover:bg-primary/10"
+              title="Profile & settings">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary text-sm font-bold text-white">
                 {user.name.charAt(0).toUpperCase()}
               </span>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-ink">{user.name}</p>
                 <p className="truncate text-xs text-muted-fg">{user.email}</p>
               </div>
-            </div>
+              <Settings className="h-3.5 w-3.5 shrink-0 text-muted-fg" aria-hidden="true" />
+            </Link>
             <button onClick={logout} className="btn-ghost w-full !py-2">
               <LogOut className="h-4 w-4" aria-hidden="true" />Log out
             </button>
@@ -1897,6 +1915,13 @@ function ConvertUnknownModal({
       </div>
     </Modal>
   );
+}
+
+/** Sidebar icon that becomes a spinner while that destination is loading. */
+function NavIcon({ Icon, busy }: { Icon: typeof Users; busy: boolean }) {
+  return busy
+    ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
+    : <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />;
 }
 
 /* ── shared bits ───────────────────────────────────────── */

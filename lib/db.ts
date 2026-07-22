@@ -24,19 +24,20 @@ function client(): postgres.Sql {
     // Supabase's transaction pooler doesn't support prepared statements.
     prepare: false,
     /**
-     * Sized against Supavisor's 200-client ceiling, not against one instance.
+     * One connection per instance, because serverless scales by instance.
      *
-     * Serverless multiplies this: every warm Lambda holds its own pool, so
-     * max × instances is what the pooler sees. At 8 a hundred concurrent
-     * users tripped EMAXCONN and the pooler refused new clients outright.
-     * Three lets an instance work in parallel while leaving room for the
-     * dozens of instances a burst spins up.
+     * A burst spins up roughly an instance per concurrent request, so the
+     * pooler sees max × instances. Raising this to 3 — never mind 8 — pushed
+     * a hundred concurrent users straight through Supavisor's 200-client
+     * ceiling and it began refusing clients outright (EMAXCONN), which is far
+     * worse than queueing.
      *
-     * The short idle timeout matters as much as the size: connections go back
-     * to the pool quickly instead of being held by an instance that has gone
-     * quiet.
+     * One apiece keeps the total at roughly the instance count. The
+     * serialisation this once caused was really the timeout handler tearing
+     * down the shared client; with that fixed, queries simply queue for the
+     * few milliseconds these take.
      */
-    max: 3,
+    max: 1,
     idle_timeout: 5,
     connect_timeout: 15,
     // A frozen serverless container wakes with a socket the pooler has long

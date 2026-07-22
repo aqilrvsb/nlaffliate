@@ -22,6 +22,7 @@ import Pagination from "@/components/Pagination";
 import { getPage, paginate } from "@/lib/pagination";
 import { fmtDate, fmtTimeRange, sumDurations } from "@/lib/format";
 import { resolveRange } from "@/lib/daterange";
+import { confirmDialog } from "@/lib/swal";
 
 type Profile = { id: number; label: string; url: string };
 type Brand = { id: number; name: string };
@@ -460,7 +461,7 @@ function BookingCard({ b, reload }: { b: Booking; reload: () => void }) {
   const hasResult = b.result_id != null;
 
   async function del() {
-    if (!confirm("Delete this scheduled live?")) return;
+    if (!(await confirmDialog({ title: "Delete this scheduled live?", danger: true }))) return;
     await fetch(`/api/bookings/${b.id}`, { method: "DELETE" });
     reload();
   }

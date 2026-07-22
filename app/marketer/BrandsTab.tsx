@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 // Tag doubles as the brand-filter icon below.
 import Modal from "@/components/Modal";
+import { confirmDialog } from "@/lib/swal";
 
 export type Brand = {
   id: number; name: string;
@@ -29,7 +30,8 @@ export default function BrandsTab({ onChange }: { onChange?: () => void }) {
   useEffect(() => { load(); }, [load]);
 
   async function remove(b: Brand) {
-    if (!confirm(`Delete "${b.name}"?`)) return;
+    const go = await confirmDialog({ title: `Delete "${b.name}"?`, danger: true });
+    if (!go) return;
     setError("");
 
     let res = await fetch(`/api/brands/${b.id}`, { method: "DELETE" });
@@ -38,7 +40,10 @@ export default function BrandsTab({ onChange }: { onChange?: () => void }) {
     // The API refuses when the brand still carries data and reports exactly
     // what would go with it, so the second prompt can name the cost.
     if (res.status === 409 && data.needsConfirm) {
-      if (!confirm(`${data.error}\n\nDelete "${b.name}" anyway?`)) return;
+      const anyway = await confirmDialog({
+        title: `Delete "${b.name}" anyway?`, text: data.error, danger: true,
+      });
+      if (!anyway) return;
       res = await fetch(`/api/brands/${b.id}?force=1`, { method: "DELETE" });
       data = await res.json();
     }

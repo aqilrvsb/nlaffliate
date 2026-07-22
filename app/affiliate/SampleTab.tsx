@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import Modal from "@/components/Modal";
 import { fmtDate } from "@/lib/format";
+import { confirmDialog } from "@/lib/swal";
 
 export type SampleProduct = { id: number; name: string; image_url: string | null };
 export type SampleRequest = {
@@ -70,7 +71,10 @@ export default function SampleTab() {
   }
 
   async function withdraw(id: number) {
-    if (!confirm("Cancel this sample request?")) return;
+    if (!(await confirmDialog({
+      title: "Cancel this sample request?", danger: true,
+      confirmText: "Cancel request", cancelText: "Keep it",
+    }))) return;
     await fetch(`/api/samples/${id}`, { method: "DELETE" });
     load();
   }

@@ -11,6 +11,7 @@ import { useSearchParams } from "next/navigation";
 import { fmtDate } from "@/lib/format";
 import { SampleStatusBadge, type SampleRequest } from "../affiliate/SampleTab";
 import type { Product } from "./ProductsTab";
+import { alertDialog } from "@/lib/swal";
 
 type AdminSample = SampleRequest & {
   affiliate_name: string;
@@ -334,9 +335,10 @@ function TrackingModal({
     // The affiliate is told their parcel shipped by WhatsApp — if that failed,
     // they have no idea it is on the way, so surface it rather than swallow it.
     if (data.notified === false && data.notify_note) {
-      alert(`Marked as shipped, but the WhatsApp was not sent:
-
-${data.notify_note}`);
+      await alertDialog({
+        title: "Marked as shipped, but the WhatsApp was not sent",
+        text: data.notify_note, variant: "warning",
+      });
     }
     onClose(); onSaved();
   }

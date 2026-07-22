@@ -20,6 +20,7 @@ import Pagination from "@/components/Pagination";
 import { getPage, paginate } from "@/lib/pagination";
 import { useSearchParams } from "next/navigation";
 import { fmtDate, fmtTimeRange, sumDurations } from "@/lib/format";
+import { confirmDialog, alertDialog } from "@/lib/swal";
 
 type Marketer = { id: number; name: string; email: string };
 type Affiliate = {
@@ -60,10 +61,14 @@ export default function AdminDashboard({
         .map(([k, n]) => `  • ${n} ${k.replace(/_/g, " ")}`)
         .join("\n");
       const body =
-        `Delete ${data.role} "${name}" (${data.email})?\n\n` +
         (lines ? `This affects:\n${lines}\n\n` : "") +
         `${data.note}\n\nThis cannot be undone.`;
-      if (!confirm(body)) return;
+      const go = await confirmDialog({
+        title: `Delete ${data.role} "${name}" (${data.email})?`,
+        text: body,
+        danger: true,
+      });
+      if (!go) return;
 
       res = await fetch(`/api/admin/users/${id}?force=1`, { method: "DELETE" });
       data = await res.json();
@@ -88,9 +93,10 @@ export default function AdminDashboard({
     // Assigning is what unlocks the account, and the affiliate only learns
     // that from the welcome message — so say so when it did not send.
     if (data.notified === false && data.notify_note) {
-      alert(`Assigned, but the welcome WhatsApp was not sent:
-
-${data.notify_note}`);
+      await alertDialog({
+        title: "Assigned, but the welcome WhatsApp was not sent",
+        text: data.notify_note, variant: "warning",
+      });
     }
     router.refresh();
   }
@@ -364,7 +370,7 @@ function TikTokLinksModal({
   }
 
   async function remove(id: number, name: string) {
-    if (!confirm(`Delete "${name}"?`)) return;
+    if (!(await confirmDialog({ title: `Delete "${name}"?`, danger: true }))) return;
     setError("");
     const res = await fetch(`/api/profiles/${id}`, { method: "DELETE" });
     const data = await res.json();

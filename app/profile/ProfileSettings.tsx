@@ -7,6 +7,7 @@ import {
   Check, AlertCircle, ExternalLink, Loader2, ArrowLeft, MessageCircle, Pencil,
 } from "lucide-react";
 import Link from "next/link";
+import { confirmDialog } from "@/lib/swal";
 
 type Profile = {
   id: number; label: string; url: string;
@@ -428,7 +429,7 @@ function TikTokProfilesCard() {
   }
 
   async function remove(id: number) {
-    if (!confirm("Delete this profile link?")) return;
+    if (!(await confirmDialog({ title: "Delete this profile link?", danger: true }))) return;
     await fetch(`/api/profiles/${id}`, { method: "DELETE" });
     load();
   }

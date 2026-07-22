@@ -33,6 +33,7 @@ import { resolveRange } from "@/lib/daterange";
 import { useNavigate } from "@/lib/useNavigate";
 import { useSearchParams } from "next/navigation";
 import type { SessionUser } from "@/lib/session";
+import { confirmDialog } from "@/lib/swal";
 
 type TikTokLink = {
   brand_id?: number | null;
@@ -760,13 +761,19 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
   const [brandMsg, setBrandMsg] = useState("");
 
   async function removeLive() {
-    if (!confirm(`Padam jadual ${l.affiliate} — ${fmtDate(l.live_date)}?`)) return;
+    const go = await confirmDialog({
+      title: `Padam jadual ${l.affiliate} — ${fmtDate(l.live_date)}?`,
+      danger: true, confirmText: "Padam", cancelText: "Batal",
+    });
+    if (!go) return;
     let r = await fetch(`/api/marketer/bookings/${l.booking_id}`, { method: "DELETE" });
     let d = await r.json();
     if (r.status === 409 && d.needsConfirm) {
-      if (!confirm(`${d.error}
-
-Teruskan?`)) return;
+      const anyway = await confirmDialog({
+        title: "Teruskan?", text: d.error,
+        danger: true, confirmText: "Padam", cancelText: "Batal",
+      });
+      if (!anyway) return;
       r = await fetch(`/api/marketer/bookings/${l.booking_id}?force=1`, { method: "DELETE" });
       d = await r.json();
     }
@@ -1949,7 +1956,11 @@ function UnknownTab({ rows }: { rows: Unknown[] }) {
   const [convert, setConvert] = useState<Unknown | null>(null);
 
   async function discard(r: Unknown) {
-    if (!confirm(`Buang baris ini? (${r.live_name || "tiada nama"})`)) return;
+    const go = await confirmDialog({
+      title: `Buang baris ini? (${r.live_name || "tiada nama"})`,
+      danger: true, confirmText: "Buang", cancelText: "Batal",
+    });
+    if (!go) return;
     await fetch(`/api/marketer/unknown/${r.id}`, { method: "DELETE" });
     router.refresh();
   }

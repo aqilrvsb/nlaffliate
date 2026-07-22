@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, AlertCircle, Check, Pencil, Trash2 } from "lucide-react";
 import Modal from "@/components/Modal";
+import { confirmDialog, alertDialog } from "@/lib/swal";
 
 export type ManagedAffiliate = {
   id: number; name: string; email: string;
@@ -68,7 +69,11 @@ export function AffiliateModal({
     // Say plainly when the welcome message did not go out — silence would read
     // as "notified" and the affiliate would be left waiting for a link.
     if (!affiliate && data.notified === false && data.notify_note) {
-      alert(`Affiliate created.\n\nWhatsApp not sent: ${data.notify_note}`);
+      await alertDialog({
+        title: "Affiliate created",
+        text: `WhatsApp not sent: ${data.notify_note}`,
+        variant: "warning",
+      });
     }
     onClose();
     router.refresh();
@@ -157,18 +162,22 @@ export function AffiliateActions({
         .filter(([, n]) => n > 0)
         .map(([k, n]) => `  • ${n} ${k.replace(/_/g, " ")}`)
         .join("\n");
-      const ok = confirm(
-        `Delete affiliate "${data.name}" (${data.email})?\n\n` +
-        (lines ? `This affects:\n${lines}\n\n` : "") +
-        `${data.note}\n\nThis cannot be undone.`
-      );
+      const ok = await confirmDialog({
+        title: `Delete affiliate "${data.name}" (${data.email})?`,
+        text:
+          (lines ? `This affects:\n${lines}\n\n` : "") +
+          `${data.note}\n\nThis cannot be undone.`,
+        danger: true,
+      });
+
       if (!ok) { setBusy(false); return; }
       res = await fetch(`/api/marketer/affiliates/${affiliate.id}?force=1`, { method: "DELETE" });
       data = await res.json();
     }
 
     setBusy(false);
-    if (!res.ok) return alert(data.error || "Could not delete.");
+    if (!res.ok)
+      return alertDialog({ title: "Could not delete", text: data.error, variant: "error" });
     router.refresh();
   }
 

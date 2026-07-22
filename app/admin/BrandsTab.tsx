@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Tag, Plus, Pencil, Trash2, Loader2, AlertCircle, Check, Users } from "lucide-react";
 import Modal from "@/components/Modal";
+import { confirmDialog } from "@/lib/swal";
 
 type CatalogueBrand = { id: number; name: string; adopted: number };
 
@@ -26,7 +27,11 @@ export default function AdminBrandsTab() {
   useEffect(() => { load(); }, [load]);
 
   async function remove(b: CatalogueBrand) {
-    if (!confirm(`Remove "${b.name}" from the catalogue?`)) return;
+    const go = await confirmDialog({
+      title: `Remove "${b.name}" from the catalogue?`,
+      danger: true, confirmText: "Remove",
+    });
+    if (!go) return;
     setError("");
 
     let res = await fetch(`/api/brands/${b.id}`, { method: "DELETE" });
@@ -35,7 +40,11 @@ export default function AdminBrandsTab() {
     // The API refuses while marketers still have it and says how many, so the
     // second prompt can name the cost instead of asking blind.
     if (res.status === 409 && data.needsConfirm) {
-      if (!confirm(`${data.error}\n\nRemove it anyway?`)) return;
+      const anyway = await confirmDialog({
+        title: "Remove it anyway?", text: data.error,
+        danger: true, confirmText: "Remove",
+      });
+      if (!anyway) return;
       res = await fetch(`/api/brands/${b.id}?force=1`, { method: "DELETE" });
       data = await res.json();
     }

@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import Modal from "@/components/Modal";
 import { compressScreenshot, fmtBytes, MAX_UPLOAD_BYTES } from "@/lib/image";
+import { confirmDialog } from "@/lib/swal";
 
 export type Product = {
   id: number; name: string; image_url: string | null;
@@ -39,7 +40,7 @@ export default function ProductsTab() {
       : products.filter((p) => p.brand_name === filter);
 
   async function remove(p: Product) {
-    if (!confirm(`Delete "${p.name}"?`)) return;
+    if (!(await confirmDialog({ title: `Delete "${p.name}"?`, danger: true }))) return;
     setError("");
     const res = await fetch(`/api/products/${p.id}`, { method: "DELETE" });
     const data = await res.json();

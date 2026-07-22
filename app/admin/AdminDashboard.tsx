@@ -41,6 +41,35 @@ export default function AdminDashboard({
   const router = useRouter();
   const [savingId, setSavingId] = useState<number | null>(null);
   const [linksFor, setLinksFor] = useState<Affiliate | null>(null);
+  const [deleteErr, setDeleteErr] = useState("");
+
+  /**
+   * Two-step delete: the first call reports what would be destroyed, and the
+   * operator confirms against that list rather than a generic "are you sure".
+   */
+  async function removeUser(id: number, name: string) {
+    setDeleteErr("");
+    let res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
+    let data = await res.json();
+
+    if (res.status === 409 && data.needsConfirm) {
+      const lines = Object.entries(data.impact as Record<string, number>)
+        .filter(([, n]) => n > 0)
+        .map(([k, n]) => `  • ${n} ${k.replace(/_/g, " ")}`)
+        .join("\n");
+      const body =
+        `Delete ${data.role} "${name}" (${data.email})?\n\n` +
+        (lines ? `This affects:\n${lines}\n\n` : "") +
+        `${data.note}\n\nThis cannot be undone.`;
+      if (!confirm(body)) return;
+
+      res = await fetch(`/api/admin/users/${id}?force=1`, { method: "DELETE" });
+      data = await res.json();
+    }
+
+    if (!res.ok) return setDeleteErr(data.error || "Could not delete.");
+    router.refresh();
+  }
 
   async function assign(affiliateId: number, marketerId: string) {
     setSavingId(affiliateId);
@@ -112,6 +141,44 @@ export default function AdminDashboard({
       <AiSettingsCard />
 
       <section>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="section-title">Marketers</h2>
+          {deleteErr && (
+            <span className="flex items-center gap-1.5 text-sm text-danger">
+              <AlertCircle className="h-4 w-4" aria-hidden="true" />{deleteErr}
+            </span>
+          )}
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {marketers.map((m) => {
+            const owned = affiliates.filter((a) => a.marketer_id === m.id).length;
+            return (
+              <div key={m.id} className="card flex items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary text-sm font-bold text-white">
+                  {m.name.charAt(0).toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-bold text-ink">{m.name}</p>
+                  <p className="truncate text-xs text-muted-fg">{m.email}</p>
+                  <p className="text-xs text-muted-fg">
+                    {owned} affiliate{owned === 1 ? "" : "s"}
+                  </p>
+                </div>
+                <button onClick={() => removeUser(m.id, m.name)}
+                  aria-label={`Delete ${m.name}`} title="Delete account"
+                  className="shrink-0 cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger">
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            );
+          })}
+          {marketers.length === 0 && (
+            <p className="card text-center text-sm text-muted-fg">No marketers registered yet.</p>
+          )}
+        </div>
+      </section>
+
+      <section>
         <h2 className="section-title mb-3">Affiliates &amp; Assignment</h2>
         <div className="grid gap-3 md:grid-cols-2">
           {affiliates.map((a) => (
@@ -154,10 +221,17 @@ export default function AdminDashboard({
                 </div>
               </div>
 
-              <button className="btn-ghost !py-2" onClick={() => setLinksFor(a)}>
-                <Link2 className="h-4 w-4" aria-hidden="true" />
-                TikTok links
-              </button>
+              <div className="flex items-center gap-2">
+                <button className="btn-ghost flex-1 !py-2" onClick={() => setLinksFor(a)}>
+                  <Link2 className="h-4 w-4" aria-hidden="true" />
+                  TikTok links
+                </button>
+                <button onClick={() => removeUser(a.id, a.name)}
+                  aria-label={`Delete ${a.name}`} title="Delete account"
+                  className="shrink-0 cursor-pointer rounded-xl border border-line bg-white/70 p-2.5 text-muted-fg shadow-lift transition-colors duration-200 hover:bg-danger/10 hover:text-danger">
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
             </div>
           ))}
           {affiliates.length === 0 && (

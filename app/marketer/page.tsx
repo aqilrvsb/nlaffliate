@@ -26,7 +26,12 @@ export default async function MarketerPage() {
       db.prepare(
           `SELECT p.id, p.user_id, p.label, p.url,
                   p.commission_type, p.commission_value, p.brand_id,
-                  pb.name AS brand_name
+                  pb.name AS brand_name,
+                  COALESCE(
+                    (SELECT array_agg(x.brand_id) FROM tiktok_profile_brands x
+                      WHERE x.profile_id = p.id),
+                    '{}'
+                  ) AS brand_ids
              FROM tiktok_profiles p
              LEFT JOIN brands pb ON pb.id = p.brand_id
              JOIN users u ON u.id = p.user_id

@@ -46,17 +46,42 @@ export async function GET(req: Request) {
   const id = await targetUserId(user, url.searchParams.get("user_id"));
   if (!id) return NextResponse.json({ error: "Not allowed." }, { status: 403 });
 
-  // The brand's group link rides along, so the affiliate sees the right
-  // WhatsApp group against each profile without a second round trip.
-  const rows = await db
+  const rows = (await db
     .prepare(`SELECT p.id, p.label, p.url, p.commission_type, p.commission_value,
-                     p.created_at, p.brand_id, b.name AS brand_name,
-                     b.wa_group_url
+                     p.created_at, p.brand_id
                 FROM tiktok_profiles p
-                LEFT JOIN brands b ON b.id = p.brand_id
                WHERE p.user_id = ? ORDER BY p.id`)
-    .all(id);
-  return NextResponse.json({ profiles: rows });
+    .all(id)) as any[];
+
+  // A link can run several brands, so its brands (and each brand's WhatsApp
+  // group) come back as a list. One query for all rows, not one per row.
+  const links = rows.length
+    ? ((await db
+        .prepare(
+          `SELECT pb.profile_id, b.id, b.name, b.wa_group_url
+             FROM tiktok_profile_brands pb
+             JOIN brands b ON b.id = pb.brand_id
+             JOIN tiktok_profiles p ON p.id = pb.profile_id
+            WHERE p.user_id = ?
+            ORDER BY b.name`
+        )
+        .all(id)) as any[])
+    : [];
+
+  const profiles = rows.map((r) => {
+    const brands = links
+      .filter((l) => l.profile_id === r.id)
+      .map(({ id, name, wa_group_url }) => ({ id, name, wa_group_url }));
+    return {
+      ...r,
+      brands,
+      // Kept for callers that still expect a single brand.
+      brand_name: brands[0]?.name ?? null,
+      wa_group_url: brands[0]?.wa_group_url ?? null,
+    };
+  });
+
+  return NextResponse.json({ profiles });
 }
 
 export async function POST(req: Request) {

@@ -8,12 +8,14 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { confirmDialog } from "@/lib/swal";
-import { profileName } from "@/lib/tiktok";
+import { handleFromUrl } from "@/lib/tiktok";
 
+type ProfileBrand = { id: number; name: string; wa_group_url: string | null };
 type Profile = {
   id: number; label: string; url: string;
   brand_name?: string | null;
   wa_group_url?: string | null;
+  brands?: ProfileBrand[];
 };
 const MAX_PROFILES = 10;
 
@@ -357,33 +359,29 @@ function ProfileRow({
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-white/60 px-3 py-2.5">
       <div className="min-w-0">
-        <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-          {profileName(p.brand_name, p.url)}
+        <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-ink">
+          {handleFromUrl(p.url)}
+          {(p.brands ?? []).map((b) => (
+            <span key={b.id} className="chip bg-primary/10 text-primary">{b.name}</span>
+          ))}
         </p>
         <a href={p.url} target="_blank" rel="noopener noreferrer"
           className="flex items-center gap-1 truncate text-xs text-accent hover:underline">
           <span className="truncate">{p.url}</span>
           <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
         </a>
-        {/* The group belongs to this profile's brand, so a creator running two
-            brands gets each brand's group beside the right account. */}
-        {p.wa_group_url && (
-          <a href={p.wa_group_url} target="_blank" rel="noopener noreferrer"
-            className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors duration-200 hover:bg-emerald-700">
-            <MessageCircle className="h-3 w-3" aria-hidden="true" />
-            Link Group WhatsApp
-          </a>
-        )}
+        {/* The WhatsApp groups live on the Brand tab now — grouped by brand
+            rather than repeated under every link that carries it. */}
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <button onClick={() => setEdit(true)}
           className="cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-accent/10 hover:text-accent"
-          aria-label={`Edit ${profileName(p.brand_name, p.url)}`}>
+          aria-label={`Edit ${handleFromUrl(p.url)}`}>
           <Pencil className="h-4 w-4" aria-hidden="true" />
         </button>
         <button onClick={onRemove}
           className="cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger"
-          aria-label={`Delete ${profileName(p.brand_name, p.url)}`}>
+          aria-label={`Delete ${handleFromUrl(p.url)}`}>
           <Trash2 className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { normalisePhone } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,7 +30,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
   for (const k of ["name", "phone", "address"] as const) {
     if (k in body) {
-      const v = String(body[k] ?? "").trim();
+      // Phone is stored canonically (60XXXXXXXXX) so notifications always
+      // reach the same number whatever shape it was typed in.
+      const v = k === "phone"
+        ? normalisePhone(body[k])
+        : String(body[k] ?? "").trim();
       if (!v) return NextResponse.json({ error: `${k} cannot be empty.` }, { status: 400 });
       sets.push(`${k} = ?`);
       args.push(v);

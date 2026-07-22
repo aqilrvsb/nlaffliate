@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
-import { sendWhatsApp, welcomeMessage } from "@/lib/whatsapp";
+import { sendWhatsApp, accountCreatedMessage, normalisePhone } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   const clean = {
     name: String(name || "").trim(),
     email: String(email || "").trim().toLowerCase(),
-    phone: String(phone || "").trim(),
+    phone: normalisePhone(phone),
     address: String(address || "").trim(),
   };
 
@@ -46,8 +46,15 @@ export async function POST(req: Request) {
        VALUES (?, ?, ?, ?, ?, 'affiliate', ?) RETURNING id`
     ).run(clean.name, clean.email, clean.phone, clean.address, hash, user.id);
 
-  // Best-effort: a failed notification must not undo a created account.
-  const wa = await sendWhatsApp(clean.phone, welcomeMessage(clean.name));
+  // The affiliate never chose this password, so the account is unusable
+  // unless we hand it over. Best-effort: a failed message must not undo a
+  // created account, but it is reported so nobody is left waiting.
+  const wa = await sendWhatsApp(
+    clean.phone,
+    accountCreatedMessage({
+      name: clean.name, email: clean.email, password: String(password),
+    })
+  );
 
   return NextResponse.json({
     ok: true,

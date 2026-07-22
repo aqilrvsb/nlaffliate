@@ -87,12 +87,48 @@ export async function deviceStatus(deviceId?: string) {
 
 /* ── Message templates ─────────────────────────────────── */
 
+/**
+ * Every automated message opens the same way, so a recipient can tell at a
+ * glance that it came from the system rather than from a person.
+ */
+const HEADER = "Notification NLAffliateArmy";
+const LOGIN_URL = "https://www.nlaffliatearmy.com/login";
+
+function compose(...blocks: (string | string[])[]) {
+  const lines: string[] = [HEADER, ""];
+  for (const b of blocks) lines.push(...(Array.isArray(b) ? b : [b]));
+  return lines.join("\n");
+}
+
 export function welcomeMessage(name: string) {
-  return `Selamat Datang ${name}
+  return compose([
+    `Selamat Datang ${name}`,
+    "",
+    "Anda Sudah Boleh Akses kepada Sistem",
+    "",
+    LOGIN_URL,
+  ]);
+}
 
-Anda Sudah Boleh Akses kepada Sistem
-
-https://www.nlaffliatearmy.com/`;
+/**
+ * Sent when a marketer registers an affiliate: they never chose a password,
+ * so the account is unusable unless we tell them what it is.
+ */
+export function accountCreatedMessage(opts: {
+  name: string; email: string; password: string;
+}) {
+  return compose([
+    `Selamat Datang ${opts.name}`,
+    "",
+    "Akaun anda sudah dibuka. Butiran log masuk:",
+    "",
+    `Email: ${opts.email}`,
+    `Password: ${opts.password}`,
+    "",
+    `Link login: ${LOGIN_URL}`,
+    "",
+    "Sila tukar password anda selepas log masuk.",
+  ]);
 }
 
 /* ── Marketer alerts ───────────────────────────────────── */
@@ -146,7 +182,7 @@ export function scheduleAlert(
     updated: "Jadual Live Dikemaskini",
     deleted: "Jadual Live Dipadam",
   }[kind];
-  return ["Notification NLAffliate", "", head, "", ...summaryLines(s)].join("\n");
+  return compose([head, "", ...summaryLines(s)]);
 }
 
 /** Told to the marketer when results land, with the figures that arrived. */
@@ -160,7 +196,7 @@ export function resultsAlert(
     title?: string | null;
   }
 ) {
-  const lines = ["Notification NLAffliate", "", "Screenshot Live Dimuat Naik", ""];
+  const lines = [HEADER, "", "Screenshot Live Dimuat Naik", ""];
   if (r.title) lines.push(`Live: ${r.title}`);
   lines.push(...summaryLines(s), "");
   lines.push(`GMV: ${r.gmv != null ? `RM${r.gmv}` : "-"}`);
@@ -177,12 +213,7 @@ export function sampleShippedMessage(opts: {
   tracking?: string | null;
   link?: string | null;
 }) {
-  const lines = [
-    "Notification NLAffliate",
-    "",
-    "Request Sample Anda Sudah Dihantar",
-    "",
-  ];
+  const lines = [HEADER, "", "Request Sample Anda Sudah Dihantar", ""];
   if (opts.brand) lines.push(`Brand: ${opts.brand}`);
   if (opts.products.length)
     lines.push(`Produk: ${opts.products.join(", ")}`);

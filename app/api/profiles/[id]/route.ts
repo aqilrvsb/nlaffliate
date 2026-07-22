@@ -72,34 +72,47 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const body = await req.json().catch(() => ({}));
 
   /**
-   * Tag the link with a brand. This is what decides which WhatsApp group the
-   * affiliate sees against that profile, so it is set by the same people who
-   * set commission — the marketer running the brand, or admin.
+   * Tag the link with brands. One creator account can run several, so this
+   * replaces the whole set rather than holding a single id — unticking is as
+   * meaningful as ticking, and a partial update could not express it.
+   *
+   * Set by whoever sets commission: the marketer running the brand, or admin.
    */
-  if ("brand_id" in body) {
-    const raw = String(body.brand_id ?? "").trim();
-    if (!raw) {
-      await db.prepare("UPDATE tiktok_profiles SET brand_id = NULL WHERE id = ?")
-        .run(params.id);
-      return NextResponse.json({ ok: true, brand_id: null });
+  if ("brand_ids" in body) {
+    const raw: unknown[] = Array.isArray(body.brand_ids) ? body.brand_ids : [];
+    const ids = [...new Set(raw.map(Number).filter((n) => Number.isFinite(n) && n > 0))];
+
+    // Every id must be a brand this caller may use, so a link cannot be
+    // pointed at someone else's brand (and their WhatsApp group).
+    for (const n of ids) {
+      const owned = await db
+        .prepare(
+          user.role === "admin"
+            ? "SELECT id FROM brands WHERE id = ? AND marketer_id IS NOT NULL"
+            : "SELECT id FROM brands WHERE id = ? AND marketer_id = ?"
+        )
+        .get(...(user.role === "admin" ? [n] : [n, user.id]));
+      if (!owned) {
+        return NextResponse.json({ error: "That brand is not yours." }, { status: 403 });
+      }
     }
-    const n = Number(raw);
-    // Scope the lookup to the marketer's own brands so a link cannot be
-    // pointed at someone else's brand (and their group).
-    const owned = Number.isFinite(n)
-      ? await db
-          .prepare(
-            user.role === "admin"
-              ? "SELECT id FROM brands WHERE id = ? AND marketer_id IS NOT NULL"
-              : "SELECT id FROM brands WHERE id = ? AND marketer_id = ?"
-          )
-          .get(...(user.role === "admin" ? [n] : [n, user.id]))
-      : null;
-    if (!owned) {
-      return NextResponse.json({ error: "That brand is not yours." }, { status: 403 });
+
+    await db.prepare("DELETE FROM tiktok_profile_brands WHERE profile_id = ?").run(params.id);
+    for (const n of ids) {
+      await db
+        .prepare(
+          `INSERT INTO tiktok_profile_brands (profile_id, brand_id)
+           VALUES (?, ?) ON CONFLICT DO NOTHING`
+        )
+        .run(params.id, n);
     }
-    await db.prepare("UPDATE tiktok_profiles SET brand_id = ? WHERE id = ?").run(n, params.id);
-    return NextResponse.json({ ok: true, brand_id: n });
+    // brand_id stays as the first brand so the older single-brand joins
+    // (a live's profile column, the schedule dropdowns) keep working.
+    await db
+      .prepare("UPDATE tiktok_profiles SET brand_id = ? WHERE id = ?")
+      .run(ids[0] ?? null, params.id);
+
+    return NextResponse.json({ ok: true, brand_ids: ids });
   }
 
   const rawType = String(body.commission_type ?? "").trim();

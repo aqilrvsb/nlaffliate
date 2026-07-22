@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import db from "@/lib/db";
 import { createSession } from "@/lib/session";
+import { normalisePhone } from "@/lib/whatsapp";
 
 export async function POST(req: Request) {
   const { name, email, phone, address, password, role } = await req.json();
@@ -21,11 +22,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Email already registered." }, { status: 409 });
   }
 
+  // Stored in one canonical shape (60XXXXXXXXX) so every notification and
+  // every lookup agrees, whatever the user typed.
+  const tel = normalisePhone(phone);
   const hash = bcrypt.hashSync(String(password), 10);
   const info = await db.prepare(
       "INSERT INTO users (name, email, phone, address, password_hash, role) VALUES (?, ?, ?, ?, ?, ?) RETURNING id"
     )
-    .run(name, email, phone, address, hash, role);
+    .run(name, email, tel, address, hash, role);
 
   const user = {
     id: Number(info.lastInsertRowid),

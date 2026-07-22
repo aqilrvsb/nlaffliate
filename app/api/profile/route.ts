@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { normalisePhone } from "@/lib/whatsapp";
 
 export async function GET() {
   const user = await getSession();
@@ -27,7 +28,7 @@ export async function PUT(req: Request) {
   }
 
   await db.prepare("UPDATE users SET name = ?, phone = ?, address = ? WHERE id = ?")
-    .run(name, phone, address, user.id);
+    .run(name, normalisePhone(phone), address, user.id);
 
   // Only a marketer owns a group link; their affiliates read it off this row.
   if (user.role === "marketer") {

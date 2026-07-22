@@ -43,6 +43,7 @@ import { profileName } from "@/lib/tiktok";
 
 type TikTokLink = {
   brand_id?: number | null;
+  brand_ids?: number[] | null;
   brand_name?: string | null;
   id: number; label: string; url: string;
   commission_type: "percent" | "hour" | null; commission_value: number | null;
@@ -566,7 +567,7 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
                     <CommissionEditor profileId={l.id} initial={l} />
                     {/* The brand decides which WhatsApp group the affiliate
                         sees against this account. */}
-                    <ProfileBrandPicker profileId={l.id} initial={l.brand_id} />
+                    <ProfileBrandPicker profileId={l.id} initial={l.brand_ids ?? []} />
                   </li>
                 ))}
               </ul>

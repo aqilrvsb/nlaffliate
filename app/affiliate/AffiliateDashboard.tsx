@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import TabBar from "@/components/TabBar";
 import SampleTab from "./SampleTab";
+import BrandsView from "./BrandsView";
 import ExampleHint from "@/components/ExampleHint";
 import DurationInput from "@/components/DurationInput";
 import PostGrid, { PostItem } from "./PostGrid";
@@ -239,6 +240,7 @@ export default function AffiliateDashboard({
         { key: "done-schedule", label: "Done Schedule", icon: CheckCircle2, activeTone: "emerald" },
         { key: "pending",  label: "Pending Post",       icon: Clock, activeTone: "red" },
         { key: "done",     label: "Done Post",          icon: Send,  activeTone: "emerald" },
+        { key: "brand",    label: "Brand",              icon: Tag },
         { key: "sample",   label: "Sample",             icon: Package },
       ]} />
 
@@ -313,6 +315,7 @@ export default function AffiliateDashboard({
           </>
         )}
 
+        {tab === "brand" && <BrandsView />}
         {tab === "sample" && <SampleTab />}
       </section>
 

@@ -11,6 +11,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import TabBar from "@/components/TabBar";
+import VideoSop from "@/components/VideoSop";
 import SampleTab from "./SampleTab";
 import BrandsView from "./BrandsView";
 import ExampleHint from "@/components/ExampleHint";
@@ -180,6 +181,9 @@ export default function AffiliateDashboard({
           {/* The group link moved onto each TikTok profile, where it is scoped
               to that profile's brand — a creator running two brands belongs to
               two different groups, which one button here could never express. */}
+          {/* The written guides live behind each tab's question mark; this is
+              the same walkthrough shown rather than read. */}
+          <VideoSop />
           <Link href="/profile" className="btn-ghost !py-2">
             <Settings className="h-4 w-4" aria-hidden="true" />
             Profile &amp; TikTok links

@@ -1145,6 +1145,9 @@ function aggregate(lives: Live[]) {
 function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: Live[] }) {
   // "" = All Brands, the default.
   const [brand, setBrand] = useState("");
+  // Sub-profiles start collapsed: the main rows are the summary, and the
+  // per-link breakdown is detail you opt into.
+  const [showSubs, setShowSubs] = useState(false);
   const shown = lives.filter((l) => !brand || String(l.brand_id ?? "") === brand);
 
   const t = aggregate(shown);
@@ -1155,6 +1158,38 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
   const active = brand
     ? affiliates.filter((a) => shown.some((l) => l.affiliate_id === a.id))
     : affiliates;
+
+  /** Per-link breakdown for one affiliate, with what each link earned. */
+  function subsFor(a: Affiliate) {
+    const mine = shown.filter((l) => l.affiliate_id === a.id);
+    const byProfile = new Map<number, Live[]>();
+    for (const l of mine) {
+      const list = byProfile.get(l.profile_id) || [];
+      list.push(l);
+      byProfile.set(l.profile_id, list);
+    }
+    return [...byProfile.entries()].map(([pid, ls]) => {
+      const agg = aggregate(ls);
+      const link = a.links.find((x) => x.id === pid);
+      // Bill only completed lives, matching the Duration column —
+      // aggregate() counts airtime the same way. Paying on pending lives
+      // would pay for airtime nobody has verified yet.
+      const secs = ls
+        .filter((l) => l.status === "completed")
+        .reduce((s, l) => s + durationToSeconds(l.duration_live), 0);
+      const commission = link ? commissionFor(link, agg.gmv, secs) : 0;
+      return {
+        pid, agg, link, secs, commission,
+        label: link?.label ?? ls[0]?.profile_label ?? "—",
+      };
+    });
+  }
+
+  // What every affiliate is owed in this range, together.
+  const totalCommission = active.reduce(
+    (s, a) => s + subsFor(a).reduce((x, sub) => x + sub.commission, 0),
+    0
+  );
 
   return (
     <>
@@ -1173,6 +1208,16 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
         <Kpi Icon={TrendingUp} label="Affiliate Gross Revenue" value={rm(t.gross, t.hasGross)} fill="emerald" />
         <Kpi Icon={(t.roi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="Affiliate ROI"
           value={t.roi != null ? t.roi : "—"} />
+        <Kpi Icon={Wallet} label="Total Commission"
+          value={`RM${totalCommission.toFixed(2)}`} fill="emerald" />
+      </div>
+
+      <div className="flex justify-end">
+        <button onClick={() => setShowSubs((o) => !o)} className="btn-ghost !py-2 text-xs">
+          <ChevronDown aria-hidden="true"
+            className={`h-4 w-4 transition-transform duration-200 ${showSubs ? "rotate-180" : ""}`} />
+          {showSubs ? "Sembunyi sub profile" : "Papar sub profile"}
+        </button>
       </div>
 
       <div className="glass overflow-x-auto rounded-2xl">
@@ -1195,27 +1240,8 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
           </thead>
           <tbody>
             {active.map((a) => {
-              const mine = shown.filter((l) => l.affiliate_id === a.id);
-              const r = aggregate(mine);
-
-              // One sub-row per TikTok link that actually ran a live, so the
-              // commission can differ per link.
-              const byProfile = new Map<number, Live[]>();
-              for (const l of mine) {
-                const list = byProfile.get(l.profile_id) || [];
-                list.push(l);
-                byProfile.set(l.profile_id, list);
-              }
-              const subs = [...byProfile.entries()].map(([pid, ls]) => {
-                const agg = aggregate(ls);
-                const link = a.links.find((x) => x.id === pid);
-                const secs = ls.reduce((s, l) => s + durationToSeconds(l.duration_live), 0);
-                const commission = link ? commissionFor(link, agg.gmv, secs) : 0;
-                return {
-                  pid, agg, link, secs, commission,
-                  label: link?.label ?? ls[0]?.profile_label ?? "—",
-                };
-              });
+              const r = aggregate(shown.filter((l) => l.affiliate_id === a.id));
+              const subs = subsFor(a);
               const totalIncome = subs.reduce((s, x) => s + x.commission, 0);
 
               return (
@@ -1240,7 +1266,7 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
                     </td>
                   </tr>
 
-                  {subs.map((s) => (
+                  {showSubs && subs.map((s) => (
                     <tr key={`${a.id}-${s.pid}`} className="border-t border-line/40 text-[13px]">
                       <td className="py-2 pl-10 pr-4">
                         <span className="flex items-center gap-1.5 text-muted-fg">

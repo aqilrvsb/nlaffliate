@@ -15,7 +15,7 @@ import {
 import { AffiliateModal, AffiliateActions, type ManagedAffiliate } from "./AffiliateManager";
 import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
 import ProfileBrandPicker from "@/components/ProfileBrandPicker";
-import AddProfileLink from "@/components/AddProfileLink";
+import AddProfileLink, { DeleteProfileLink } from "@/components/AddProfileLink";
 import ProductsTab from "@/app/admin/ProductsTab";
 import AffiliatePosts from "./AffiliatePosts";
 import Modal from "@/components/Modal";
@@ -550,11 +550,15 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
                           <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
                         </a>
                       </span>
-                      {commissionLabel(l) && (
-                        <span className="chip shrink-0 bg-emerald-100 text-emerald-700">
-                          {commissionLabel(l)}
-                        </span>
-                      )}
+                      <span className="flex shrink-0 items-center gap-1">
+                        {commissionLabel(l) && (
+                          <span className="chip bg-emerald-100 text-emerald-700">
+                            {commissionLabel(l)}
+                          </span>
+                        )}
+                        <DeleteProfileLink id={l.id}
+                          name={profileName(l.brand_name, l.url)} />
+                      </span>
                     </div>
                     {/* Commission is per link — one creator can run one account
                         on a percentage and another on an hourly rate. */}

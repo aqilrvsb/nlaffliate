@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Loader2, AlertCircle } from "lucide-react";
+import { Plus, Loader2, AlertCircle, Trash2 } from "lucide-react";
+import { confirmDialog, alertDialog } from "@/lib/swal";
 
 /**
  * Add a TikTok link on someone else's behalf.
@@ -52,5 +53,37 @@ export default function AddProfileLink({ userId }: { userId: number }) {
         </p>
       )}
     </form>
+  );
+}
+
+/**
+ * Remove a link the marketer or affiliate added by mistake. The API refuses
+ * once lives are booked on it — that history would be orphaned — and says so
+ * rather than failing silently.
+ */
+export function DeleteProfileLink({ id, name }: { id: number; name: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+
+  async function remove() {
+    if (!(await confirmDialog({ title: `Padam link "${name}"?`, danger: true }))) return;
+    setBusy(true);
+    const res = await fetch(`/api/profiles/${id}`, { method: "DELETE" });
+    const d = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) {
+      return alertDialog({ title: "Tidak boleh padam", text: d.error, variant: "error" });
+    }
+    router.refresh();
+  }
+
+  return (
+    <button onClick={remove} disabled={busy} type="button"
+      className="shrink-0 cursor-pointer rounded-lg p-1.5 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger disabled:opacity-50"
+      aria-label={`Padam ${name}`} title="Padam link">
+      {busy
+        ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+        : <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />}
+    </button>
   );
 }

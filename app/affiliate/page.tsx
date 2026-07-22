@@ -33,7 +33,6 @@ export default async function AffiliatePage() {
       <main className="mx-auto max-w-6xl px-4 py-8">
         {me?.marketer_id ? (
           <AffiliateDashboard
-            userName={user.name}
           />
         ) : (
           <PendingApproval userName={user.name} />

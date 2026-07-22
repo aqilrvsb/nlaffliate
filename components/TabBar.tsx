@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useNavigate } from "@/lib/useNavigate";
+import SopButton from "@/components/SopButton";
 
 export type TabDef = {
   key: string;
@@ -22,11 +23,14 @@ export default function TabBar({
   tabs,
   active,
   param = "tab",
+  helpFor,
 }: {
   tabs: TabDef[];
   active: string;
   /** Query key to drive. Override so a nested row doesn't fight ?tab=. */
   param?: string;
+  /** Show a per-tab guide button for this role. */
+  helpFor?: "affiliate" | "marketer";
 }) {
   const { navigate, prefetch, pending } = useNavigate();
   const pathname = usePathname();
@@ -59,26 +63,32 @@ export default function TabBar({
             : t.activeTone === "emerald" ? "bg-emerald-600 text-white"
             : "bg-primary text-primary-fg";
         const busy = pending && clicked === t.key;
+        // The pill is a container, not a button: the guide icon lives inside
+        // it and a button cannot be nested in a button.
         return (
-          <button key={t.key} role="tab" aria-selected={on} aria-busy={busy || undefined}
-            onClick={() => go(t.key)}
-            onMouseEnter={() => prefetch(hrefFor(t.key))}
-            onFocus={() => prefetch(hrefFor(t.key))}
-            className={`inline-flex cursor-pointer items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold transition-all duration-200 ${
+          <span key={t.key}
+            className={`inline-flex items-center rounded-xl text-sm font-semibold transition-all duration-200 ${
               on ? `${activeBg} shadow-lift` : "glass text-ink hover:bg-white"
-            }`}>
-            {busy
-              ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              : <Icon className="h-4 w-4" />}
-            {t.label}
-            {typeof t.count === "number" && (
-              <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
-                on ? "bg-white/25 text-white" : "bg-muted text-muted-fg"
-              }`}>
-                {t.count}
-              </span>
-            )}
-          </button>
+            } ${helpFor ? "pr-2" : ""}`}>
+            <button role="tab" aria-selected={on} aria-busy={busy || undefined}
+              onClick={() => go(t.key)}
+              onMouseEnter={() => prefetch(hrefFor(t.key))}
+              onFocus={() => prefetch(hrefFor(t.key))}
+              className="inline-flex cursor-pointer items-center gap-2 px-3.5 py-2">
+              {busy
+                ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                : <Icon className="h-4 w-4" />}
+              {t.label}
+              {typeof t.count === "number" && (
+                <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                  on ? "bg-white/25 text-white" : "bg-muted text-muted-fg"
+                }`}>
+                  {t.count}
+                </span>
+              )}
+            </button>
+            {helpFor && <SopButton role={helpFor} tab={t.key} variant="pill" />}
+          </span>
         );
       })}
     </div>

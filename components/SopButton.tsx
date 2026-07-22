@@ -17,10 +17,12 @@ import { AFFILIATE_SOP, MARKETER_SOP, type Sop } from "@/lib/sop";
  * kotak kosong.
  */
 export default function SopButton({
-  role, tab,
+  role, tab, variant = "default",
 }: {
   role: "affiliate" | "marketer";
   tab: string;
+  /** "pill" sits inside a tab pill and inherits its colour. */
+  variant?: "default" | "pill";
 }) {
   const [open, setOpen] = useState(false);
   const sop: Sop | undefined =
@@ -33,8 +35,13 @@ export default function SopButton({
       <button type="button" onClick={() => setOpen(true)}
         aria-label={`Panduan ${sop.title}`}
         title="Panduan halaman ini"
-        className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-fg transition-colors duration-200 hover:bg-primary/10 hover:text-primary">
-        <HelpCircle className="h-[18px] w-[18px]" aria-hidden="true" />
+        className={
+          variant === "pill"
+            ? "inline-flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full opacity-60 transition-opacity duration-200 hover:opacity-100"
+            : "inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-fg transition-colors duration-200 hover:bg-primary/10 hover:text-primary"
+        }>
+        <HelpCircle className={variant === "pill" ? "h-4 w-4" : "h-[18px] w-[18px]"}
+          aria-hidden="true" />
       </button>
 
       <Modal open={open} onClose={() => setOpen(false)}

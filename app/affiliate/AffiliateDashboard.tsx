@@ -11,7 +11,6 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import TabBar from "@/components/TabBar";
-import SopButton from "@/components/SopButton";
 import SampleTab from "./SampleTab";
 import BrandsView from "./BrandsView";
 import ExampleHint from "@/components/ExampleHint";
@@ -72,9 +71,7 @@ function affiliateStatus(b: Booking) {
 }
 
 export default function AffiliateDashboard({
-  userName,
 }: {
-  userName: string;
 }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -170,11 +167,9 @@ export default function AffiliateDashboard({
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <span className="flex items-center gap-1">
-            <h1 className="text-2xl font-extrabold tracking-tight text-ink">Hi {userName}</h1>
-            {/* Panduan untuk tab yang sedang dibuka. */}
-            <SopButton role="affiliate" tab={tab} />
-          </span>
+          <h1 className="text-2xl font-extrabold tracking-tight text-ink">
+            Selamat Datang Ke NLAffliateArmy
+          </h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* The group link moved onto each TikTok profile, where it is scoped
@@ -214,7 +209,7 @@ export default function AffiliateDashboard({
         </div>
       )}
 
-      <TabBar active={tab} tabs={[
+      <TabBar active={tab} helpFor="affiliate" tabs={[
         { key: "schedule", label: "Pending Schedule", icon: CalendarDays },
         { key: "done-schedule", label: "Done Schedule", icon: CheckCircle2, activeTone: "emerald" },
         { key: "pending",  label: "Pending Post",       icon: Clock, activeTone: "red" },

@@ -23,6 +23,7 @@ import AddProfileLink, { DeleteProfileLink } from "@/components/AddProfileLink";
 import ProductsTab from "@/app/admin/ProductsTab";
 import AffiliatePosts from "./AffiliatePosts";
 import SortTh, { useTableSort } from "@/components/SortableTable";
+import SopButton from "@/components/SopButton";
 import Modal from "@/components/Modal";
 import ExampleHint from "@/components/ExampleHint";
 import DurationInput from "@/components/DurationInput";
@@ -360,6 +361,8 @@ export default function MarketerShell({
             <Menu className="h-5 w-5" aria-hidden="true" />
           </button>
           <h1 className="text-lg font-extrabold tracking-tight text-ink">{activeLabel}</h1>
+          {/* Panduan halaman semasa, di tempat soalan itu timbul. */}
+          <SopButton role="marketer" tab={active} />
         </div>
 
         <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">

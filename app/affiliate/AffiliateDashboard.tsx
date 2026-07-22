@@ -11,6 +11,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import TabBar from "@/components/TabBar";
+import SopButton from "@/components/SopButton";
 import SampleTab from "./SampleTab";
 import BrandsView from "./BrandsView";
 import ExampleHint from "@/components/ExampleHint";
@@ -169,7 +170,11 @@ export default function AffiliateDashboard({
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-ink">Hi {userName}</h1>
+          <span className="flex items-center gap-1">
+            <h1 className="text-2xl font-extrabold tracking-tight text-ink">Hi {userName}</h1>
+            {/* Panduan untuk tab yang sedang dibuka. */}
+            <SopButton role="affiliate" tab={tab} />
+          </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* The group link moved onto each TikTok profile, where it is scoped

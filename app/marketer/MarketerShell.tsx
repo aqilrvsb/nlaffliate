@@ -591,10 +591,14 @@ function AddScheduleModal({
     setEnd(""); setBudget(""); setNote(""); setError("");
   }, [open]);
 
-  // One dropdown identifies both affiliate and account.
-  const options = affiliates.flatMap((a) =>
-    (a.links || []).map((p) => ({ id: p.id, label: `${a.name} — ${p.label}` }))
-  );
+  // One dropdown identifies both affiliate and account. Inhouse is offered
+  // as a fixed choice rather than a listed profile, because the bucket
+  // account is created on first use — it may not exist yet.
+  const options = affiliates
+    .filter((a) => a.name !== "Inhouse")
+    .flatMap((a) =>
+      (a.links || []).map((p) => ({ id: String(p.id), label: `${a.name} — ${p.label}` }))
+    );
 
   async function save() {
     setBusy(true); setError("");
@@ -623,6 +627,7 @@ function AddScheduleModal({
             onChange={(e) => setProfileId(e.target.value)} required>
             <option value="">— Pilih profile —</option>
             {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            <option value="inhouse">Inhouse (bukan affiliate)</option>
           </select>
         </div>
         <div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { inhouseProfile } from "@/lib/inhouse";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,14 +35,21 @@ export async function POST(req: Request) {
   if (endTime && !/^\d{2}:\d{2}$/.test(endTime))
     return NextResponse.json({ error: "End time must be HH:MM." }, { status: 400 });
 
-  // The profile identifies the affiliate, and must be one of this
-  // marketer's own.
-  const profile = await db.prepare(
-      `SELECT p.id, p.user_id
-         FROM tiktok_profiles p
-         JOIN users u ON u.id = p.user_id
-        WHERE p.id = ? AND u.marketer_id = ?`
-    ).get<{ id: number; user_id: number }>(Number(body.profile_id));
+  // The profile identifies the affiliate, and must be one of this marketer's
+  // own. "inhouse" is a sentinel rather than a real id: the bucket account is
+  // created lazily, so it must be bookable before any import has made it.
+  let profile: { id: number; user_id: number } | undefined;
+  if (String(body.profile_id) === "inhouse") {
+    const ih = await inhouseProfile(user.id);
+    profile = { id: ih.profileId, user_id: ih.userId };
+  } else {
+    profile = await db.prepare(
+        `SELECT p.id, p.user_id
+           FROM tiktok_profiles p
+           JOIN users u ON u.id = p.user_id
+          WHERE p.id = ? AND u.marketer_id = ?`
+      ).get<{ id: number; user_id: number }>(Number(body.profile_id), user.id);
+  }
   if (!profile)
     return NextResponse.json(
       { error: "Pick a TikTok profile belonging to one of your affiliates." },
@@ -68,10 +76,12 @@ export async function POST(req: Request) {
       `INSERT INTO bookings
          (user_id, profile_id, brand_id, live_date, start_time, end_time, note,
           status, source, affiliate_can_edit, ads_budget)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 'affiliate', 0, ?) RETURNING id`
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, 0, ?) RETURNING id`
     ).run(
       profile.user_id, profile.id, Number(brandRaw), liveDate, startTime,
-      endTime || null, note || null, budget
+      endTime || null, note || null,
+      String(body.profile_id) === "inhouse" ? "inhouse" : "affiliate",
+      budget
     );
 
   return NextResponse.json({ ok: true, id: Number(info.lastInsertRowid) });

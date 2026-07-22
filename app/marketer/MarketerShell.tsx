@@ -810,6 +810,9 @@ function AddScheduleModal({
           <label className="label" htmlFor="as-budget">Budget Ads (RM)</label>
           <input id="as-budget" type="number" min="0" step="any" className="input"
             value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="0.00" />
+          <p className="mt-1 text-xs text-muted-fg">
+            Bajet yang dirancang. Belanja sebenar diisi kemudian di Enter results.
+          </p>
         </div>
 
       </div>
@@ -1068,7 +1071,9 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
         <div className="mt-4 flex flex-wrap items-end gap-4 border-t border-line pt-4">
           <div>
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
-              htmlFor={`bud-${l.booking_id}`}>Budget Ads (RM)</label>
+              htmlFor={`bud-${l.booking_id}`}>
+              Budget Ads (RM) <span className="font-normal normal-case">— bajet dirancang</span>
+            </label>
             <div className="flex items-center gap-2">
               <input id={`bud-${l.booking_id}`} type="number" min="0" step="any"
                 className="input !py-1.5 text-sm sm:w-40" placeholder="0.00"
@@ -1143,7 +1148,9 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
       {!done && resultsOpen && (
         <div className="mt-3 grid grid-cols-1 gap-2 rounded-xl border border-line bg-white/60 p-3 sm:grid-cols-5">
           <div>
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg">Spend (RM)</label>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg">
+              Spend (RM) <span className="font-normal normal-case">— belanja sebenar</span>
+            </label>
             <input type="number" min="0" step="any" className="input !py-1.5 text-sm"
               value={spend} onChange={(e) => setSpend(e.target.value)} />
           </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { sendWhatsApp, sampleShippedMessage } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -105,6 +106,35 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
                 shipped_at = COALESCE(shipped_at, now())
           WHERE id = ?`
       ).run(tracking, courier || null, id);
+
+    // Tell the affiliate their parcel is on the way, with what is in it and
+    // how to track it. Best-effort: a failed message must not fail the ship.
+    const info = await db.prepare(
+        `SELECT u.phone, b.name AS brand
+           FROM sample_requests s
+           JOIN users u ON u.id = s.user_id
+           LEFT JOIN brands b ON b.id = s.brand_id
+          WHERE s.id = ?`
+      ).get<{ phone: string | null; brand: string | null }>(id);
+    const items = (await db.prepare(
+        `SELECT p.name, p.product_url
+           FROM sample_request_items i
+           JOIN products p ON p.id = i.product_id
+          WHERE i.request_id = ? ORDER BY p.name`
+      ).all(id)) as { name: string; product_url: string | null }[];
+
+    if (info) {
+      await sendWhatsApp(
+        info.phone,
+        sampleShippedMessage({
+          brand: info.brand,
+          products: items.map((x) => x.name),
+          courier: courier || null,
+          tracking,
+          link: items.find((x) => x.product_url)?.product_url ?? null,
+        })
+      );
+    }
 
     return NextResponse.json({ ok: true, status: "shipped" });
   }

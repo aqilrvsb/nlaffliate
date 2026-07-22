@@ -8,8 +8,8 @@ import { completeIfReady } from "@/lib/status";
  *   - ads_budget: the ad budget for this live
  *   - allow_edit: toggle whether the affiliate may re-edit date/time
  *
- * Setting a budget without an explicit allow_edit locks affiliate edits
- * (the marketer has taken over), matching the described workflow.
+ * Setting a budget leaves affiliate edits ON unless the marketer explicitly
+ * locks the slot.
  */
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   const user = await getSession();
@@ -37,9 +37,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     }
     sets.push("ads_budget = ?");
     args.push(n);
-    // Updating the budget locks the affiliate unless they also pass allow_edit.
+    // Setting a budget leaves the affiliate free to adjust date and time.
+    // It used to lock them out, but the budget is theirs to plan around, not
+    // a reason to freeze the slot — the marketer can still lock it explicitly.
     if (!("allow_edit" in body)) {
-      sets.push("affiliate_can_edit = 0");
+      sets.push("affiliate_can_edit = 1");
     }
   }
 

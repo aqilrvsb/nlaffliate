@@ -432,7 +432,9 @@ function BookingCard({ b, reload }: { b: Booking; reload: () => void }) {
 
   // Inline editing (date / time / name). Allowed while pending, UNLESS the
   // marketer has set a budget and left the "affiliate can edit" toggle off.
-  const marketerLocked = b.ads_budget != null && b.affiliate_can_edit === 0;
+  // Locked purely by the marketer's toggle. Budget used to imply a lock, but
+  // it is now hidden from affiliates entirely, so it cannot explain the state.
+  const marketerLocked = b.affiliate_can_edit === 0;
   const canEdit = b.status === "pending" && !marketerLocked;
   const [editingWhen, setEditingWhen] = useState(false);
   const [eDate, setEDate] = useState(b.live_date);
@@ -519,9 +521,6 @@ function BookingCard({ b, reload }: { b: Booking; reload: () => void }) {
               <span className="chip bg-primary/10 text-primary">
                 <Tag className="h-3 w-3" aria-hidden="true" />{b.brand_name}
               </span>
-            )}
-            {b.ads_budget != null && (
-              <span className="chip bg-accent/10 text-accent">Budget RM{b.ads_budget}</span>
             )}
             {marketerLocked && (
               <span className="chip bg-gray-100 text-gray-500">

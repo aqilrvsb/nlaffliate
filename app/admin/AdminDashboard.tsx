@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   TrendingUp, Users, ShoppingBag, UserRound, Bot, Check, ExternalLink,
   Loader2, KeyRound, Clock, AlertTriangle, CalendarDays, Timer,
-  LayoutDashboard, Package, Boxes, Link2, Trash2, Plus, AlertCircle, BarChart3,
+  LayoutDashboard, Package, Boxes, Link2, Trash2, Plus, AlertCircle, BarChart3, MessageCircle,
 } from "lucide-react";
 import Modal from "@/components/Modal";
 import CommissionEditor, { commissionLabel } from "@/components/CommissionEditor";
@@ -139,6 +139,7 @@ export default function AdminDashboard({
       </div>
 
       <AiSettingsCard />
+      <WhatsAppCard />
 
       <section>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -420,6 +421,114 @@ function TikTokLinksModal({
         </p>
       )}
     </Modal>
+  );
+}
+
+/**
+ * WhaCenter device for outbound notifications.
+ *
+ * One field: the Device ID. Everything else (welcome on approval, sample
+ * shipped) fires automatically once it is set, and a test send proves the
+ * device can actually deliver before anyone relies on it.
+ */
+function WhatsAppCard() {
+  const [cfg, setCfg] = useState<any>(null);
+  const [device, setDevice] = useState("");
+  const [phone, setPhone] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [result, setResult] = useState<any>(null);
+
+  const load = useCallback(async () => {
+    setCfg(await fetch("/api/admin/whatsapp").then((r) => r.json()));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  async function save() {
+    setBusy(true); setSaved(false); setResult(null);
+    await fetch("/api/admin/whatsapp", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ device }),
+    });
+    setDevice(""); setBusy(false); setSaved(true); load();
+  }
+
+  async function test() {
+    setBusy(true); setResult(null);
+    const r = await fetch("/api/admin/whatsapp", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "test", device, phone }),
+    });
+    setResult(await r.json().catch(() => ({ error: "No response" })));
+    setBusy(false);
+  }
+
+  return (
+    <section className="card">
+      <div className="mb-1 flex items-center gap-2">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+          <MessageCircle className="h-4 w-4" aria-hidden="true" />
+        </span>
+        <h2 className="font-bold text-ink">WhatsApp Notification — WhaCenter</h2>
+      </div>
+      <p className="mb-4 text-xs text-muted-fg">
+        Masukkan Device ID sahaja. Affiliate akan dapat notifikasi bila akaun
+        diluluskan dan bila sample dihantar.
+      </p>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="label" htmlFor="wa-device">Device ID</label>
+          <input id="wa-device" className="input" autoComplete="off"
+            placeholder={cfg?.device_set ? `Saved (${cfg.device_hint}) — blank to keep` : "Paste WhaCenter Device ID"}
+            value={device} onChange={(e) => setDevice(e.target.value)} />
+          {cfg && (
+            <p className="mt-1.5 flex items-center gap-1.5 text-[11px]">
+              <span className={`h-1.5 w-1.5 rounded-full ${cfg.device_set ? "bg-emerald-500" : "bg-amber-500"}`} />
+              <span className="text-muted-fg">
+                {cfg.device_set
+                  ? <>Set <span className="text-muted-fg/70">({cfg.source})</span></>
+                  : "Belum set — notifikasi tidak akan dihantar"}
+              </span>
+            </p>
+          )}
+        </div>
+        <div>
+          <label className="label" htmlFor="wa-test">Test to number</label>
+          <input id="wa-test" className="input" type="tel" inputMode="tel"
+            placeholder="0123456789" value={phone}
+            onChange={(e) => setPhone(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button className="btn" onClick={save} disabled={busy}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                : <Check className="h-4 w-4" aria-hidden="true" />}
+          Save device
+        </button>
+        <button className="btn-ghost" onClick={test} disabled={busy}>
+          <MessageCircle className="h-4 w-4" aria-hidden="true" />
+          Send test
+        </button>
+        {saved && (
+          <span className="flex items-center gap-1 text-sm font-medium text-emerald-600">
+            <Check className="h-4 w-4" aria-hidden="true" />Saved
+          </span>
+        )}
+      </div>
+
+      {result && (
+        <div className={`mt-3 rounded-xl border px-3 py-2 text-sm ${
+          result.sent?.ok ? "border-emerald-200 bg-emerald-50/60 text-emerald-800"
+                          : "border-danger/30 bg-danger/5 text-danger"
+        }`}>
+          {result.sent?.ok
+            ? <><b>Sent.</b> Check {result.to} on WhatsApp.</>
+            : <><b>Not sent.</b> {result.sent?.skipped || result.sent?.error || "Device status: " + JSON.stringify(result.status?.data ?? result.status).slice(0, 160)}</>}
+        </div>
+      )}
+    </section>
   );
 }
 

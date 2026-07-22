@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { sendWhatsApp, welcomeMessage } from "@/lib/whatsapp";
 
 export async function POST(req: Request) {
   const user = await getSession();
@@ -26,5 +27,15 @@ export async function POST(req: Request) {
   }
 
   await db.prepare("UPDATE users SET marketer_id = ? WHERE id = ?").run(mid, affiliate_id);
+  // Assignment is what unlocks the dashboard, so this is the moment the
+  // affiliate can actually use the system — tell them. Best-effort: a failed
+  // message must not fail the assignment.
+  if (marketer_id) {
+    const a = await db
+      .prepare("SELECT name, phone FROM users WHERE id = ?")
+      .get<{ name: string; phone: string | null }>(affiliate_id);
+    if (a) await sendWhatsApp(a.phone, welcomeMessage(a.name));
+  }
+
   return NextResponse.json({ ok: true });
 }

@@ -35,7 +35,7 @@ export default async function MarketerPage() {
       db.prepare(
           `SELECT b.id AS booking_id, b.user_id AS affiliate_id,
                   u.name AS affiliate, u.email AS affiliate_email,
-                  p.label AS profile_label, p.url AS profile_url,
+                  b.profile_id, p.label AS profile_label, p.url AS profile_url,
                   b.live_date, b.start_time, b.end_time, b.note, b.status, b.post_url,
                   b.ads_budget, b.affiliate_can_edit,
                   b.ad_spend, b.gross_revenue, b.roi,

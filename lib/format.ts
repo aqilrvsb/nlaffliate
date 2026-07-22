@@ -95,6 +95,42 @@ export function joinDuration(h: number, m: number, s: number): string {
   return `${hh}h ${mm}m ${ss}s`;
 }
 
+/**
+ * Whole hours used for hourly commission.
+ *
+ * Part-hours are dropped rather than pro-rated: the rule is "1-5 minit
+ * bundarkan ke 0", i.e. a stray remainder is not paid for. 2h 05m bills as
+ * 2 hours. Kept here beside the other duration maths so the payout rule and
+ * the parsing never drift apart.
+ */
+export function billableHours(totalSeconds: number): number {
+  return Math.floor(Math.max(0, totalSeconds) / 3600);
+}
+
+export type CommissionInput = {
+  commission_type: "percent" | "hour" | null;
+  commission_value: number | null;
+};
+
+/**
+ * What one TikTok link earned.
+ *   percent -> rate% of sales
+ *   hour    -> rate x whole hours streamed
+ * Returns 0 when no commission is configured, so totals stay additive.
+ */
+export function commissionFor(
+  c: CommissionInput,
+  sales: number,
+  totalSeconds: number
+): number {
+  if (!c.commission_type || c.commission_value == null) return 0;
+  const amount =
+    c.commission_type === "percent"
+      ? (sales * c.commission_value) / 100
+      : billableHours(totalSeconds) * c.commission_value;
+  return Math.round(amount * 100) / 100;
+}
+
 /** Sum a list of duration strings and format the total. */
 export function sumDurations(list: (string | null | undefined)[]): string {
   return fmtDuration(list.reduce((acc, d) => acc + durationToSeconds(d), 0));

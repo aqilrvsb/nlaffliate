@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Radio, LayoutDashboard, Users, Clock, CheckCircle2, LogOut,
@@ -21,7 +21,10 @@ import DateRangeFilter from "@/components/DateRangeFilter";
 import Pagination from "@/components/Pagination";
 import ImageModal from "@/components/ImageModal";
 import { getPage, paginate } from "@/lib/pagination";
-import { fmtDate, fmtTime, fmtTimeRange, sumDurations } from "@/lib/format";
+import {
+  fmtDate, fmtTime, fmtTimeRange, sumDurations,
+  durationToSeconds, billableHours, commissionFor,
+} from "@/lib/format";
 import { resolveRange } from "@/lib/daterange";
 import { useSearchParams } from "next/navigation";
 import type { SessionUser } from "@/lib/session";
@@ -36,7 +39,7 @@ type Affiliate = {
 };
 type Live = {
   booking_id: number; affiliate_id: number; affiliate: string; affiliate_email: string;
-  profile_label: string; profile_url: string;
+  profile_id: number; profile_label: string; profile_url: string;
   live_date: string; start_time: string; end_time: string | null;
   note: string | null; status: string; post_url: string | null;
   ads_budget: number | null; affiliate_can_edit: number;
@@ -1184,31 +1187,105 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
               <th className="px-4 py-3 text-right font-semibold">Affiliate Spend</th>
               <th className="px-4 py-3 text-right font-semibold">Affiliate Gross Rev.</th>
               <th className="px-4 py-3 text-right font-semibold">Affiliate ROI</th>
+              <th className="px-4 py-3 font-semibold">Jenis Komisyen</th>
+              <th className="px-4 py-3 text-right font-semibold">Rate</th>
+              <th className="px-4 py-3 text-right font-semibold">Komisyen</th>
             </tr>
           </thead>
           <tbody>
             {active.map((a) => {
-              const r = aggregate(shown.filter((l) => l.affiliate_id === a.id));
+              const mine = shown.filter((l) => l.affiliate_id === a.id);
+              const r = aggregate(mine);
+
+              // One sub-row per TikTok link that actually ran a live, so the
+              // commission can differ per link.
+              const byProfile = new Map<number, Live[]>();
+              for (const l of mine) {
+                const list = byProfile.get(l.profile_id) || [];
+                list.push(l);
+                byProfile.set(l.profile_id, list);
+              }
+              const subs = [...byProfile.entries()].map(([pid, ls]) => {
+                const agg = aggregate(ls);
+                const link = a.links.find((x) => x.id === pid);
+                const secs = ls.reduce((s, l) => s + durationToSeconds(l.duration_live), 0);
+                const commission = link ? commissionFor(link, agg.gmv, secs) : 0;
+                return {
+                  pid, agg, link, secs, commission,
+                  label: link?.label ?? ls[0]?.profile_label ?? "—",
+                };
+              });
+              const totalIncome = subs.reduce((s, x) => s + x.commission, 0);
+
               return (
-                <tr key={a.id} className="border-t border-line/60 hover:bg-white/50">
-                  <td className="px-4 py-3">
-                    <div className="font-semibold text-ink">{a.name}</div>
-                    <div className="text-xs text-muted-fg">{a.email}</div>
-                    {a.phone && <div className="text-xs text-muted-fg">{a.phone}</div>}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold text-ink">RM{r.gmv.toFixed(2)}</td>
-                  <td className="px-4 py-3 text-right">{r.viewers}</td>
-                  <td className="px-4 py-3 text-right">{r.items}</td>
-                  <td className="px-4 py-3">{r.duration}</td>
-                  <td className="px-4 py-3 text-right">{rm(r.budget, r.hasBudget)}</td>
-                  <td className="px-4 py-3 text-right">{rm(r.spend, r.hasSpend)}</td>
-                  <td className="px-4 py-3 text-right">{rm(r.gross, r.hasGross)}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi != null ? r.roi : "—"}</td>
-                </tr>
+                <Fragment key={a.id}>
+                  <tr className="border-t border-line bg-white/40">
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-ink">{a.name}</div>
+                      <div className="text-xs text-muted-fg">{a.email}</div>
+                      {a.phone && <div className="text-xs text-muted-fg">{a.phone}</div>}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">RM{r.gmv.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right">{r.viewers}</td>
+                    <td className="px-4 py-3 text-right">{r.items}</td>
+                    <td className="px-4 py-3">{r.duration}</td>
+                    <td className="px-4 py-3 text-right">{rm(r.budget, r.hasBudget)}</td>
+                    <td className="px-4 py-3 text-right">{rm(r.spend, r.hasSpend)}</td>
+                    <td className="px-4 py-3 text-right">{rm(r.gross, r.hasGross)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi != null ? r.roi : "—"}</td>
+                    <td className="px-4 py-3 text-xs text-muted-fg" colSpan={2}>Total Income</td>
+                    <td className="px-4 py-3 text-right font-extrabold text-emerald-700">
+                      RM{totalIncome.toFixed(2)}
+                    </td>
+                  </tr>
+
+                  {subs.map((s) => (
+                    <tr key={`${a.id}-${s.pid}`} className="border-t border-line/40 text-[13px]">
+                      <td className="py-2 pl-10 pr-4">
+                        <span className="flex items-center gap-1.5 text-muted-fg">
+                          <Link2 className="h-3 w-3 shrink-0" aria-hidden="true" />
+                          {s.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-right">RM{s.agg.gmv.toFixed(2)}</td>
+                      <td className="px-4 py-2 text-right">{s.agg.viewers}</td>
+                      <td className="px-4 py-2 text-right">{s.agg.items}</td>
+                      <td className="px-4 py-2">
+                        {s.agg.duration}
+                        {s.link?.commission_type === "hour" && (
+                          <span className="ml-1 text-[11px] text-muted-fg">
+                            ({billableHours(s.secs)}j dikira)
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-right">{rm(s.agg.budget, s.agg.hasBudget)}</td>
+                      <td className="px-4 py-2 text-right">{rm(s.agg.spend, s.agg.hasSpend)}</td>
+                      <td className="px-4 py-2 text-right">{rm(s.agg.gross, s.agg.hasGross)}</td>
+                      <td className="px-4 py-2 text-right">{s.agg.roi != null ? s.agg.roi : "—"}</td>
+                      <td className="px-4 py-2">
+                        {s.link?.commission_type
+                          ? <span className="chip bg-emerald-100 text-emerald-700">
+                              {s.link.commission_type === "percent" ? "Percent" : "Hour"}
+                            </span>
+                          : <span className="text-muted-fg/50">—</span>}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        {s.link?.commission_value != null
+                          ? (s.link.commission_type === "percent"
+                              ? `${s.link.commission_value}%`
+                              : `RM${s.link.commission_value}/j`)
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-2 text-right font-semibold text-emerald-700">
+                        {s.link?.commission_type ? `RM${s.commission.toFixed(2)}` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </Fragment>
               );
             })}
             {active.length === 0 && (
-              <tr><td colSpan={9} className="px-4 py-12 text-center text-muted-fg">
+              <tr><td colSpan={12} className="px-4 py-12 text-center text-muted-fg">
                 {affiliates.length === 0
                   ? "No affiliates assigned to you yet."
                   : "No affiliate ran a live for this brand in this range."}

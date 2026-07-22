@@ -56,8 +56,8 @@ export default function BrandsTab({ onChange }: { onChange?: () => void }) {
         <div>
           <h2 className="section-title">Brand</h2>
           <p className="text-sm text-muted-fg">
-            Brand anda. Pilih dari senarai brand admin — Overall dan Pillar
-            disimpan mengikut brand.
+            Brand anda. Pilih dari senarai syarikat atau tambah yang baharu —
+            Overall dan Pillar disimpan mengikut brand.
           </p>
         </div>
         <button className="btn !py-2"
@@ -75,7 +75,7 @@ export default function BrandsTab({ onChange }: { onChange?: () => void }) {
 
       {brands.length === 0 ? (
         <p className="card text-center text-sm text-muted-fg">
-          Belum ada brand — klik Add Brand dan pilih dari senarai admin.
+          Belum ada brand — klik Add Brand untuk pilih atau tambah brand.
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -86,15 +86,11 @@ export default function BrandsTab({ onChange }: { onChange?: () => void }) {
               </span>
               <p className="min-w-0 flex-1 truncate font-bold text-ink">{b.name}</p>
               <div className="flex shrink-0 items-center gap-1">
-                {/* Adopted brands carry the admin's name, so only a brand the
-                    marketer typed themselves is theirs to rename. */}
-                {!b.catalogue_id && (
                 <button onClick={() => { setEditing(b); setOpen(true); }}
                   className="cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-accent/10 hover:text-accent"
                   aria-label={`Edit ${b.name}`}>
                   <Pencil className="h-4 w-4" aria-hidden="true" />
                 </button>
-                )}
                 <button onClick={() => remove(b)}
                   className="cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger"
                   aria-label={`Delete ${b.name}`}>
@@ -146,7 +142,7 @@ function BrandModal({
     const res = await fetch(brand ? `/api/brands/${brand.id}` : "/api/brands", {
       method: brand ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(brand ? { name } : { catalogue_id: pick }),
+      body: JSON.stringify(brand ? { name } : pick ? { catalogue_id: pick } : { name }),
     });
     const data = await res.json();
     setSaving(false);
@@ -165,21 +161,41 @@ function BrandModal({
               placeholder="e.g. Bloom & Grow" />
           </div>
         ) : (
-          <div>
-            <label className="label" htmlFor="brand-pick">Pilih Brand</label>
-            <select id="brand-pick" className="input cursor-pointer" value={pick}
-              onChange={(e) => setPick(e.target.value)} required autoFocus>
-              <option value="">— Pilih brand —</option>
-              {catalogue.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-muted-fg">
-              {catalogue.length === 0
-                ? "Admin belum tambah sebarang brand — minta admin tambah dahulu."
-                : "Senarai brand dari admin. Brand yang dipilih menjadi brand anda."}
-            </p>
-          </div>
+          <>
+            <div>
+              <label className="label" htmlFor="brand-pick">Pilih Brand Sedia Ada</label>
+              <select id="brand-pick" className="input cursor-pointer" value={pick}
+                onChange={(e) => { setPick(e.target.value); if (e.target.value) setName(""); }}
+                autoFocus>
+                <option value="">— Pilih brand —</option>
+                {catalogue.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-muted-fg">
+                {catalogue.length === 0
+                  ? "Senarai kosong buat masa ini — taip nama brand baharu di bawah."
+                  : "Senarai brand syarikat. Brand yang dipilih menjadi brand anda."}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="h-px flex-1 bg-line" />
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-fg">atau</span>
+              <span className="h-px flex-1 bg-line" />
+            </div>
+
+            <div>
+              <label className="label" htmlFor="brand-new">Brand Baharu</label>
+              <input id="brand-new" className="input" value={name}
+                onChange={(e) => { setName(e.target.value); if (e.target.value) setPick(""); }}
+                placeholder="e.g. Bloom & Grow" />
+              <p className="mt-1 text-xs text-muted-fg">
+                Brand baharu turut masuk senarai syarikat, jadi marketer lain
+                boleh guna nanti.
+              </p>
+            </div>
+          </>
         )}
 
         {error && (

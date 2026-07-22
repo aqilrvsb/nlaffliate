@@ -58,19 +58,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     return NextResponse.json({ ok: true, renamed: Number(spread.changes ?? 0) });
   }
 
-  // A marketer may rename only a brand they typed themselves. Adopted brands
-  // carry the admin's name, and letting each marketer reword it would break
-  // the one thing the catalogue exists to guarantee.
-  const linked = await db
-    .prepare("SELECT catalogue_id FROM brands WHERE id = ?")
-    .get<{ catalogue_id: number | null }>(id);
-  if (linked?.catalogue_id) {
-    return NextResponse.json(
-      { error: `"${row.name}" comes from the admin catalogue — ask admin to rename it.` },
-      { status: 409 }
-    );
-  }
-
+  /* ── Marketer renaming their own copy ───────────────── */
   const dupe = await db
     .prepare(
       "SELECT id FROM brands WHERE marketer_id = ? AND lower(name) = lower(?) AND id <> ?"
@@ -80,8 +68,40 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     return NextResponse.json({ error: "You already have a brand with that name." }, { status: 409 });
   }
 
-  await db.prepare("UPDATE brands SET name = ? WHERE id = ?").run(clean, id);
-  return NextResponse.json({ ok: true });
+  const linked = await db
+    .prepare("SELECT catalogue_id FROM brands WHERE id = ?")
+    .get<{ catalogue_id: number | null }>(id);
+  let cat = linked?.catalogue_id ?? null;
+
+  // A brand name is a company-wide fact, not one marketer's label, so fixing
+  // it fixes it for the catalogue and everyone working the same brand. A
+  // legacy free-typed brand has no catalogue row yet — give it one, so every
+  // brand in the system converges on the shared list.
+  if (cat === null) {
+    const found = await db
+      .prepare("SELECT id FROM brands WHERE marketer_id IS NULL AND lower(name) = lower(?)")
+      .get<{ id: number }>(clean);
+    if (found) {
+      cat = found.id;
+    } else {
+      const made = await db
+        .prepare("INSERT INTO brands (marketer_id, name) VALUES (NULL, ?) RETURNING id")
+        .run(clean);
+      cat = Number(made.lastInsertRowid);
+    }
+    await db.prepare("UPDATE brands SET catalogue_id = ? WHERE id = ?").run(cat, id);
+  }
+
+  const others = await db
+    .prepare(
+      "SELECT COUNT(*)::int AS n FROM brands WHERE catalogue_id = ? AND id <> ? AND marketer_id IS NOT NULL"
+    )
+    .get<{ n: number }>(cat, id);
+
+  await db.prepare("UPDATE brands SET name = ? WHERE id = ? OR id = ? OR catalogue_id = ?")
+    .run(clean, id, cat, cat);
+
+  return NextResponse.json({ ok: true, shared_with: others?.n ?? 0 });
 }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {

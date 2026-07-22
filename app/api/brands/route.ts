@@ -92,16 +92,40 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, id: Number(info.lastInsertRowid) });
   }
 
-  /* ── Marketer: adopt one of admin's brands ──────────── */
+  /* ── Marketer: adopt from the catalogue, or add a new one ──
+   *
+   * Typing a name that isn't in the catalogue adds it there as well as to the
+   * marketer. The catalogue is the company's shared list, so a brand one
+   * marketer starts working is a brand the next one should be able to find —
+   * admin doesn't have to have thought of it first.
+   */
   const raw = String(body.catalogue_id ?? "").trim();
-  if (!raw) {
-    return NextResponse.json({ error: "Pick a brand from the list." }, { status: 400 });
+  const typed = String(body.name ?? "").trim();
+  if (!raw && !typed) {
+    return NextResponse.json(
+      { error: "Pick a brand from the list, or type a new name." },
+      { status: 400 }
+    );
   }
-  const cat = await db
-    .prepare("SELECT id, name FROM brands WHERE id = ? AND marketer_id IS NULL")
-    .get<{ id: number; name: string }>(Number(raw));
-  if (!cat) {
-    return NextResponse.json({ error: "That brand is no longer available." }, { status: 404 });
+
+  let cat: { id: number; name: string } | null | undefined;
+  if (raw) {
+    cat = await db
+      .prepare("SELECT id, name FROM brands WHERE id = ? AND marketer_id IS NULL")
+      .get<{ id: number; name: string }>(Number(raw));
+    if (!cat) {
+      return NextResponse.json({ error: "That brand is no longer available." }, { status: 404 });
+    }
+  } else {
+    cat = await db
+      .prepare("SELECT id, name FROM brands WHERE marketer_id IS NULL AND lower(name) = lower(?)")
+      .get<{ id: number; name: string }>(typed);
+    if (!cat) {
+      const made = await db
+        .prepare("INSERT INTO brands (marketer_id, name) VALUES (NULL, ?) RETURNING id")
+        .run(typed);
+      cat = { id: Number(made.lastInsertRowid), name: typed };
+    }
   }
 
   const mine = await db

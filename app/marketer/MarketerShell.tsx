@@ -1605,12 +1605,35 @@ function ProductGmvTab({ products }: { products: Product[] }) {
   );
   // "" = All Brands, the default.
   const [brand, setBrand] = useState("");
+  // Click a header to sort; click again to reverse. Default newest-first is
+  // preserved as the null state so the tab opens as it always has.
+  const [sort, setSort] = useState<{ k: string; dir: 1 | -1 } | null>(null);
   const rows = products.filter((p) => {
     if (from && p.report_date < from) return false;
     if (to && p.report_date > to) return false;
     if (brand && String(p.brand_id ?? "") !== brand) return false;
     return true;
   });
+
+  if (sort) {
+    const { k, dir } = sort;
+    rows.sort((a: any, b: any) => {
+      const x = a[k], y = b[k];
+      // Nulls sink to the bottom either way — an empty cell is not a value.
+      if (x == null && y == null) return 0;
+      if (x == null) return 1;
+      if (y == null) return -1;
+      return (typeof x === "number" && typeof y === "number"
+        ? x - y
+        : String(x).localeCompare(String(y))) * dir;
+    });
+  }
+
+  function toggleSort(k: string) {
+    setSort((cur) =>
+      cur && cur.k === k ? (cur.dir === 1 ? { k, dir: -1 } : null) : { k, dir: 1 }
+    );
+  }
 
   const spend = rows.reduce((s, r) => s + (r.spend || 0), 0);
   const orders = rows.reduce((s, r) => s + (r.sku_orders || 0), 0);
@@ -1649,14 +1672,14 @@ function ProductGmvTab({ products }: { products: Product[] }) {
             <table className="w-full min-w-[960px] text-sm">
               <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Product Campaign</th>
-                  <th className="px-4 py-3 font-semibold">Brand</th>
-                  <th className="px-4 py-3 font-semibold">Date</th>
-                  <th className="px-4 py-3 text-right font-semibold">Product Spend</th>
-                  <th className="px-4 py-3 text-right font-semibold">Product SKU Orders</th>
-                  <th className="px-4 py-3 text-right font-semibold">Product Cost / Order</th>
-                  <th className="px-4 py-3 text-right font-semibold">Product Gross Revenue</th>
-                  <th className="px-4 py-3 text-right font-semibold">Product ROI</th>
+                  <SortTh k="campaign_name" sort={sort} on={toggleSort}>Product Campaign</SortTh>
+                  <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
+                  <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
+                  <SortTh k="spend" sort={sort} on={toggleSort} right>Product Spend</SortTh>
+                  <SortTh k="sku_orders" sort={sort} on={toggleSort} right>Product SKU Orders</SortTh>
+                  <SortTh k="cost_per_order" sort={sort} on={toggleSort} right>Product Cost / Order</SortTh>
+                  <SortTh k="gross_revenue" sort={sort} on={toggleSort} right>Product Gross Revenue</SortTh>
+                  <SortTh k="roi" sort={sort} on={toggleSort} right>Product ROI</SortTh>
                 </tr>
               </thead>
               <tbody>
@@ -2081,6 +2104,34 @@ function NavIcon({ Icon, busy }: { Icon: typeof Users; busy: boolean }) {
   return busy
     ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
     : <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />;
+}
+
+/** Clickable table header: asc -> desc -> back to the default order. */
+function SortTh({
+  k, sort, on, right, children,
+}: {
+  k: string;
+  sort: { k: string; dir: 1 | -1 } | null;
+  on: (k: string) => void;
+  right?: boolean;
+  children: React.ReactNode;
+}) {
+  const active = sort?.k === k;
+  return (
+    <th className={`px-4 py-3 font-semibold ${right ? "text-right" : ""}`}>
+      <button onClick={() => on(k)}
+        aria-sort={active ? (sort!.dir === 1 ? "ascending" : "descending") : "none"}
+        className={`inline-flex cursor-pointer items-center gap-1 uppercase tracking-wide transition-colors duration-200 hover:text-ink ${
+          active ? "text-ink" : ""
+        } ${right ? "flex-row-reverse" : ""}`}>
+        {children}
+        <ChevronDown aria-hidden="true"
+          className={`h-3 w-3 shrink-0 transition-transform duration-200 ${
+            active ? (sort!.dir === 1 ? "rotate-180" : "") : "opacity-25"
+          }`} />
+      </button>
+    </th>
+  );
 }
 
 /* ── shared bits ───────────────────────────────────────── */

@@ -20,6 +20,8 @@ export default function ProductsTab() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
+  // "" = All Brands, the default.
+  const [filter, setFilter] = useState("");
 
   const load = useCallback(async () => {
     const d = await fetch("/api/products").then((r) => r.json());
@@ -27,6 +29,14 @@ export default function ProductsTab() {
     setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  // "__none" is its own choice: products with no brand are the ones most
+  // likely to need attention, so they must be findable.
+  const shown = !filter
+    ? products
+    : filter === "__none"
+      ? products.filter((p) => !p.brand_name)
+      : products.filter((p) => p.brand_name === filter);
 
   async function remove(p: Product) {
     if (!confirm(`Delete "${p.name}"?`)) return;
@@ -61,13 +71,35 @@ export default function ProductsTab() {
         </p>
       )}
 
-      {products.length === 0 ? (
+      {(() => {
+        const names = [...new Set(products.map((p) => p.brand_name).filter(Boolean))] as string[];
+        return names.length > 0 ? (
+          <div className="card mb-3 flex flex-wrap items-end gap-3">
+            <div className="min-w-[220px]">
+              <label className="label" htmlFor="pf-brand">Brand</label>
+              <select id="pf-brand" className="input cursor-pointer !py-2 text-sm"
+                value={filter} onChange={(e) => setFilter(e.target.value)}>
+                <option value="">All Brands</option>
+                {names.map((b) => <option key={b} value={b}>{b}</option>)}
+                <option value="__none">— Tiada brand —</option>
+              </select>
+            </div>
+            <p className="pb-2 text-xs text-muted-fg">
+              {filter ? "Menunjukkan satu brand sahaja." : "Menunjukkan semua brand."}
+            </p>
+          </div>
+        ) : null;
+      })()}
+
+      {shown.length === 0 ? (
         <p className="card text-center text-sm text-muted-fg">
-          No products yet — add the first one so samples can be assigned.
+          {products.length === 0
+            ? "No products yet — add the first one so samples can be assigned."
+            : "No products for this brand."}
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {products.map((p) => (
+          {shown.map((p) => (
             <div key={p.id} className="card flex items-center gap-3">
               {p.image_url ? (
                 // eslint-disable-next-line @next/next/no-img-element

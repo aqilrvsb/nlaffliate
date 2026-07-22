@@ -12,6 +12,7 @@ import { confirmDialog } from "@/lib/swal";
 export type SampleProduct = {
   id: number; name: string; image_url: string | null;
   sku?: string | null; product_url?: string | null; document_url?: string | null;
+  info?: string | null;
 };
 export type SampleRequest = {
   id: number;
@@ -154,7 +155,7 @@ export default function SampleTab() {
               {r.products.length > 0 && (
                 <div>
                   <p className="label">Sample diberi ({r.products.length})</p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     {r.products.map((p) => (
                       <span key={p.id}
                         className="flex items-start gap-2 rounded-xl border border-line bg-white/60 p-2">
@@ -170,6 +171,11 @@ export default function SampleTab() {
                           <span className="block text-sm font-semibold text-ink">{p.name}</span>
                           {p.sku && (
                             <span className="block font-mono text-[10px] text-muted-fg">{p.sku}</span>
+                          )}
+                          {p.info && (
+                            <span className="mt-1 block whitespace-pre-line text-[11px] leading-snug text-muted-fg">
+                              {p.info}
+                            </span>
                           )}
                           <span className="mt-1 flex flex-wrap items-center gap-3">
                             {p.product_url && (

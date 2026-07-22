@@ -13,13 +13,13 @@ async function requireAdmin() {
 }
 
 
-/** Products hang off a marketer's brand — a catalogue row has no affiliates. */
+/** Products hang off the admin catalogue row, shared by every marketer. */
 async function assignableBrand(raw: string): Promise<number | null | "bad"> {
   if (!raw) return null;
   const n = Number(raw);
   if (!Number.isFinite(n)) return "bad";
   const ok = await db
-    .prepare("SELECT id FROM brands WHERE id = ? AND marketer_id IS NOT NULL")
+    .prepare("SELECT id FROM brands WHERE id = ? AND marketer_id IS NULL")
     .get(n);
   return ok ? n : "bad";
 }
@@ -65,15 +65,6 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     await db.prepare("UPDATE products SET image_url = ? WHERE id = ?").run(url, id);
   }
 
-  // A second image slot for spec sheets / product info the affiliate reads.
-  const att = form.get("attachment") as File | null;
-  if (att && att.size > 0) {
-    const bytes = Buffer.from(await att.arrayBuffer());
-    const mime = att.type || "image/png";
-    const ext = (att.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const url = await uploadImage(`product_att_${id}.${ext}`, bytes, mime);
-    await db.prepare("UPDATE products SET attachment_url = ? WHERE id = ?").run(url, id);
-  }
 
   // A downloadable document (PDF) — spec sheet, price list, brief.
   const doc = form.get("document") as File | null;

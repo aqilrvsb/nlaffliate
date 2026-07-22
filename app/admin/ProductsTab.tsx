@@ -11,7 +11,7 @@ import { confirmDialog } from "@/lib/swal";
 export type Product = {
   id: number; name: string; image_url: string | null;
   sku: string | null; product_url: string | null;
-  info: string | null; attachment_url: string | null; document_url: string | null;
+  info: string | null; document_url: string | null;
   brand_id: number | null; brand_name: string | null;
 };
 
@@ -161,7 +161,6 @@ function ProductModal({
   const [sku, setSku] = useState("");
   const [link, setLink] = useState("");
   const [info, setInfo] = useState("");
-  const [att, setAtt] = useState<File | null>(null);
   const [doc, setDoc] = useState<File | null>(null);
   const [brand, setBrand] = useState("");
   const [brands, setBrands] = useState<
@@ -178,13 +177,12 @@ function ProductModal({
     setSku(product?.sku || "");
     setLink(product?.product_url || "");
     setInfo(product?.info || "");
-    setAtt(null);
     setDoc(null);
     setBrand(product?.brand_id != null ? String(product.brand_id) : "");
     setPreview(product?.image_url || null);
     setFile(null);
     setError("");
-    fetch("/api/brands?scope=assignable").then((r) => r.json()).then((d) => setBrands(d.brands || []));
+    fetch("/api/brands?scope=catalogue").then((r) => r.json()).then((d) => setBrands(d.brands || []));
   }, [open, product]);
 
   async function pick(f: File | null) {
@@ -214,7 +212,6 @@ function ProductModal({
     fd.append("sku", sku);
     fd.append("product_url", link);
     fd.append("info", info);
-    if (att) fd.append("attachment", att);
     if (doc) fd.append("document", doc);
     fd.append("brand_id", brand);
     if (file) fd.append("image", file);
@@ -246,12 +243,10 @@ function ProductModal({
             <select id="pr-brand" className="input cursor-pointer" value={brand}
               onChange={(e) => setBrand(e.target.value)}>
               <option value="">— Tiada brand —</option>
-              {/* Two marketers can work the same brand, so the owner is part
-                  of the name — otherwise the options are indistinguishable. */}
+              {/* The company brand list, shared by everyone — a product is
+                  not owned by whichever marketer happens to file it. */}
               {brands.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}{b.marketer_name ? ` — ${b.marketer_name}` : ""}
-                </option>
+                <option key={b.id} value={b.id}>{b.name}</option>
               ))}
             </select>
           </div>
@@ -277,22 +272,6 @@ function ProductModal({
           <textarea id="pr-info" className="input resize-y" rows={4} value={info}
             onChange={(e) => setInfo(e.target.value)}
             placeholder="Cara guna, kandungan, selling points — affiliate akan baca ini." />
-        </div>
-
-        <div>
-          <label className="label" htmlFor="pr-att">Attachment (image)</label>
-          <input id="pr-att" type="file" accept="image/*"
-            onChange={async (e) => {
-              const f = e.target.files?.[0];
-              setAtt(f ? (await compressScreenshot(f)).file : null);
-            }}
-            className="block w-full cursor-pointer text-sm text-muted-fg file:mr-3 file:cursor-pointer file:rounded-xl file:border-0 file:bg-muted file:px-4 file:py-2 file:text-sm file:font-semibold file:text-ink" />
-          {product?.attachment_url && !att && (
-            <a href={product.attachment_url} target="_blank" rel="noopener noreferrer"
-              className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-accent hover:underline">
-              <ExternalLink className="h-3 w-3" aria-hidden="true" />Attachment semasa
-            </a>
-          )}
         </div>
 
         <div>

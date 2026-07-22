@@ -8,13 +8,17 @@ export const dynamic = "force-dynamic";
 
 /** Readable by any signed-in user; admin and marketers can change it. */
 
-/** Products hang off a marketer's brand — a catalogue row has no affiliates. */
+/**
+ * Products hang off the brand itself — the admin catalogue row — not one
+ * marketer's copy of it. Two marketers working the same brand sell the same
+ * products, so filing them per-marketer would fork the list for no reason.
+ */
 async function assignableBrand(raw: string): Promise<number | null | "bad"> {
   if (!raw) return null;
   const n = Number(raw);
   if (!Number.isFinite(n)) return "bad";
   const ok = await db
-    .prepare("SELECT id FROM brands WHERE id = ? AND marketer_id IS NOT NULL")
+    .prepare("SELECT id FROM brands WHERE id = ? AND marketer_id IS NULL")
     .get(n);
   return ok ? n : "bad";
 }
@@ -30,13 +34,18 @@ export async function GET(req: Request) {
   // filter lives here rather than being done client-side over everything.
   const products = brand
     ? await db.prepare(
-        `SELECT p.id, p.name, p.sku, p.product_url, p.info, p.attachment_url, p.document_url,
+        `SELECT p.id, p.name, p.sku, p.product_url, p.info, p.document_url,
                   p.image_url, p.brand_id, b.name AS brand_name, p.created_at
            FROM products p LEFT JOIN brands b ON b.id = p.brand_id
-          WHERE p.brand_id = ? ORDER BY p.name`
+          -- The caller may pass a marketer's copy of a brand; products live
+          -- on the catalogue row, so resolve through catalogue_id.
+          WHERE p.brand_id = (
+            SELECT COALESCE(c.catalogue_id, c.id) FROM brands c WHERE c.id = ?
+          )
+          ORDER BY p.name`
       ).all(Number(brand))
     : await db.prepare(
-        `SELECT p.id, p.name, p.sku, p.product_url, p.info, p.attachment_url, p.document_url,
+        `SELECT p.id, p.name, p.sku, p.product_url, p.info, p.document_url,
                   p.image_url, p.brand_id, b.name AS brand_name, p.created_at
            FROM products p LEFT JOIN brands b ON b.id = p.brand_id
           ORDER BY b.name NULLS LAST, p.name`
@@ -93,15 +102,6 @@ export async function POST(req: Request) {
     await db.prepare("UPDATE products SET image_url = ? WHERE id = ?").run(url, id);
   }
 
-  // A second image slot for spec sheets / product info the affiliate reads.
-  const att = form.get("attachment") as File | null;
-  if (att && att.size > 0) {
-    const bytes = Buffer.from(await att.arrayBuffer());
-    const mime = att.type || "image/png";
-    const ext = (att.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const url = await uploadImage(`product_att_${id}.${ext}`, bytes, mime);
-    await db.prepare("UPDATE products SET attachment_url = ? WHERE id = ?").run(url, id);
-  }
 
   // A downloadable document (PDF) — spec sheet, price list, brief.
   const doc = form.get("document") as File | null;

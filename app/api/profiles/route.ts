@@ -19,12 +19,23 @@ async function targetUserId(
   const asked = Number(String(requested ?? "").trim());
   if (!Number.isFinite(asked) || !asked) return user.id;
   if (asked === user.id) return user.id;
-  if (user.role !== "admin") return null;
 
-  const exists = await db
-    .prepare("SELECT id FROM users WHERE id = ? AND role = 'affiliate'")
-    .get(asked);
-  return exists ? asked : null;
+  // Admin may manage anyone's links; a marketer only their own affiliates'.
+  // Getting these right is fiddly, and the person chasing the affiliate to
+  // fix them is usually the marketer.
+  if (user.role === "admin") {
+    const exists = await db
+      .prepare("SELECT id FROM users WHERE id = ? AND role = 'affiliate'")
+      .get(asked);
+    return exists ? asked : null;
+  }
+  if (user.role === "marketer") {
+    const mine = await db
+      .prepare("SELECT id FROM users WHERE id = ? AND role = 'affiliate' AND marketer_id = ?")
+      .get(asked, user.id);
+    return mine ? asked : null;
+  }
+  return null;
 }
 
 export async function GET(req: Request) {

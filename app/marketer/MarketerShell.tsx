@@ -14,6 +14,7 @@ import {
 import { AffiliateModal, AffiliateActions, type ManagedAffiliate } from "./AffiliateManager";
 import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
 import ProfileBrandPicker from "@/components/ProfileBrandPicker";
+import AddProfileLink from "@/components/AddProfileLink";
 import Modal from "@/components/Modal";
 import ExampleHint from "@/components/ExampleHint";
 import CommissionEditor, { commissionLabel } from "@/components/CommissionEditor";
@@ -27,7 +28,7 @@ import ImageModal from "@/components/ImageModal";
 import { getPage, paginate } from "@/lib/pagination";
 import {
   fmtDate, fmtTime, fmtTimeRange, sumDurations,
-  scheduledHours, commissionFor,
+  durationHours, commissionFor,
 } from "@/lib/format";
 import { resolveRange } from "@/lib/daterange";
 import { useNavigate } from "@/lib/useNavigate";
@@ -91,7 +92,8 @@ const AFFILIATE_CHILDREN = [
   { key: "success", label: "Success Affiliate", icon: CheckCircle2 },
   { key: "posting", label: "Posting Affiliate", icon: Send },
   { key: "reporting", label: "Reporting Affiliate", icon: BarChart3 },
-  { key: "unknown", label: "Unknown Affiliate", icon: HelpCircle },
+  // Unknown is hidden for now. The tab body is still routed, so ?tab=unknown
+  // reaches it and putting the entry back is a one-line change.
 ] as const;
 
 const PILLAR_CHILDREN = [
@@ -538,6 +540,9 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
                 ))}
               </ul>
             )}
+            {/* The marketer can add links too — affiliates often paste the
+                wrong URL, and this is who ends up fixing it. */}
+            <AddProfileLink userId={a.id} />
           </div>
         </div>
       ))}
@@ -622,23 +627,21 @@ function AddScheduleModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  const [affId, setAffId] = useState("");
+
   useEffect(() => {
     if (!open) return;
-    setProfileId(""); setBrand(""); setDate(""); setStart("");
+    setAffId(""); setProfileId(""); setBrand(""); setDate(""); setStart("");
     setEnd(""); setBudget(""); setNote(""); setError("");
   }, [open]);
 
-  // One dropdown identifies both affiliate and account. Inhouse is offered
-  // as a fixed choice rather than a listed profile, because the bucket
-  // account is created on first use — it may not exist yet.
-  const options = affiliates
-    .filter((a) => a.name !== "Inhouse")
-    .flatMap((a) =>
-      (a.links || []).map((p) => ({
-        id: String(p.id),
-        label: `${a.name} — ${profileName(p.brand_name, p.url)}`,
-      }))
-    );
+  // Pick the person first, then which of their accounts. One combined list
+  // got unusable as soon as an affiliate ran several accounts. Inhouse is a
+  // fixed choice rather than a listed profile, because the bucket account is
+  // created on first use — it may not exist yet.
+  const people = affiliates.filter((a) => a.name !== "Inhouse");
+  const chosen = people.find((a) => String(a.id) === affId);
+  const links = chosen?.links ?? [];
 
   async function save() {
     setBusy(true); setError("");
@@ -646,7 +649,8 @@ function AddScheduleModal({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        profile_id: profileId, brand_id: brand, live_date: date,
+        profile_id: affId === "inhouse" ? "inhouse" : profileId,
+        brand_id: brand, live_date: date,
         start_time: start, end_time: end || null,
         ads_budget: budget, note,
       }),
@@ -662,16 +666,41 @@ function AddScheduleModal({
       subtitle="Waktu Malaysia (GMT+8). Jadual baru bermula sebagai Pending.">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <label className="label" htmlFor="as-profile">Affiliate / profile</label>
-          <select id="as-profile" className="input cursor-pointer" value={profileId}
-            onChange={(e) => setProfileId(e.target.value)} required>
-            <option value="">— Pilih profile —</option>
-            {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+          <label className="label" htmlFor="as-aff">1. Affiliate</label>
+          <select id="as-aff" className="input cursor-pointer" value={affId}
+            onChange={(e) => { setAffId(e.target.value); setProfileId(""); }} required>
+            <option value="">— Pilih affiliate —</option>
+            {people.map((a) => (
+              <option key={a.id} value={a.id}>{a.email} — {a.name}</option>
+            ))}
             <option value="inhouse">Inhouse (bukan affiliate)</option>
           </select>
         </div>
-        <div>
-          <label className="label" htmlFor="as-brand">Brand</label>
+
+        {affId !== "inhouse" && (
+          <div className="sm:col-span-2">
+            <label className="label" htmlFor="as-profile">2. Link profile</label>
+            <select id="as-profile" className="input cursor-pointer" value={profileId}
+              onChange={(e) => setProfileId(e.target.value)} required disabled={!affId}>
+              <option value="">
+                {!affId ? "— Pilih affiliate dahulu —" : "— Pilih profile —"}
+              </option>
+              {links.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {profileName(p.brand_name, p.url)} — {p.url}
+                </option>
+              ))}
+            </select>
+            {affId && links.length === 0 && (
+              <p className="mt-1 text-xs text-danger">
+                Affiliate ini belum ada link TikTok — tambah di List Affiliate dahulu.
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="sm:col-span-2">
+          <label className="label" htmlFor="as-brand">3. Brand</label>
           <BrandSelect id="as-brand" value={brand} onChange={setBrand} />
         </div>
         <div>
@@ -1397,12 +1426,13 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
     return [...byProfile.entries()].map(([pid, ls]) => {
       const agg = aggregate(ls);
       const link = a.links.find((x) => x.id === pid);
-      // Hourly pay follows the booked slot, not the streamed duration, and
-      // only for lives that actually completed — a pending slot has not been
-      // verified as having happened.
+      // Hourly pay follows the duration actually streamed. A booked slot is
+      // only a plan; the recorded duration is what happened, down to the
+      // second. Still restricted to completed lives — a pending slot has not
+      // been verified as having taken place.
       const hours = ls
         .filter((l) => l.status === "completed")
-        .reduce((s, l) => s + scheduledHours(l.start_time, l.end_time), 0);
+        .reduce((s, l) => s + durationHours(l.duration_live), 0);
       const commission = link ? commissionFor(link, agg.gmv, hours) : 0;
       return {
         pid, agg, link, hours, commission,

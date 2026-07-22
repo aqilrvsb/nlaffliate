@@ -14,9 +14,22 @@ async function canEdit(profileId: string) {
   if (user.role === "admin") return { adminOverride: true, userId: null };
 
   const row = await db
-    .prepare("SELECT user_id FROM tiktok_profiles WHERE id = ?")
-    .get<{ user_id: number }>(profileId);
-  if (!row || row.user_id !== user.id) return null;
+    .prepare(
+      `SELECT p.user_id, u.marketer_id
+         FROM tiktok_profiles p JOIN users u ON u.id = p.user_id
+        WHERE p.id = ?`
+    )
+    .get<{ user_id: number; marketer_id: number | null }>(profileId);
+  if (!row) return null;
+
+  // The owning affiliate, or the marketer responsible for them — the same
+  // pair who can create these links in the first place.
+  if (user.role === "marketer") {
+    return row.marketer_id === user.id
+      ? { adminOverride: true, userId: null }
+      : null;
+  }
+  if (row.user_id !== user.id) return null;
   return { adminOverride: false, userId: user.id };
 }
 

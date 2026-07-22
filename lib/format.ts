@@ -103,15 +103,16 @@ export function joinDuration(h: number, m: number, s: number): string {
  * Not rounded — 90 minutes bills as 1.5 hours. Returns 0 when the slot has
  * no end time, since there is no range to pay for.
  */
-export function scheduledHours(start?: string | null, end?: string | null): number {
-  if (!start || !end) return 0;
-  const [sh, sm] = String(start).split(":").map(Number);
-  const [eh, em] = String(end).split(":").map(Number);
-  if (![sh, sm, eh, em].every((n) => Number.isFinite(n))) return 0;
-
-  let mins = eh * 60 + em - (sh * 60 + sm);
-  if (mins < 0) mins += 24 * 60; // slot crosses midnight
-  return mins / 60;
+/**
+ * Hours actually streamed, from the recorded duration ("2h 0m 25s").
+ *
+ * Hourly commission used to bill the booked slot, but a slot is a plan — the
+ * affiliate is paid for the time they were actually live. Seconds are kept
+ * whole (25s of a RM30/hour rate is real money at scale), so the division
+ * happens once, at the end, rather than rounding a per-second rate first.
+ */
+export function durationHours(duration?: string | null): number {
+  return durationToSeconds(duration) / 3600;
 }
 
 export type CommissionInput = {
@@ -122,7 +123,7 @@ export type CommissionInput = {
 /**
  * What one TikTok link earned.
  *   percent -> rate% of sales
- *   hour    -> rate x hours booked (see scheduledHours)
+ *   hour    -> rate x hours streamed (see durationHours)
  * Returns 0 when no commission is configured, so totals stay additive.
  */
 export function commissionFor(

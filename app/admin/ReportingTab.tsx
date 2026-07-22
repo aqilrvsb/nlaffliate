@@ -4,7 +4,7 @@ import { Fragment, useState } from "react";
 import { ChevronDown, Link2, TrendingUp, TrendingDown, Users, ShoppingBag, Timer, Wallet, CheckCircle2 } from "lucide-react";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import {
-  sumDurations, scheduledHours, commissionFor,
+  sumDurations, durationHours, commissionFor,
 } from "@/lib/format";
 import { profileName } from "@/lib/tiktok";
 
@@ -83,9 +83,10 @@ export default function AdminReportingTab({
     return [...byProfile.entries()].map(([pid, ls]) => {
       const agg = aggregate(ls);
       const link = links.find((x) => x.id === pid);
+      // Paid on the duration actually streamed, not the booked slot.
       const hours = ls
         .filter((l) => l.status === "completed")
-        .reduce((s, l) => s + scheduledHours(l.start_time, l.end_time), 0);
+        .reduce((s, l) => s + durationHours(l.duration_live), 0);
       return {
         pid, agg, link, hours,
         commission: link ? commissionFor(link, agg.gmv, hours) : 0,

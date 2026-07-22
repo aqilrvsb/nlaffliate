@@ -36,14 +36,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Attach at least one analytics image." }, { status: 400 });
 
   // 1) Extract rows from every uploaded image.
+  //
+  // Read them together, not one after another. A single table read has been
+  // measured anywhere from 10s to 57s — that variance is the provider's
+  // queue, not the image — so three sequential reads would blow past
+  // maxDuration and fail the whole upload. In parallel the request costs
+  // roughly the slowest image instead of their sum.
   let rows: AnalyticsRow[] = [];
   try {
-    for (const file of files) {
-      const bytes = Buffer.from(await file.arrayBuffer());
-      const dataUrl = `data:${file.type || "image/png"};base64,${bytes.toString("base64")}`;
-      const part = await readAnalyticsTable(dataUrl);
-      rows = rows.concat(part);
-    }
+    const parts = await Promise.all(
+      files.map(async (file) => {
+        const bytes = Buffer.from(await file.arrayBuffer());
+        const dataUrl = `data:${file.type || "image/png"};base64,${bytes.toString("base64")}`;
+        return readAnalyticsTable(dataUrl);
+      })
+    );
+    rows = parts.flat();
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Could not read the analytics image." }, { status: 502 });
   }

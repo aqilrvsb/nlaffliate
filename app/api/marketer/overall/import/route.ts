@@ -69,16 +69,21 @@ export async function POST(req: Request) {
   let overview: any = {}, metrics: any = {};
   let img1Path: string | null = null, img2Path: string | null = null;
   try {
-    if (img1) {
-      const s = await saveImg(img1, `overall_ov_${user.id}_${brandId}_${reportDate}`);
-      img1Path = s.publicPath;
-      overview = await readImageJson(s.dataUrl, OVERVIEW_PROMPT);
-    }
-    if (img2) {
-      const s = await saveImg(img2, `overall_km_${user.id}_${brandId}_${reportDate}`);
-      img2Path = s.publicPath;
-      metrics = await readImageJson(s.dataUrl, METRICS_PROMPT);
-    }
+    // Both panels are required, so read them together rather than one after
+    // the other: a single read can take tens of seconds and two in sequence
+    // risk exceeding maxDuration. In parallel this costs the slower of the two.
+    const [ov, km] = await Promise.all([
+      (async () => {
+        const s = await saveImg(img1, `overall_ov_${user.id}_${brandId}_${reportDate}`);
+        return { path: s.publicPath, data: await readImageJson(s.dataUrl, OVERVIEW_PROMPT) };
+      })(),
+      (async () => {
+        const s = await saveImg(img2, `overall_km_${user.id}_${brandId}_${reportDate}`);
+        return { path: s.publicPath, data: await readImageJson(s.dataUrl, METRICS_PROMPT) };
+      })(),
+    ]);
+    img1Path = ov.path; overview = ov.data;
+    img2Path = km.path; metrics = km.data;
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Could not read the images." }, { status: 502 });
   }

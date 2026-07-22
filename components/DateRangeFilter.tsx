@@ -4,8 +4,9 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useNavigate } from "@/lib/useNavigate";
 import { CalendarRange, Link2 } from "lucide-react";
 import { resolveRange, todayKL, monthRangeKL } from "@/lib/daterange";
+import { profileName } from "@/lib/tiktok";
 
-type ProfileOption = { id: number; label: string; url?: string };
+type ProfileOption = { id: number; label: string; url?: string; brand_name?: string | null };
 
 /**
  * Filter bar driven by URL params:
@@ -111,7 +112,7 @@ export default function DateRangeFilter({
             value={profile} onChange={(e) => update("profile", e.target.value)}>
             <option value="">All profiles</option>
             {profiles.map((p) => (
-              <option key={p.id} value={p.id}>{p.label}</option>
+              <option key={p.id} value={p.id}>{profileName(p.brand_name, p.url)}</option>
             ))}
           </select>
         </div>

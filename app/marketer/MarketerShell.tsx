@@ -569,12 +569,9 @@ function ScheduleTab({ title, rows, kind, showUpload, affiliates, defaultMode = 
         </div>
       )}
 
-      {showUpload && (
-        <div className="grid gap-3 lg:grid-cols-2">
-          <LivePerformanceImport />
-          <BulkUpload />
-        </div>
-      )}
+      {/* Check Schedule + Upload LIVE analytics are hidden on this tab for now.
+          Both components are kept below so surfacing them again is a one-line
+          change rather than a rewrite. */}
 
       <BrandFilterCard id={`sched-brand-${kind}`} value={brand} onChange={setBrand} />
 
@@ -1096,6 +1093,7 @@ function Stat({ Icon, label, value }: { Icon: typeof Users; label: string; value
 
 /* ── Bulk analytics upload ─────────────────────────────── */
 
+/** Currently not rendered — see the note in ScheduleTab. */
 function BulkUpload() {
   const router = useRouter();
   const [files, setFiles] = useState<(File | null)[]>([null, null, null]);
@@ -1179,6 +1177,7 @@ function BulkUpload() {
  * figures; rows with no schedule are created as Inhouse so the live is not
  * lost, and the marketer can tag the brand afterwards on the card.
  */
+/** Currently not rendered — see the note in ScheduleTab. */
 function LivePerformanceImport() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);

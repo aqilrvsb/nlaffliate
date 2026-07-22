@@ -36,6 +36,21 @@ export async function GET(req: Request) {
     return NextResponse.json({ brands });
   }
 
+  /**
+   * ?scope=assignable — brands that working data may point at. Only a
+   * marketer's own copies qualify: a product filed against a catalogue row
+   * would be invisible to every affiliate, since they browse by their own
+   * marketer's brand.
+   */
+  if (scope === "assignable") {
+    const brands = await db.prepare(
+        `SELECT b.id, b.name, b.marketer_id, u.name AS marketer_name
+           FROM brands b JOIN users u ON u.id = b.marketer_id
+          ORDER BY b.name, u.name`
+      ).all();
+    return NextResponse.json({ brands });
+  }
+
   let brands;
   if (user.role === "admin") {
     // Admin's working list is every brand in play, catalogue entries included,

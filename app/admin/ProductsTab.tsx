@@ -164,7 +164,9 @@ function ProductModal({
   const [att, setAtt] = useState<File | null>(null);
   const [doc, setDoc] = useState<File | null>(null);
   const [brand, setBrand] = useState("");
-  const [brands, setBrands] = useState<{ id: number; name: string }[]>([]);
+  const [brands, setBrands] = useState<
+    { id: number; name: string; marketer_name?: string | null }[]
+  >([]);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -182,7 +184,7 @@ function ProductModal({
     setPreview(product?.image_url || null);
     setFile(null);
     setError("");
-    fetch("/api/brands").then((r) => r.json()).then((d) => setBrands(d.brands || []));
+    fetch("/api/brands?scope=assignable").then((r) => r.json()).then((d) => setBrands(d.brands || []));
   }, [open, product]);
 
   async function pick(f: File | null) {
@@ -244,8 +246,12 @@ function ProductModal({
             <select id="pr-brand" className="input cursor-pointer" value={brand}
               onChange={(e) => setBrand(e.target.value)}>
               <option value="">— Tiada brand —</option>
+              {/* Two marketers can work the same brand, so the owner is part
+                  of the name — otherwise the options are indistinguishable. */}
               {brands.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
+                <option key={b.id} value={b.id}>
+                  {b.name}{b.marketer_name ? ` — ${b.marketer_name}` : ""}
+                </option>
               ))}
             </select>
           </div>

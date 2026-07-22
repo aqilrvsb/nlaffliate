@@ -7,6 +7,18 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** Catalogue is readable by any signed-in user; only admin can change it. */
+
+/** Products hang off a marketer's brand — a catalogue row has no affiliates. */
+async function assignableBrand(raw: string): Promise<number | null | "bad"> {
+  if (!raw) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return "bad";
+  const ok = await db
+    .prepare("SELECT id FROM brands WHERE id = ? AND marketer_id IS NOT NULL")
+    .get(n);
+  return ok ? n : "bad";
+}
+
 export async function GET(req: Request) {
   const user = await getSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -46,6 +58,13 @@ export async function POST(req: Request) {
   }
 
   const brandRaw = String(form.get("brand_id") ?? "").trim();
+  const brandId = await assignableBrand(brandRaw);
+  if (brandId === "bad") {
+    return NextResponse.json(
+      { error: "Pick a brand that belongs to a marketer." },
+      { status: 400 }
+    );
+  }
   const sku = String(form.get("sku") ?? "").trim() || null;
   const productUrl = String(form.get("product_url") ?? "").trim() || null;
   if (productUrl && !/^https?:\/\//i.test(productUrl))
@@ -55,7 +74,7 @@ export async function POST(req: Request) {
     .prepare(
       "INSERT INTO products (name, sku, product_url, info, brand_id, image_url) VALUES (?, ?, ?, ?, ?, NULL) RETURNING id"
     )
-    .run(name, sku, productUrl, String(form.get("info") ?? "").trim() || null, brandRaw ? Number(brandRaw) : null);
+    .run(name, sku, productUrl, String(form.get("info") ?? "").trim() || null, brandId);
   const id = Number(info.lastInsertRowid);
 
   // Named after the row id so re-uploading a product image replaces the old one

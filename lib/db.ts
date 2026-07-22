@@ -27,6 +27,15 @@ function client(): postgres.Sql {
     max: 1,
     idle_timeout: 20,
     connect_timeout: 15,
+    // A frozen serverless container wakes with a socket the pooler has long
+    // since dropped. Keep-alive makes TCP notice the death instead of writing
+    // queries into a black hole.
+    keep_alive: 10,
+    connection: {
+      // Server-side backstop: if the query does arrive, it cannot run forever.
+      statement_timeout: 20_000,
+      idle_in_transaction_session_timeout: 20_000,
+    } as Record<string, number>,
     types: {
       // int8/bigint would otherwise arrive as strings, which silently breaks
       // arithmetic (0 + "12" === "012"). Ids and COUNT()s become numbers.
@@ -89,19 +98,51 @@ export type RunResult = {
   lastInsertRowid: number | null;
 };
 
+/**
+ * How long any single query may take before we give up on it.
+ *
+ * postgres.js has no client-side query timeout: if the socket is dead but
+ * still open — which is what a thawed serverless container hands you — the
+ * query is written and awaited forever. Vercel then kills the whole render at
+ * its own limit, which is how a healthy database produced 300-second page
+ * timeouts. Failing here instead turns a five-minute hang into a fast error.
+ */
+const QUERY_TIMEOUT_MS = 12_000;
+
+async function withTimeout<T>(work: Promise<T>): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          // Drop the cached client so the next request dials a fresh socket
+          // rather than inheriting the broken one.
+          const dead = globalForDb._sql;
+          globalForDb._sql = undefined;
+          dead?.end({ timeout: 0 }).catch(() => {});
+          reject(new Error(`Database query timed out after ${QUERY_TIMEOUT_MS}ms`));
+        }, QUERY_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 function prepare(query: string) {
   const q = toPg(query);
   return {
     async get<T = any>(...params: any[]): Promise<T | undefined> {
-      const rows = await client().unsafe(q, params);
+      const rows = await withTimeout(client().unsafe(q, params));
       return rows[0] as T | undefined;
     },
     async all<T = any>(...params: any[]): Promise<T[]> {
-      const rows = await client().unsafe(q, params);
+      const rows = await withTimeout(client().unsafe(q, params));
       return rows as unknown as T[];
     },
     async run(...params: any[]): Promise<RunResult> {
-      const rows: any = await client().unsafe(q, params);
+      const rows: any = await withTimeout(client().unsafe(q, params));
       return {
         changes: typeof rows.count === "number" ? rows.count : rows.length ?? 0,
         lastInsertRowid: rows?.[0]?.id != null ? Number(rows[0].id) : null,

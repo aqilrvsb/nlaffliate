@@ -7,6 +7,12 @@ import { resolveRange } from "@/lib/daterange";
 
 export const dynamic = "force-dynamic";
 
+// A page render is a handful of small queries. If it has not finished well
+// inside this, something is wedged — fail fast rather than holding the
+// invocation open for the platform's five-minute maximum.
+export const maxDuration = 20;
+
+
 export default async function AdminPage({
   searchParams,
 }: {

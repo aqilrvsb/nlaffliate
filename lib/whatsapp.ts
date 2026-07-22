@@ -53,10 +53,14 @@ export async function sendWhatsApp(
     form.append("number", number);
     form.append("message", message);
 
+    // A courtesy message must never hold a request open. Without a deadline
+    // an unresponsive provider keeps the whole serverless invocation alive
+    // until the platform kills it.
     const res = await fetch(`${API}/api/send`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: form.toString(),
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) {
       const t = await res.text().catch(() => "");
@@ -74,7 +78,8 @@ export async function deviceStatus(deviceId?: string) {
   if (!device) return { ok: false, error: "No device ID set." };
   try {
     const res = await fetch(
-      `${API}/api/statusDevice?device_id=${encodeURIComponent(device)}`
+      `${API}/api/statusDevice?device_id=${encodeURIComponent(device)}`,
+      { signal: AbortSignal.timeout(8000) }
     );
     const text = await res.text();
     let data: any = null;

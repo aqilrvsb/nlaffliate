@@ -23,8 +23,14 @@ function client(): postgres.Sql {
   globalForDb._sql = postgres(url, {
     // Supabase's transaction pooler doesn't support prepared statements.
     prepare: false,
-    // Serverless: keep the footprint tiny and don't hold sockets open.
-    max: 1,
+    /**
+     * One socket per instance serialised every concurrent request through it:
+     * a handful of simultaneous page renders queued behind each other until
+     * they breached the query timeout. Supavisor multiplexes on its side, so
+     * a small pool per instance costs the database nothing and lets an
+     * instance actually work in parallel.
+     */
+    max: 8,
     idle_timeout: 20,
     connect_timeout: 15,
     // A frozen serverless container wakes with a socket the pooler has long
@@ -115,14 +121,16 @@ async function withTimeout<T>(work: Promise<T>): Promise<T> {
     return await Promise.race([
       work,
       new Promise<never>((_, reject) => {
-        timer = setTimeout(() => {
-          // Drop the cached client so the next request dials a fresh socket
-          // rather than inheriting the broken one.
-          const dead = globalForDb._sql;
-          globalForDb._sql = undefined;
-          dead?.end({ timeout: 0 }).catch(() => {});
-          reject(new Error(`Database query timed out after ${QUERY_TIMEOUT_MS}ms`));
-        }, QUERY_TIMEOUT_MS);
+        timer = setTimeout(
+          () =>
+            // Only this query fails. An earlier version tore down the shared
+            // client here, which killed every sibling query on the same pool
+            // with CONNECTION_DESTROYED — one slow query took its neighbours
+            // with it. postgres.js already retires genuinely broken sockets;
+            // this guard exists purely so a caller cannot wait forever.
+            reject(new Error(`Database query timed out after ${QUERY_TIMEOUT_MS}ms`)),
+          QUERY_TIMEOUT_MS
+        );
       }),
     ]);
   } finally {

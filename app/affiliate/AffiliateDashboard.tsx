@@ -161,7 +161,7 @@ export default function AffiliateDashboard({
         </div>
       </div>
 
-      <DateRangeFilter count={filtered.length} profiles={profiles} />
+      <DateRangeFilter count={filtered.length} profiles={profiles} defaultMode="month" />
 
       <div className="card flex flex-wrap items-end gap-3">
         <div className="min-w-[220px]">
@@ -550,7 +550,7 @@ function BookingCard({
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-bold text-ink">{profileName(b.profile_brand, b.profile_url)}</span>
             <StatusBadge status={b.status} />
-            {b.brand_name && (
+            {b.brand_name && b.brand_name !== profileName(b.profile_brand, b.profile_url) && (
               <span className="chip bg-primary/10 text-primary">
                 <Tag className="h-3 w-3" aria-hidden="true" />{b.brand_name}
               </span>

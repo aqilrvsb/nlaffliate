@@ -428,26 +428,53 @@ function AiSettingsCard() {
   const [key, setKey] = useState("");
   const [model, setModel] = useState("");
   const [base, setBase] = useState("");
+  const [provider, setProvider] = useState("grsai");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [test, setTest] = useState<any>(null);
 
   async function load() {
     const d = await fetch("/api/admin/settings").then((r) => r.json());
     setCfg(d);
+    setProvider(d.provider || "grsai");
     setModel(d.model || "");
     setBase(d.base || "");
   }
   useEffect(() => { load(); }, []);
+
+  /** Switching provider swaps in that provider's URL and model, so the
+      form never leaves a stale base URL pointing at the old service. */
+  function pickProvider(p: string) {
+    setProvider(p);
+    setTest(null);
+    const preset = cfg?.providers?.find((x: any) => x.key === p);
+    if (preset) { setBase(preset.base); setModel(preset.defaultModel); }
+  }
 
   async function save() {
     setSaving(true); setSaved(false);
     await fetch("/api/admin/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key, model, base }),
+      body: JSON.stringify({ key, model, base, provider }),
     });
     setKey(""); setSaving(false); setSaved(true); load();
   }
+
+  /** Prove the key/model work before relying on them at upload time. */
+  async function runTest() {
+    setTesting(true); setTest(null);
+    const r = await fetch("/api/admin/settings/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider, key, base, model }),
+    });
+    setTest(await r.json().catch(() => ({ ok: false, error: "No response" })));
+    setTesting(false);
+  }
+
+  const preset = cfg?.providers?.find((x: any) => x.key === provider);
 
   return (
     <section className="card">
@@ -463,12 +490,28 @@ function AiSettingsCard() {
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <label className="label" htmlFor="grsai-key">GRSAI API Key</label>
+          <label className="label" htmlFor="ai-provider">Provider</label>
+          <select id="ai-provider" className="input cursor-pointer"
+            value={provider} onChange={(e) => pickProvider(e.target.value)}>
+            {(cfg?.providers ?? [{ key: "grsai", label: "GRSAI" }]).map((p: any) => (
+              <option key={p.key} value={p.key}>{p.label}</option>
+            ))}
+          </select>
+          <p className="mt-1.5 text-[11px] text-muted-fg">
+            Both speak the same API, so switching needs no redeploy. OpenRouter
+            model names are namespaced — e.g. <b>google/gemini-2.5-flash</b>.
+          </p>
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className="label" htmlFor="grsai-key">API Key</label>
           <div className="relative">
             <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-fg"
               aria-hidden="true" />
             <input id="grsai-key" className="input pl-9" type="password" autoComplete="off"
-              placeholder={cfg?.key_set ? `Saved (${cfg.key_hint}) — blank to keep` : "Paste GRSAI API key"}
+              placeholder={cfg?.key_set
+                ? `Saved (${cfg.key_hint}) — blank to keep`
+                : `Paste key (${preset?.keyHint ?? "sk-…"})`}
               value={key} onChange={(e) => setKey(e.target.value)} />
           </div>
           {cfg && (
@@ -484,7 +527,7 @@ function AiSettingsCard() {
         </div>
         <div>
           <label className="label" htmlFor="grsai-model">Model</label>
-          <input id="grsai-model" className="input" placeholder="gemini-2.5-flash"
+          <input id="grsai-model" className="input" placeholder={preset?.modelHint ?? "gemini-2.5-flash"}
             value={model} onChange={(e) => setModel(e.target.value)} />
         </div>
         <div>
@@ -500,12 +543,41 @@ function AiSettingsCard() {
             ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Saving…</>
             : "Save AI settings"}
         </button>
+        <button className="btn-ghost" onClick={runTest} disabled={testing}>
+          {testing
+            ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Testing…</>
+            : <><Bot className="h-4 w-4" aria-hidden="true" />Test connection</>}
+        </button>
         {saved && (
           <span className="flex items-center gap-1 text-sm font-medium text-emerald-600">
             <Check className="h-4 w-4" aria-hidden="true" />Saved
           </span>
         )}
       </div>
+
+      {test && (
+        <div className={`mt-3 rounded-xl border px-3 py-2 text-sm ${
+          test.ok ? "border-emerald-200 bg-emerald-50/60 text-emerald-800"
+                  : "border-danger/30 bg-danger/5 text-danger"
+        }`}>
+          {test.ok ? (
+            <>
+              <b>Working.</b> {test.model} replied &ldquo;{test.reply}&rdquo; in {(test.ms / 1000).toFixed(1)}s.
+              <span className="block text-[11px] opacity-80">
+                The model accepted an image, so screenshot reading will work.
+              </span>
+            </>
+          ) : (
+            <>
+              <b>Failed{test.status ? ` (${test.status})` : ""}.</b>{" "}
+              {String(test.error || "").slice(0, 220)}
+              <span className="block text-[11px] opacity-80">
+                Checked {test.base} with model {test.model}.
+              </span>
+            </>
+          )}
+        </div>
+      )}
     </section>
   );
 }

@@ -4,7 +4,7 @@
  * /chat/completions endpoint, so we send the image as a data URL.
  */
 
-import { getGrsaiConfig } from "@/lib/settings";
+import { getGrsaiConfig, providerHeaders } from "@/lib/settings";
 
 export type LiveStats = {
   live_title: string | null;
@@ -93,12 +93,16 @@ export async function readImageJson(
   imageBase64DataUrl: string,
   systemPrompt: string
 ): Promise<Record<string, any>> {
-  const { key, base, model } = await getGrsaiConfig();
+  const { provider, key, base, model } = await getGrsaiConfig();
   if (!key) throw new Error("GRSAI_API_KEY not set.");
 
   const res = await fetch(`${base}/chat/completions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${key}`,
+      ...providerHeaders(provider),
+    },
     body: JSON.stringify({
       model, temperature: 0, max_tokens: 1000, stream: false,
       messages: [
@@ -122,12 +126,16 @@ export async function readImageJson(
 export async function readAnalyticsTable(
   imageBase64DataUrl: string
 ): Promise<AnalyticsRow[]> {
-  const { key, base, model } = await getGrsaiConfig();
+  const { provider, key, base, model } = await getGrsaiConfig();
   if (!key) throw new Error("GRSAI_API_KEY not set — cannot read bulk analytics.");
 
   const res = await fetch(`${base}/chat/completions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${key}`,
+      ...providerHeaders(provider),
+    },
     body: JSON.stringify({
       model,
       temperature: 0,
@@ -171,7 +179,7 @@ export async function readLiveScreenshot(
   // Admin-entered key/model (from the DB) take precedence over env.
   // GRSAI chat endpoint is OpenAI-compatible and MUST include /v1
   // (https://grsaiapi.com/v1/chat/completions) — verified against HCKCREA P4.
-  const { key, base, model } = await getGrsaiConfig();
+  const { provider, key, base, model } = await getGrsaiConfig();
 
   if (!key) {
     return {
@@ -189,6 +197,7 @@ export async function readLiveScreenshot(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${key}`,
+      ...providerHeaders(provider),
     },
     body: JSON.stringify({
       model,

@@ -39,11 +39,12 @@ import { useNavigate } from "@/lib/useNavigate";
 import { useSearchParams } from "next/navigation";
 import type { SessionUser } from "@/lib/session";
 import { confirmDialog } from "@/lib/swal";
-import { profileName } from "@/lib/tiktok";
+import { profileName, handleFromUrl } from "@/lib/tiktok";
 
 type TikTokLink = {
   brand_id?: number | null;
   brand_ids?: number[] | null;
+  brand_names?: string[] | null;
   brand_name?: string | null;
   id: number; label: string; url: string;
   commission_type: "percent" | "hour" | null; commission_value: number | null;
@@ -545,7 +546,15 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
                     className="rounded-lg border border-line bg-white/60 px-2.5 py-1.5">
                     <div className="flex items-start justify-between gap-2">
                       <span className="min-w-0">
-                        <span className="block text-xs font-semibold text-ink">{profileName(l.brand_name, l.url)}</span>
+                        {/* The handle names the account; the brands it runs
+                            are chips beside it, since a link can carry
+                            several and only the first would otherwise show. */}
+                        <span className="flex flex-wrap items-center gap-1 text-xs font-semibold text-ink">
+                          {handleFromUrl(l.url)}
+                          {(l.brand_names ?? []).map((n) => (
+                            <span key={n} className="chip bg-primary/10 text-primary">{n}</span>
+                          ))}
+                        </span>
                         <a href={l.url} target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-1 truncate text-[11px] text-accent hover:underline">
                           <span className="truncate">{l.url}</span>

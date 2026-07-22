@@ -28,10 +28,19 @@ export default async function MarketerPage() {
                   p.commission_type, p.commission_value, p.brand_id,
                   pb.name AS brand_name,
                   COALESCE(
-                    (SELECT array_agg(x.brand_id) FROM tiktok_profile_brands x
+                    (SELECT array_agg(x.brand_id ORDER BY xb.name)
+                       FROM tiktok_profile_brands x
+                       JOIN brands xb ON xb.id = x.brand_id
                       WHERE x.profile_id = p.id),
                     '{}'
-                  ) AS brand_ids
+                  ) AS brand_ids,
+                  COALESCE(
+                    (SELECT array_agg(xb.name ORDER BY xb.name)
+                       FROM tiktok_profile_brands x
+                       JOIN brands xb ON xb.id = x.brand_id
+                      WHERE x.profile_id = p.id),
+                    '{}'
+                  ) AS brand_names
              FROM tiktok_profiles p
              LEFT JOIN brands pb ON pb.id = p.brand_id
              JOIN users u ON u.id = p.user_id

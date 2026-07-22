@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { completeIfReady } from "@/lib/status";
+import { inhouseProfile } from "@/lib/inhouse";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -57,37 +58,6 @@ function normDuration(v: any): string | null {
   const ss = s.match(/(\d+)\s*s/i);
   if (!h && !mm && !ss) return null;
   return `${h ? Number(h[1]) : 0}h ${mm ? Number(mm[1]) : 0}m ${ss ? Number(ss[1]) : 0}s`;
-}
-
-/**
- * The marketer's Inhouse account, created on first use.
- *
- * It is a real affiliate row so its lives flow through every existing report,
- * but with an unusable password — it is a bucket, not a person who logs in.
- */
-async function inhouseProfile(marketerId: number) {
-  const email = `inhouse+${marketerId}@nlaffliatearmy.local`;
-
-  let u = await db.prepare("SELECT id FROM users WHERE email = ?")
-    .get<{ id: number }>(email);
-  if (!u) {
-    const created = await db.prepare(
-        `INSERT INTO users (name, email, phone, address, password_hash, role, marketer_id)
-         VALUES (?, ?, NULL, NULL, ?, 'affiliate', ?) RETURNING id`
-      ).run("Inhouse", email, "!", marketerId);
-    u = { id: Number(created.lastInsertRowid) };
-  }
-
-  let p = await db.prepare("SELECT id FROM tiktok_profiles WHERE user_id = ? ORDER BY id")
-    .get<{ id: number }>(u.id);
-  if (!p) {
-    const created = await db.prepare(
-        "INSERT INTO tiktok_profiles (user_id, label, url) VALUES (?, 'Inhouse', ?) RETURNING id"
-      ).run(u.id, "https://www.tiktok.com/");
-    p = { id: Number(created.lastInsertRowid) };
-  }
-
-  return { userId: u.id, profileId: p.id };
 }
 
 export async function POST(req: Request) {

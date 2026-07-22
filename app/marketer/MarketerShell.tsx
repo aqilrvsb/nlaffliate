@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Radio, LayoutDashboard, Users, Clock, CheckCircle2, LogOut,
@@ -8,9 +8,10 @@ import {
   Mail, Phone, MapPin, Link2, Menu, ChevronDown, List, Check, Loader2, Wallet,
   HelpCircle, Upload, ImagePlus, TrendingDown, Pencil, BarChart3,
   PackageSearch, FileSpreadsheet, ShoppingCart, Layers, Eye, MousePointerClick,
-  Send, Boxes, ClipboardList, Tag,
+  Send, Boxes, ClipboardList, Tag, CalendarPlus, Trash2, AlertCircle,
 } from "lucide-react";
 import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
+import Modal from "@/components/Modal";
 import ExampleHint from "@/components/ExampleHint";
 import CommissionEditor, { commissionLabel } from "@/components/CommissionEditor";
 import DurationInput from "@/components/DurationInput";
@@ -1683,42 +1684,192 @@ function OverallTab({ overall }: { overall: Overall[] }) {
 /* ── Unknown Affiliate ─────────────────────────────────── */
 
 function UnknownTab({ rows }: { rows: Unknown[] }) {
+  const router = useRouter();
+  const [convert, setConvert] = useState<Unknown | null>(null);
+
+  async function discard(r: Unknown) {
+    if (!confirm(`Buang baris ini? (${r.live_name || "tiada nama"})`)) return;
+    await fetch(`/api/marketer/unknown/${r.id}`, { method: "DELETE" });
+    router.refresh();
+  }
+
   if (rows.length === 0)
     return (
       <p className="card text-center text-sm text-muted-fg">
-        No unmatched analytics rows. When a bulk row can&apos;t be matched to a pending live, it appears here.
+        Tiada baris tertunggak — Unknown kosong. Baris analytics yang tidak
+        padan dengan mana-mana jadual akan muncul di sini.
       </p>
     );
+
   return (
-    <div className="glass overflow-x-auto rounded-2xl">
-      <table className="w-full min-w-[720px] text-sm">
-        <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
-          <tr>
-            <th className="px-4 py-3 font-semibold">Live name</th>
-            <th className="px-4 py-3 font-semibold">Date / Time</th>
-            <th className="px-4 py-3 font-semibold">Duration</th>
-            <th className="px-4 py-3 text-right font-semibold">Spend</th>
-            <th className="px-4 py-3 text-right font-semibold">Gross Revenue</th>
-            <th className="px-4 py-3 text-right font-semibold">ROI</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id} className="border-t border-line/60">
-              <td className="px-4 py-3 font-semibold text-ink">{r.live_name || "—"}</td>
-              <td className="px-4 py-3">
-                <div className="text-ink">{r.live_date ? fmtDate(r.live_date) : "—"}</div>
-                <div className="text-xs text-muted-fg">{r.live_time || ""}</div>
-              </td>
-              <td className="px-4 py-3">{r.duration || "—"}</td>
-              <td className="px-4 py-3 text-right">{r.ad_spend != null ? `RM${r.ad_spend}` : "—"}</td>
-              <td className="px-4 py-3 text-right">{r.gross_revenue != null ? `RM${r.gross_revenue}` : "—"}</td>
-              <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
+    <>
+      <p className="card mb-3 text-sm text-muted-fg">
+        Baris di sini belum ada jadual. Tekan <b>Create schedule</b> untuk
+        bukanya di bawah <b>Inhouse</b> supaya ia masuk ke Pending/Success —
+        atau buang jika ia bukan live anda. Sasaran: Unknown sentiasa kosong.
+      </p>
+
+      <div className="glass overflow-x-auto rounded-2xl">
+        <table className="w-full min-w-[860px] text-sm">
+          <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+            <tr>
+              <th className="px-4 py-3 font-semibold">Live name</th>
+              <th className="px-4 py-3 font-semibold">Date / Time</th>
+              <th className="px-4 py-3 font-semibold">Duration</th>
+              <th className="px-4 py-3 text-right font-semibold">Spend</th>
+              <th className="px-4 py-3 text-right font-semibold">Gross Revenue</th>
+              <th className="px-4 py-3 text-right font-semibold">ROI</th>
+              <th className="px-4 py-3 font-semibold">Action</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} className="border-t border-line/60">
+                <td className="px-4 py-3 font-semibold text-ink">{r.live_name || "—"}</td>
+                <td className="px-4 py-3">
+                  <div className="text-ink">{r.live_date ? fmtDate(r.live_date) : "—"}</div>
+                  <div className="text-xs text-muted-fg">{r.live_time || ""}</div>
+                </td>
+                <td className="px-4 py-3">{r.duration || "—"}</td>
+                <td className="px-4 py-3 text-right">{r.ad_spend != null ? `RM${r.ad_spend}` : "—"}</td>
+                <td className="px-4 py-3 text-right">{r.gross_revenue != null ? `RM${r.gross_revenue}` : "—"}</td>
+                <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-1.5">
+                    <button className="btn !py-1.5 text-xs" onClick={() => setConvert(r)}>
+                      <CalendarPlus className="h-3.5 w-3.5" aria-hidden="true" />
+                      Create schedule
+                    </button>
+                    <button onClick={() => discard(r)} aria-label="Buang baris"
+                      className="cursor-pointer rounded-lg p-1.5 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger">
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <ConvertUnknownModal row={convert} onClose={() => setConvert(null)}
+        onDone={() => { setConvert(null); router.refresh(); }} />
+    </>
+  );
+}
+
+/**
+ * Book an Unknown row as an Inhouse schedule.
+ *
+ * Everything is prefilled from the row, because the usual case is "yes, this
+ * really happened — file it". The fields stay editable so a misread time or
+ * figure can be corrected before it becomes a schedule.
+ */
+function ConvertUnknownModal({
+  row, onClose, onDone,
+}: { row: Unknown | null; onClose: () => void; onDone: () => void }) {
+  const [date, setDate] = useState("");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [dur, setDur] = useState("");
+  const [brand, setBrand] = useState("");
+  const [budget, setBudget] = useState("");
+  const [spend, setSpend] = useState("");
+  const [gross, setGross] = useState("");
+  const [roi, setRoi] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!row) return;
+    setDate(row.live_date || "");
+    setStart((row.live_time || "").slice(0, 5));
+    setEnd("");
+    setDur(row.duration || "");
+    setBrand("");
+    setBudget("");
+    setSpend(row.ad_spend != null ? String(row.ad_spend) : "");
+    setGross(row.gross_revenue != null ? String(row.gross_revenue) : "");
+    setRoi(row.roi != null ? String(row.roi) : "");
+    setError("");
+  }, [row]);
+
+  async function save() {
+    if (!row) return;
+    setBusy(true); setError("");
+    const res = await fetch(`/api/marketer/unknown/${row.id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        live_date: date, start_time: start, end_time: end || null,
+        duration_live: dur, brand_id: brand,
+        ads_budget: budget, ad_spend: spend, gross_revenue: gross, roi,
+      }),
+    });
+    const data = await res.json();
+    setBusy(false);
+    if (!res.ok) return setError(data.error || "Could not create.");
+    onDone();
+  }
+
+  const field = (label: string, node: React.ReactNode) => (
+    <div>
+      <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg">
+        {label}
+      </label>
+      {node}
     </div>
+  );
+
+  return (
+    <Modal open={!!row} onClose={onClose}
+      title="Create schedule (Inhouse)"
+      subtitle={row?.live_name || "Baris tanpa jadual"}>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {field("Date", <input type="date" className="input !py-1.5 text-sm"
+          value={date} onChange={(e) => setDate(e.target.value)} />)}
+        {field("Start", <input type="time" className="input !py-1.5 text-sm"
+          value={start} onChange={(e) => setStart(e.target.value)} />)}
+        {field("End (optional)", <input type="time" className="input !py-1.5 text-sm"
+          value={end} onChange={(e) => setEnd(e.target.value)} />)}
+
+        <div className="sm:col-span-3">
+          {field("Duration", <DurationInput idPrefix={`unk-${row?.id ?? 0}`}
+            value={dur} onChange={setDur} compact />)}
+        </div>
+
+        {field("Brand (optional)", <BrandSelect id={`unk-brand-${row?.id ?? 0}`}
+          value={brand} onChange={setBrand} className="!py-1.5 text-sm" />)}
+        {field("Budget (RM)", <input type="number" min="0" step="any" className="input !py-1.5 text-sm"
+          value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="0.00" />)}
+        {field("Spend (RM)", <input type="number" min="0" step="any" className="input !py-1.5 text-sm"
+          value={spend} onChange={(e) => setSpend(e.target.value)} />)}
+        {field("Gross Revenue (RM)", <input type="number" min="0" step="any" className="input !py-1.5 text-sm"
+          value={gross} onChange={(e) => setGross(e.target.value)} />)}
+        {field("ROI", <input type="number" step="any" className="input !py-1.5 text-sm"
+          value={roi} onChange={(e) => setRoi(e.target.value)} />)}
+      </div>
+
+      <p className="mt-3 text-[11px] text-muted-fg">
+        Ia akan dibuka di bawah <b>Inhouse</b>. Jika Budget + Spend + Gross +
+        ROI lengkap, ia terus masuk <b>Success</b>.
+      </p>
+
+      {error && (
+        <p className="mt-2 flex items-center gap-1.5 text-sm text-danger">
+          <AlertCircle className="h-4 w-4" aria-hidden="true" />{error}
+        </p>
+      )}
+
+      <div className="mt-4 flex justify-end gap-2">
+        <button className="btn-ghost" onClick={onClose}>Cancel</button>
+        <button className="btn" onClick={save} disabled={busy}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                : <CalendarPlus className="h-4 w-4" aria-hidden="true" />}
+          Create schedule
+        </button>
+      </div>
+    </Modal>
   );
 }
 

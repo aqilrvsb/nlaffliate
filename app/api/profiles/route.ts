@@ -35,7 +35,8 @@ export async function GET(req: Request) {
   if (!id) return NextResponse.json({ error: "Not allowed." }, { status: 403 });
 
   const rows = await db
-    .prepare("SELECT id, label, url, created_at FROM tiktok_profiles WHERE user_id = ? ORDER BY id")
+    .prepare(`SELECT id, label, url, commission_type, commission_value, created_at
+       FROM tiktok_profiles WHERE user_id = ? ORDER BY id`)
     .all(id);
   return NextResponse.json({ profiles: rows });
 }

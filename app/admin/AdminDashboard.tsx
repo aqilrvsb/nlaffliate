@@ -8,6 +8,7 @@ import {
   LayoutDashboard, Package, Boxes, Link2, Trash2, Plus, AlertCircle,
 } from "lucide-react";
 import Modal from "@/components/Modal";
+import CommissionEditor, { commissionLabel } from "@/components/CommissionEditor";
 import TabBar from "@/components/TabBar";
 import ProductsTab from "./ProductsTab";
 import SamplesTab from "./SamplesTab";
@@ -283,20 +284,31 @@ function TikTokLinksModal({
       <div className="space-y-2">
         {links.map((p) => (
           <div key={p.id}
-            className="flex items-center justify-between gap-3 rounded-xl border border-line bg-white/60 px-3 py-2.5">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-ink">{p.label}</p>
-              <a href={p.url} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-1 truncate text-xs text-accent hover:underline">
-                <span className="truncate">{p.url}</span>
-                <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
-              </a>
+            className="rounded-xl border border-line bg-white/60 px-3 py-2.5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 text-sm font-semibold text-ink">
+                  {p.label}
+                  {commissionLabel(p) && (
+                    <span className="chip bg-emerald-100 text-emerald-700">
+                      {commissionLabel(p)}
+                    </span>
+                  )}
+                </p>
+                <a href={p.url} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1 truncate text-xs text-accent hover:underline">
+                  <span className="truncate">{p.url}</span>
+                  <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+                </a>
+              </div>
+              <button onClick={() => remove(p.id, p.label)}
+                className="shrink-0 cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger"
+                aria-label={`Delete ${p.label}`}>
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </button>
             </div>
-            <button onClick={() => remove(p.id, p.label)}
-              className="shrink-0 cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger"
-              aria-label={`Delete ${p.label}`}>
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-            </button>
+            {/* Admin sets commission on the same links they manage here. */}
+            <CommissionEditor profileId={p.id} initial={p} onSaved={load} />
           </div>
         ))}
         {links.length === 0 && (

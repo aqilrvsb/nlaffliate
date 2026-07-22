@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
 import ExampleHint from "@/components/ExampleHint";
+import CommissionEditor, { commissionLabel } from "@/components/CommissionEditor";
 import DurationInput from "@/components/DurationInput";
 import { compressScreenshot } from "@/lib/image";
 import PillarCreate from "./PillarCreate";
@@ -25,7 +26,10 @@ import { resolveRange } from "@/lib/daterange";
 import { useSearchParams } from "next/navigation";
 import type { SessionUser } from "@/lib/session";
 
-type TikTokLink = { id: number; label: string; url: string };
+type TikTokLink = {
+  id: number; label: string; url: string;
+  commission_type: "percent" | "hour" | null; commission_value: number | null;
+};
 type Affiliate = {
   id: number; name: string; email: string;
   phone: string | null; address: string | null; links: TikTokLink[];
@@ -453,15 +457,25 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
               <ul className="space-y-1.5">
                 {a.links.map((l) => (
                   <li key={l.id}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-line bg-white/60 px-2.5 py-1.5">
-                    <span className="min-w-0">
-                      <span className="block text-xs font-semibold text-ink">{l.label}</span>
-                      <a href={l.url} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center gap-1 truncate text-[11px] text-accent hover:underline">
-                        <span className="truncate">{l.url}</span>
-                        <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
-                      </a>
-                    </span>
+                    className="rounded-lg border border-line bg-white/60 px-2.5 py-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="min-w-0">
+                        <span className="block text-xs font-semibold text-ink">{l.label}</span>
+                        <a href={l.url} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1 truncate text-[11px] text-accent hover:underline">
+                          <span className="truncate">{l.url}</span>
+                          <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+                        </a>
+                      </span>
+                      {commissionLabel(l) && (
+                        <span className="chip shrink-0 bg-emerald-100 text-emerald-700">
+                          {commissionLabel(l)}
+                        </span>
+                      )}
+                    </div>
+                    {/* Commission is per link — one creator can run one account
+                        on a percentage and another on an hourly rate. */}
+                    <CommissionEditor profileId={l.id} initial={l} />
                   </li>
                 ))}
               </ul>

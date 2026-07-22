@@ -24,7 +24,8 @@ export default async function MarketerPage() {
         ).all(user.id) as Promise<any[]>,
 
       db.prepare(
-          `SELECT p.id, p.user_id, p.label, p.url
+          `SELECT p.id, p.user_id, p.label, p.url,
+                  p.commission_type, p.commission_value
              FROM tiktok_profiles p
              JOIN users u ON u.id = p.user_id
             WHERE u.marketer_id = ?

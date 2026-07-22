@@ -19,6 +19,78 @@ async function canEdit(profileId: string) {
   return { adminOverride: false, userId: user.id };
 }
 
+/**
+ * PATCH — set the commission on one link.
+ *
+ * Commission is a commercial term, so it is set by the admin or by the
+ * marketer who owns that affiliate — never by the affiliate themselves,
+ * who would otherwise be able to set their own rate.
+ *
+ * Body: { commission_type: 'percent' | 'hour' | null, commission_value: number|null }
+ * Percent -> a share of sales. Hour -> RM per hour.
+ */
+export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  const user = await getSession();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const owner = await db
+    .prepare(
+      `SELECT p.id, u.marketer_id
+         FROM tiktok_profiles p JOIN users u ON u.id = p.user_id
+        WHERE p.id = ?`
+    )
+    .get<{ id: number; marketer_id: number | null }>(params.id);
+  if (!owner) return NextResponse.json({ error: "Not found." }, { status: 404 });
+
+  const allowed =
+    user.role === "admin" ||
+    (user.role === "marketer" && owner.marketer_id === user.id);
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Only the admin or this affiliate's marketer can set commission." },
+      { status: 403 }
+    );
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const rawType = String(body.commission_type ?? "").trim();
+
+  // Empty type clears the commission entirely.
+  if (!rawType) {
+    await db
+      .prepare("UPDATE tiktok_profiles SET commission_type = NULL, commission_value = NULL WHERE id = ?")
+      .run(params.id);
+    return NextResponse.json({ ok: true, commission_type: null, commission_value: null });
+  }
+
+  if (rawType !== "percent" && rawType !== "hour") {
+    return NextResponse.json(
+      { error: "Commission type must be 'percent' or 'hour'." },
+      { status: 400 }
+    );
+  }
+
+  const n = Number(body.commission_value);
+  if (!Number.isFinite(n) || n < 0) {
+    return NextResponse.json(
+      { error: "Enter a commission amount." },
+      { status: 400 }
+    );
+  }
+  if (rawType === "percent" && n > 100) {
+    return NextResponse.json(
+      { error: "Percentage cannot exceed 100." },
+      { status: 400 }
+    );
+  }
+
+  await db
+    .prepare("UPDATE tiktok_profiles SET commission_type = ?, commission_value = ? WHERE id = ?")
+    .run(rawType, n, params.id);
+
+  return NextResponse.json({ ok: true, commission_type: rawType, commission_value: n });
+}
+
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   const scope = await canEdit(params.id);
   if (!scope) return NextResponse.json({ error: "Not found." }, { status: 404 });

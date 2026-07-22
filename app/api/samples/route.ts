@@ -23,15 +23,21 @@ export async function GET() {
 
   const rows = user.role === "admin"
     ? await db.prepare(
-        `SELECT s.*, u.name AS affiliate_name, u.email AS affiliate_email
+        `SELECT s.*, u.name AS affiliate_name, u.email AS affiliate_email,
+                b.name AS brand_name, m.name AS marketer_name
            FROM sample_requests s
            JOIN users u ON u.id = s.user_id
+           LEFT JOIN users m ON m.id = u.marketer_id
+           LEFT JOIN brands b ON b.id = s.brand_id
           ORDER BY s.created_at DESC`
       ).all()
     : await db.prepare(
-        `SELECT s.*, u.name AS affiliate_name, u.email AS affiliate_email
+        `SELECT s.*, u.name AS affiliate_name, u.email AS affiliate_email,
+                b.name AS brand_name, m.name AS marketer_name
            FROM sample_requests s
            JOIN users u ON u.id = s.user_id
+           LEFT JOIN users m ON m.id = u.marketer_id
+           LEFT JOIN brands b ON b.id = s.brand_id
           WHERE s.user_id = ?
           ORDER BY s.created_at DESC`
       ).all(user.id);
@@ -89,10 +95,28 @@ export async function POST(req: Request) {
     );
   }
 
+  // The brand must be one of this affiliate's own marketer's — admin packs
+  // against it, so a sample cannot be requested for someone else's brand.
+  const brandRaw = String(body.brand_id ?? "").trim();
+  if (!brandRaw) {
+    return NextResponse.json({ error: "Pilih brand." }, { status: 400 });
+  }
+  const brand = await db.prepare(
+      `SELECT b.id FROM brands b
+         JOIN users a ON a.marketer_id = b.marketer_id
+        WHERE b.id = ? AND a.id = ?`
+    ).get(Number(brandRaw), user.id);
+  if (!brand) {
+    return NextResponse.json(
+      { error: "That brand is not available to you." },
+      { status: 403 }
+    );
+  }
+
   const info = await db.prepare(
-      `INSERT INTO sample_requests (user_id, full_name, phone, address, note, status)
-       VALUES (?, ?, ?, ?, ?, 'pending') RETURNING id`
-    ).run(user.id, full_name, phone, address, note || null);
+      `INSERT INTO sample_requests (user_id, brand_id, full_name, phone, address, note, status)
+       VALUES (?, ?, ?, ?, ?, ?, 'pending') RETURNING id`
+    ).run(user.id, Number(brandRaw), full_name, phone, address, note || null);
 
   return NextResponse.json({ ok: true, id: Number(info.lastInsertRowid) });
 }

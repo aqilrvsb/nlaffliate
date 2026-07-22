@@ -15,6 +15,9 @@ export type SampleRequest = {
   phone: string | null;
   address: string | null;
   note: string | null;
+  brand_id: number | null;
+  brand_name: string | null;
+  marketer_name: string | null;
   status: "pending" | "processing" | "shipped" | "received";
   tracking_number: string | null;
   courier: string | null;
@@ -99,8 +102,11 @@ export default function SampleTab() {
             <div key={r.id} className="card space-y-3">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <SampleStatusBadge status={r.status} />
+                    {r.brand_name && (
+                      <span className="chip bg-primary/10 text-primary">{r.brand_name}</span>
+                    )}
                     <span className="text-xs text-muted-fg">
                       {fmtDate(String(r.created_at).slice(0, 10))}
                     </span>
@@ -188,6 +194,8 @@ function RequestModal({
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [note, setNote] = useState("");
+  const [brand, setBrand] = useState("");
+  const [brands, setBrands] = useState<{ id: number; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
@@ -196,16 +204,18 @@ function RequestModal({
   // field stays editable in case this parcel goes somewhere else.
   useEffect(() => {
     if (!open) return;
-    setError(""); setReady(false);
-    fetch("/api/profile")
-      .then((r) => r.json())
-      .then((d) => {
-        setName(d.profile?.name || "");
-        setPhone(d.profile?.phone || "");
-        setAddress(d.profile?.address || "");
-        setNote("");
-        setReady(true);
-      });
+    setError(""); setReady(false); setBrand("");
+    Promise.all([
+      fetch("/api/profile").then((r) => r.json()),
+      fetch("/api/brands").then((r) => r.json()),
+    ]).then(([me, br]) => {
+      setName(me.profile?.name || "");
+      setPhone(me.profile?.phone || "");
+      setAddress(me.profile?.address || "");
+      setNote("");
+      setBrands(br.brands || []);
+      setReady(true);
+    });
   }, [open]);
 
   async function submit(e: React.FormEvent) {
@@ -214,7 +224,7 @@ function RequestModal({
     const res = await fetch("/api/samples", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ full_name: name, phone, address, note }),
+      body: JSON.stringify({ full_name: name, phone, address, note, brand_id: brand }),
     });
     const data = await res.json();
     setSaving(false);
@@ -230,6 +240,22 @@ function RequestModal({
         </p>
       ) : (
         <form onSubmit={submit} className="space-y-4">
+          <div>
+            <label className="label" htmlFor="s-brand">Brand</label>
+            <select id="s-brand" className="input cursor-pointer" value={brand}
+              onChange={(e) => setBrand(e.target.value)} required>
+              <option value="">— Pilih brand —</option>
+              {brands.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+            {brands.length === 0 && (
+              <p className="mt-1 text-xs text-muted-fg">
+                Marketer anda belum tambah brand — hubungi mereka dahulu.
+              </p>
+            )}
+          </div>
+
           <div>
             <label className="label" htmlFor="s-name">Full Name</label>
             <div className="relative">

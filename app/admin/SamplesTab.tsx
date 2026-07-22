@@ -45,7 +45,12 @@ export default function SamplesTab() {
 
   const params = useSearchParams();
   const sub = params.get("sample") || "all";
-  const shown = sub === "all" ? requests : requests.filter((r) => r.status === sub);
+  const [brand, setBrand] = useState("");
+
+  const byStatus = sub === "all" ? requests : requests.filter((r) => r.status === sub);
+  const shown = brand ? byStatus.filter((r) => r.brand_name === brand) : byStatus;
+
+  const brandNames = [...new Set(requests.map((r) => r.brand_name).filter(Boolean))] as string[];
 
   if (loading)
     return (
@@ -71,6 +76,22 @@ export default function SamplesTab() {
         }))}
       />
 
+      {brandNames.length > 0 && (
+        <div className="card mt-4 flex flex-wrap items-end gap-3">
+          <div className="min-w-[220px]">
+            <label className="label" htmlFor="smp-brand">Brand</label>
+            <select id="smp-brand" className="input cursor-pointer !py-2 text-sm"
+              value={brand} onChange={(e) => setBrand(e.target.value)}>
+              <option value="">All Brands</option>
+              {brandNames.map((b) => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </div>
+          <p className="pb-2 text-xs text-muted-fg">
+            {brand ? "Menunjukkan satu brand sahaja." : "Menunjukkan semua brand."}
+          </p>
+        </div>
+      )}
+
       <div className="mt-4 space-y-3">
         {shown.length === 0 && (
           <p className="card text-center text-sm text-muted-fg">
@@ -84,6 +105,12 @@ export default function SamplesTab() {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <SampleStatusBadge status={r.status} />
+                  {r.brand_name && (
+                    <span className="chip bg-primary/10 text-primary">{r.brand_name}</span>
+                  )}
+                  {r.marketer_name && (
+                    <span className="chip bg-accent/10 text-accent">{r.marketer_name}</span>
+                  )}
                   <span className="text-xs text-muted-fg">
                     {fmtDate(String(r.created_at).slice(0, 10))}
                   </span>

@@ -81,7 +81,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       `INSERT INTO bookings
          (user_id, profile_id, brand_id, live_date, start_time, end_time, note,
           status, source, affiliate_can_edit, ads_budget, ad_spend, gross_revenue, roi)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 'inhouse', 0, ?, ?, ?, ?) RETURNING id`
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 'inhouse', 1, ?, ?, ?, ?) RETURNING id`
     )
     .run(
       inhouse.userId, inhouse.profileId, brandId, liveDate, startTime,

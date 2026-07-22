@@ -132,7 +132,7 @@ export async function POST(req: Request) {
       const info = await db.prepare(
           `INSERT INTO bookings
              (user_id, profile_id, live_date, start_time, end_time, status, source, affiliate_can_edit)
-           VALUES (?, ?, ?, ?, ?, 'pending', 'inhouse', 0) RETURNING id`
+           VALUES (?, ?, ?, ?, ?, 'pending', 'inhouse', 1) RETURNING id`
         ).run(inhouse.userId, inhouse.profileId, start.date, start.time, end ? end.time : null);
       bookingId = Number(info.lastInsertRowid);
       ownerId = inhouse.userId;

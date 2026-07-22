@@ -105,6 +105,20 @@ export default function AffiliateDashboard({
       </div>
     );
 
+  /**
+   * A live is finished only when every figure is actually in. Keying this off
+   * "a result row exists" moved lives to Done that the AI had only half read —
+   * the affiliate saw Total Sales, Viewers and Items Sold as dashes with no
+   * way to fix them, because Done is read-only. Anything incomplete stays in
+   * Pending, where it can still be corrected or the screenshot replaced.
+   */
+  const isDone = (b: Booking) =>
+    b.result_id != null &&
+    b.gmv != null &&
+    b.viewers != null &&
+    b.items_sold != null &&
+    !!b.duration_live;
+
   const totals = filtered.reduce(
     (a, b) => ({
       gmv: a.gmv + (b.gmv || 0),
@@ -113,14 +127,14 @@ export default function AffiliateDashboard({
       // Counted the same way the tabs split: a live is done once its
       // results are in. Keying these off status instead made the boxes
       // disagree with the lists directly beneath them.
-      done: a.done + (b.result_id != null ? 1 : 0),
-      pending: a.pending + (b.result_id == null ? 1 : 0),
+      done: a.done + (isDone(b) ? 1 : 0),
+      pending: a.pending + (isDone(b) ? 0 : 1),
     }),
     { gmv: 0, viewers: 0, items: 0, done: 0, pending: 0 }
   );
   // Only completed lives contribute airtime.
   const totalDuration = sumDurations(
-    filtered.filter((b) => b.result_id != null).map((b) => b.duration_live)
+    filtered.filter(isDone).map((b) => b.duration_live)
   );
 
   // Paginate the list (10 per page). KPIs stay on the full filtered set.
@@ -131,8 +145,8 @@ export default function AffiliateDashboard({
   const tab = params.get("tab") || "schedule";
   // A live is "done" once its results are in — that is the moment the
   // affiliate's work on it ends, and what they upload the screenshot for.
-  const scheduleRows = filtered.filter((b) => b.result_id == null);
-  const doneRows = filtered.filter((b) => b.result_id != null);
+  const scheduleRows = filtered.filter((b) => !isDone(b));
+  const doneRows = filtered.filter(isDone);
   const shownRows = tab === "done-schedule" ? doneRows : scheduleRows;
   const pageItems = paginate(shownRows, page);
   const pendingItems = posts.filter((p) => p.status === "pending");
@@ -498,6 +512,17 @@ function BookingCard({
     reload();
   }
   const hasResult = b.result_id != null;
+  // Which figures the AI could not read — the live stays Pending until none.
+  const missingFields = hasResult
+    ? ([
+        [b.gmv, "Total Sales"],
+        [b.viewers, "Viewers"],
+        [b.items_sold, "Items Sold"],
+        [b.duration_live, "Duration"],
+      ] as const)
+        .filter(([v]) => v == null || v === "")
+        .map(([, name]) => name)
+    : [];
 
   async function del() {
     if (!(await confirmDialog({ title: "Delete this scheduled live?", danger: true }))) return;
@@ -648,7 +673,21 @@ function BookingCard({
 
       <div className="mt-4 border-t border-line pt-4">
         {hasResult ? (
-          <ResultView b={b} reload={reload} readOnly={readOnly} />
+          <>
+            {/* A half-read screenshot leaves the live in Pending. Say which
+                figures are missing, or it just looks stuck. */}
+            {!readOnly && missingFields.length > 0 && (
+              <p className="mb-3 flex items-start gap-1.5 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>
+                  Belum lengkap — isi <b>{missingFields.join(", ")}</b> (klik
+                  Correct) atau ganti screenshot. Bila semua terisi, live ini
+                  masuk Done Schedule.
+                </span>
+              </p>
+            )}
+            <ResultView b={b} reload={reload} readOnly={readOnly} />
+          </>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
             <label className={`btn-ghost ${uploading ? "pointer-events-none opacity-60" : ""}`}>
@@ -772,6 +811,7 @@ function ResultView({
           </div>
         )}
 
+        {!readOnly && (
         <label className="btn-ghost mt-3 !py-2 text-xs">
           <Camera className="h-3.5 w-3.5" aria-hidden="true" />Replace screenshot
           <input type="file" accept="image/*" className="sr-only"
@@ -788,6 +828,7 @@ function ResultView({
               reload();
             }} />
         </label>
+        )}
       </div>
     </div>
   );

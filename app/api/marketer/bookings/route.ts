@@ -70,13 +70,14 @@ export async function POST(req: Request) {
   if (budget != null && (!Number.isFinite(budget) || budget < 0))
     return NextResponse.json({ error: "Budget must be a positive number." }, { status: 400 });
 
-  // affiliate_can_edit = 0: the marketer owns a slot they booked, matching
-  // what setting a budget already does.
+  // affiliate_can_edit = 1: a slot starts open. The marketer plans it, but the
+  // affiliate is the one who has to run it, so they can still move it — the
+  // marketer can lock it deliberately if the timing is fixed.
   const info = await db.prepare(
       `INSERT INTO bookings
          (user_id, profile_id, brand_id, live_date, start_time, end_time, note,
           status, source, affiliate_can_edit, ads_budget)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, 0, ?) RETURNING id`
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, 1, ?) RETURNING id`
     ).run(
       profile.user_id, profile.id, Number(brandRaw), liveDate, startTime,
       endTime || null, note || null,

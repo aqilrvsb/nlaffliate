@@ -47,7 +47,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     (user.role === "marketer" && owner.marketer_id === user.id);
   if (!allowed) {
     return NextResponse.json(
-      { error: "Only the admin or this affiliate's marketer can set commission." },
+      {
+        error:
+          "Only the admin or this affiliate's marketer can set the brand or commission on a link.",
+      },
       { status: 403 }
     );
   }

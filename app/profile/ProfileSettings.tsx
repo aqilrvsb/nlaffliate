@@ -8,13 +8,14 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { confirmDialog } from "@/lib/swal";
+import { profileName } from "@/lib/tiktok";
 
 type Profile = {
   id: number; label: string; url: string;
   brand_name?: string | null;
   wa_group_url?: string | null;
 };
-const MAX_PROFILES = 4;
+const MAX_PROFILES = 10;
 
 export default function ProfileSettings({ role }: { role: string }) {
   const router = useRouter();
@@ -319,7 +320,7 @@ function ProfileRow({
     const res = await fetch(`/api/profiles/${p.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ label, url }),
+      body: JSON.stringify({ url }),
     });
     const data = await res.json();
     setBusy(false);
@@ -331,25 +332,21 @@ function ProfileRow({
   if (edit) {
     return (
       <div className="rounded-xl border border-primary/40 bg-white/70 p-3">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_2fr]">
-          <input className="input !py-2 text-sm" value={label} aria-label="Label"
-            onChange={(e) => setLabel(e.target.value)} placeholder="Label (e.g. Main)" />
-          <input className="input !py-2 text-sm" type="url" value={url} aria-label="TikTok URL"
-            onChange={(e) => setUrl(e.target.value)} placeholder="https://www.tiktok.com/@username" />
-        </div>
+        <input className="input !py-2 text-sm" type="url" value={url} aria-label="TikTok URL"
+          onChange={(e) => setUrl(e.target.value)} placeholder="https://www.tiktok.com/@username" />
         {error && (
           <p className="mt-2 flex items-center gap-1.5 text-xs text-danger">
             <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />{error}
           </p>
         )}
         <div className="mt-2 flex items-center gap-2">
-          <button className="btn !py-1.5 text-xs" onClick={save} disabled={busy || !label || !url}>
+          <button className="btn !py-1.5 text-xs" onClick={save} disabled={busy || !url}>
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
                   : <Check className="h-3.5 w-3.5" aria-hidden="true" />}
             Save
           </button>
           <button className="btn-ghost !py-1.5 text-xs"
-            onClick={() => { setEdit(false); setLabel(p.label); setUrl(p.url); setError(""); }}>
+            onClick={() => { setEdit(false); setUrl(p.url); setError(""); }}>
             Cancel
           </button>
         </div>
@@ -361,10 +358,7 @@ function ProfileRow({
     <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-white/60 px-3 py-2.5">
       <div className="min-w-0">
         <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-          {p.label}
-          {p.brand_name && (
-            <span className="chip bg-primary/10 text-primary">{p.brand_name}</span>
-          )}
+          {profileName(p.brand_name, p.url)}
         </p>
         <a href={p.url} target="_blank" rel="noopener noreferrer"
           className="flex items-center gap-1 truncate text-xs text-accent hover:underline">
@@ -384,12 +378,12 @@ function ProfileRow({
       <div className="flex shrink-0 items-center gap-1">
         <button onClick={() => setEdit(true)}
           className="cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-accent/10 hover:text-accent"
-          aria-label={`Edit ${p.label}`}>
+          aria-label={`Edit ${profileName(p.brand_name, p.url)}`}>
           <Pencil className="h-4 w-4" aria-hidden="true" />
         </button>
         <button onClick={onRemove}
           className="cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger"
-          aria-label={`Delete ${p.label}`}>
+          aria-label={`Delete ${profileName(p.brand_name, p.url)}`}>
           <Trash2 className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
@@ -421,7 +415,7 @@ function TikTokProfilesCard() {
     const res = await fetch("/api/profiles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ label, url }),
+      body: JSON.stringify({ url }),
     });
     const data = await res.json();
     if (!res.ok) return setError(data.error);
@@ -462,9 +456,7 @@ function TikTokProfilesCard() {
           </div>
 
           {!atMax ? (
-            <form onSubmit={add} className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_2fr_auto]">
-              <input className="input" placeholder="Label (e.g. Main)" value={label}
-                onChange={(e) => setLabel(e.target.value)} required aria-label="Profile label" />
+            <form onSubmit={add} className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
               <input className="input" type="url" placeholder="https://www.tiktok.com/@username"
                 value={url} onChange={(e) => setUrl(e.target.value)} required aria-label="TikTok URL" />
               <button className="btn"><Plus className="h-4 w-4" aria-hidden="true" />Add</button>

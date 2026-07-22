@@ -25,8 +25,10 @@ export default async function MarketerPage() {
 
       db.prepare(
           `SELECT p.id, p.user_id, p.label, p.url,
-                  p.commission_type, p.commission_value, p.brand_id
+                  p.commission_type, p.commission_value, p.brand_id,
+                  pb.name AS brand_name
              FROM tiktok_profiles p
+             LEFT JOIN brands pb ON pb.id = p.brand_id
              JOIN users u ON u.id = p.user_id
             WHERE u.marketer_id = ?
             ORDER BY p.id`
@@ -36,6 +38,7 @@ export default async function MarketerPage() {
           `SELECT b.id AS booking_id, b.user_id AS affiliate_id,
                   u.name AS affiliate, u.email AS affiliate_email,
                   b.profile_id, p.label AS profile_label, p.url AS profile_url,
+                  pb.name AS profile_brand,
                   b.live_date, b.start_time, b.end_time, b.note, b.status, b.post_url,
                   b.ads_budget, b.affiliate_can_edit,
                   b.ad_spend, b.gross_revenue, b.roi,
@@ -44,6 +47,7 @@ export default async function MarketerPage() {
              FROM bookings b
              JOIN users u ON u.id = b.user_id
              JOIN tiktok_profiles p ON p.id = b.profile_id
+             LEFT JOIN brands pb ON pb.id = p.brand_id
              LEFT JOIN brands br ON br.id = b.brand_id
              LEFT JOIN live_results r ON r.booking_id = b.id
             WHERE u.marketer_id = ?

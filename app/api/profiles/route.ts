@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getSession, type SessionUser } from "@/lib/session";
+import { handleFromUrl } from "@/lib/tiktok";
 
-const MAX_PROFILES = 4;
+const MAX_PROFILES = 10;
 
 /**
  * Which account's TikTok links are being read/written.
@@ -52,10 +53,14 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { label, url } = body;
-  if (!label || !url) {
-    return NextResponse.json({ error: "Label and TikTok URL are required." }, { status: 400 });
+  const url = String(body.url ?? "").trim();
+  if (!url) {
+    return NextResponse.json({ error: "TikTok URL is required." }, { status: 400 });
   }
+  // A link is identified by its brand and its handle, so the label is no
+  // longer asked for — it is derived to satisfy the column and to give the
+  // link a readable name before a brand is assigned.
+  const label = String(body.label ?? "").trim() || handleFromUrl(url);
 
   const id = await targetUserId(user, body.user_id);
   if (!id) return NextResponse.json({ error: "Not allowed." }, { status: 403 });

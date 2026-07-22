@@ -61,6 +61,7 @@ export default async function AdminPage({
       `SELECT b.id AS booking_id, b.user_id AS affiliate_id,
               u.name AS affiliate, m.name AS marketer,
               b.profile_id, p.label AS profile_label, p.url AS profile_url,
+              pb.name AS profile_brand,
               b.live_date, b.start_time, b.end_time, b.status,
               b.ads_budget, b.ad_spend, b.gross_revenue, b.roi,
               r.gmv, r.viewers, r.items_sold, r.duration_live, r.screenshot_path
@@ -68,6 +69,7 @@ export default async function AdminPage({
        JOIN users u ON u.id = b.user_id
        LEFT JOIN users m ON m.id = u.marketer_id
        JOIN tiktok_profiles p ON p.id = b.profile_id
+       LEFT JOIN brands pb ON pb.id = p.brand_id
        LEFT JOIN live_results r ON r.booking_id = b.id
        WHERE 1=1${dateWhere}
        ORDER BY b.live_date DESC, b.start_time DESC`
@@ -77,8 +79,10 @@ export default async function AdminPage({
   // Every affiliate's links, so the reporting tab can break commission down
   // per link exactly as the marketer console does.
   const links = plain(await db.prepare(
-      `SELECT p.id, p.user_id, p.label, p.url, p.commission_type, p.commission_value
+      `SELECT p.id, p.user_id, p.label, p.url, p.commission_type, p.commission_value,
+              pb.name AS brand_name
          FROM tiktok_profiles p
+         LEFT JOIN brands pb ON pb.id = p.brand_id
          JOIN users u ON u.id = p.user_id
         WHERE u.role = 'affiliate'
         ORDER BY p.id`

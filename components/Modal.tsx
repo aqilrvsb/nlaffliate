@@ -57,7 +57,9 @@ export default function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="glass my-auto w-full max-w-2xl rounded-t-2xl p-5 outline-none sm:rounded-2xl"
+        /* Solid white, not glass: a form you are filling in needs its own
+           surface — the page bleeding through made fields hard to read. */
+        className="my-auto w-full max-w-2xl rounded-t-2xl border border-line bg-white p-5 shadow-lift outline-none sm:rounded-2xl"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>

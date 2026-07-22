@@ -8,11 +8,13 @@ export async function GET() {
 
   const rows = await db.prepare(
       `SELECT b.*, p.label AS profile_label, p.url AS profile_url,
+              pb.name AS profile_brand,
               br.name AS brand_name,
               r.id AS result_id, r.live_title, r.gmv, r.viewers, r.items_sold,
               r.duration_live, r.screenshot_path
        FROM bookings b
        JOIN tiktok_profiles p ON p.id = b.profile_id
+       LEFT JOIN brands pb ON pb.id = p.brand_id
        LEFT JOIN brands br ON br.id = b.brand_id
        LEFT JOIN live_results r ON r.booking_id = b.id
        WHERE b.user_id = ?

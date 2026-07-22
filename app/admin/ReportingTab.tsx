@@ -6,6 +6,7 @@ import DateRangeFilter from "@/components/DateRangeFilter";
 import {
   sumDurations, scheduledHours, commissionFor,
 } from "@/lib/format";
+import { profileName } from "@/lib/tiktok";
 
 export type AdminLive = {
   booking_id: number; affiliate_id: number; affiliate: string;
@@ -20,6 +21,7 @@ export type AdminLive = {
 
 export type AdminLink = {
   id: number; user_id: number; label: string; url: string;
+  brand_name?: string | null;
   commission_type: "percent" | "hour" | null; commission_value: number | null;
 };
 
@@ -87,7 +89,9 @@ export default function AdminReportingTab({
       return {
         pid, agg, link, hours,
         commission: link ? commissionFor(link, agg.gmv, hours) : 0,
-        label: link?.label ?? ls[0]?.profile_label ?? "—",
+        label: link
+          ? profileName(link.brand_name, link.url)
+          : ls[0]?.profile_label ?? "—",
       };
     });
   }

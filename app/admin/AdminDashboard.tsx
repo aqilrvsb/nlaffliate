@@ -21,6 +21,7 @@ import { getPage, paginate } from "@/lib/pagination";
 import { useSearchParams } from "next/navigation";
 import { fmtDate, fmtTimeRange, sumDurations } from "@/lib/format";
 import { confirmDialog, alertDialog } from "@/lib/swal";
+import { profileName } from "@/lib/tiktok";
 
 type Marketer = { id: number; name: string; email: string };
 type Affiliate = {
@@ -30,7 +31,7 @@ type Affiliate = {
 };
 type Row = {
   booking_id: number; affiliate: string; marketer: string | null;
-  profile_label: string; profile_url: string;
+  profile_label: string; profile_url: string; profile_brand?: string | null;
   live_date: string; start_time: string; end_time: string | null; status: string;
   gmv: number | null; viewers: number | null; items_sold: number | null;
   duration_live: string | null; screenshot_path: string | null;
@@ -389,7 +390,7 @@ function TikTokLinksModal({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="flex items-center gap-2 text-sm font-semibold text-ink">
-                  {p.label}
+                  {profileName(p.brand_name, p.url)}
                   {commissionLabel(p) && (
                     <span className="chip bg-emerald-100 text-emerald-700">
                       {commissionLabel(p)}
@@ -402,9 +403,9 @@ function TikTokLinksModal({
                   <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
                 </a>
               </div>
-              <button onClick={() => remove(p.id, p.label)}
+              <button onClick={() => remove(p.id, profileName(p.brand_name, p.url))}
                 className="shrink-0 cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger"
-                aria-label={`Delete ${p.label}`}>
+                aria-label={`Delete ${profileName(p.brand_name, p.url)}`}>
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>

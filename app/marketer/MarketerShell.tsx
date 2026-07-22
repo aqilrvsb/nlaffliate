@@ -34,9 +34,11 @@ import { useNavigate } from "@/lib/useNavigate";
 import { useSearchParams } from "next/navigation";
 import type { SessionUser } from "@/lib/session";
 import { confirmDialog } from "@/lib/swal";
+import { profileName } from "@/lib/tiktok";
 
 type TikTokLink = {
   brand_id?: number | null;
+  brand_name?: string | null;
   id: number; label: string; url: string;
   commission_type: "percent" | "hour" | null; commission_value: number | null;
 };
@@ -47,6 +49,7 @@ type Affiliate = {
 type Live = {
   booking_id: number; affiliate_id: number; affiliate: string; affiliate_email: string;
   profile_id: number; profile_label: string; profile_url: string;
+  profile_brand: string | null;
   live_date: string; start_time: string; end_time: string | null;
   note: string | null; status: string; post_url: string | null;
   ads_budget: number | null; affiliate_can_edit: number;
@@ -512,7 +515,7 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
                     className="rounded-lg border border-line bg-white/60 px-2.5 py-1.5">
                     <div className="flex items-start justify-between gap-2">
                       <span className="min-w-0">
-                        <span className="block text-xs font-semibold text-ink">{l.label}</span>
+                        <span className="block text-xs font-semibold text-ink">{profileName(l.brand_name, l.url)}</span>
                         <a href={l.url} target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-1 truncate text-[11px] text-accent hover:underline">
                           <span className="truncate">{l.url}</span>
@@ -631,7 +634,10 @@ function AddScheduleModal({
   const options = affiliates
     .filter((a) => a.name !== "Inhouse")
     .flatMap((a) =>
-      (a.links || []).map((p) => ({ id: String(p.id), label: `${a.name} — ${p.label}` }))
+      (a.links || []).map((p) => ({
+        id: String(p.id),
+        label: `${a.name} — ${profileName(p.brand_name, p.url)}`,
+      }))
     );
 
   async function save() {
@@ -925,7 +931,8 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
             <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-fg">
               <a href={l.profile_url} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-1 font-medium text-accent hover:underline">
-                {l.profile_label}<ExternalLink className="h-3 w-3" aria-hidden="true" />
+                {profileName(l.profile_brand, l.profile_url)}
+                <ExternalLink className="h-3 w-3" aria-hidden="true" />
               </a>
               <span className="flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />{fmtDate(l.live_date)}</span>
               <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" aria-hidden="true" />{fmtTimeRange(l.start_time, l.end_time)}</span>

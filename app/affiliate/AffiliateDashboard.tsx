@@ -8,6 +8,7 @@ import {
   Sparkles, Check, AlertCircle, Pencil, TrendingUp, Trash2,
   Users, ShoppingBag, Timer, Loader2, Image as ImageIcon, Send, Lock,
   Package, Tag,
+  CheckCircle2,
 } from "lucide-react";
 import TabBar from "@/components/TabBar";
 import SampleTab from "./SampleTab";
@@ -23,11 +24,13 @@ import { getPage, paginate } from "@/lib/pagination";
 import { fmtDate, fmtTimeRange, sumDurations } from "@/lib/format";
 import { resolveRange } from "@/lib/daterange";
 import { confirmDialog } from "@/lib/swal";
+import { profileName } from "@/lib/tiktok";
 
-type Profile = { id: number; label: string; url: string };
+type Profile = { id: number; label: string; url: string; brand_name?: string | null };
 type Brand = { id: number; name: string };
 type Booking = {
   id: number; profile_id: number; profile_label: string; profile_url: string;
+  profile_brand: string | null;
   brand_id: number | null; brand_name: string | null;
   live_date: string; start_time: string; end_time: string | null;
   note: string | null; status: string; post_url: string | null;
@@ -36,7 +39,7 @@ type Booking = {
   items_sold: number | null; duration_live: string | null; screenshot_path: string | null;
 };
 
-const MAX_PROFILES = 4;
+const MAX_PROFILES = 10;
 
 export default function AffiliateDashboard({
   userName,
@@ -72,11 +75,13 @@ export default function AffiliateDashboard({
 
   // Filters (?from=&to=&profile=) — applied to the lives list and the KPIs.
   const params = useSearchParams();
+  // Default to this month: a schedule is planned and reviewed a month at a
+  // time, and defaulting to today hid everything the affiliate had booked.
   const { from, to } = resolveRange({
     from: params.get("from"),
     to: params.get("to"),
     all: params.get("all"),
-  });
+  }, "month");
   const profileFilter = params.get("profile") || "";
   const filtered = bookings
     .filter((b) => {
@@ -105,23 +110,31 @@ export default function AffiliateDashboard({
       gmv: a.gmv + (b.gmv || 0),
       viewers: a.viewers + (b.viewers || 0),
       items: a.items + (b.items_sold || 0),
-      done: a.done + (b.status === "completed" ? 1 : 0),
-      pending: a.pending + (b.status === "pending" ? 1 : 0),
+      // Counted the same way the tabs split: a live is done once its
+      // results are in. Keying these off status instead made the boxes
+      // disagree with the lists directly beneath them.
+      done: a.done + (b.result_id != null ? 1 : 0),
+      pending: a.pending + (b.result_id == null ? 1 : 0),
     }),
     { gmv: 0, viewers: 0, items: 0, done: 0, pending: 0 }
   );
   // Only completed lives contribute airtime.
   const totalDuration = sumDurations(
-    filtered.filter((b) => b.status === "completed").map((b) => b.duration_live)
+    filtered.filter((b) => b.result_id != null).map((b) => b.duration_live)
   );
 
   // Paginate the list (10 per page). KPIs stay on the full filtered set.
   const page = getPage(params.get("page"));
-  const pageItems = paginate(filtered, page);
 
   // Tabs. Pending/Done Post are PeningLab videos and deliberately IGNORE the
   // date filter — they show every post until the affiliate clears it.
   const tab = params.get("tab") || "schedule";
+  // A live is "done" once its results are in — that is the moment the
+  // affiliate's work on it ends, and what they upload the screenshot for.
+  const scheduleRows = filtered.filter((b) => b.result_id == null);
+  const doneRows = filtered.filter((b) => b.result_id != null);
+  const shownRows = tab === "done-schedule" ? doneRows : scheduleRows;
+  const pageItems = paginate(shownRows, page);
   const pendingItems = posts.filter((p) => p.status === "pending");
   const doneItems = posts.filter((p) => p.status === "done");
 
@@ -194,7 +207,8 @@ export default function AffiliateDashboard({
       )}
 
       <TabBar active={tab} tabs={[
-        { key: "schedule", label: "My Scheduled Lives", icon: CalendarDays },
+        { key: "schedule", label: "Pending Schedule", icon: CalendarDays },
+        { key: "done-schedule", label: "Done Schedule", icon: CheckCircle2, activeTone: "emerald" },
         { key: "pending",  label: "Pending Post",       icon: Clock, activeTone: "red" },
         { key: "done",     label: "Done Post",          icon: Send,  activeTone: "emerald" },
         { key: "sample",   label: "Sample",             icon: Package },
@@ -204,7 +218,7 @@ export default function AffiliateDashboard({
         {tab === "schedule" && (
           <>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="section-title">My Scheduled Lives</h2>
+              <h2 className="section-title">Pending Schedule</h2>
               <button className="btn !py-2" onClick={() => setScheduleOpen(true)}
                 disabled={profiles.length === 0}
                 title={profiles.length === 0 ? "Add a TikTok profile link first" : undefined}>
@@ -213,18 +227,41 @@ export default function AffiliateDashboard({
               </button>
             </div>
 
-            {filtered.length === 0 ? (
+            {scheduleRows.length === 0 ? (
               <p className="card text-center text-sm text-muted-fg">
                 {bookings.length === 0
                   ? "Nothing scheduled yet — click Add Schedule to book your first live."
-                  : "No lives match these filters."}
+                  : "No pending lives match these filters."}
               </p>
             ) : (
               <>
                 <div className="space-y-3">
                   {pageItems.map((b) => <BookingCard key={b.id} b={b} reload={load} />)}
                 </div>
-                <Pagination page={page} total={filtered.length} />
+                <Pagination page={page} total={scheduleRows.length} />
+              </>
+            )}
+          </>
+        )}
+
+        {tab === "done-schedule" && (
+          <>
+            <h2 className="section-title mb-3">Done Schedule</h2>
+            {doneRows.length === 0 ? (
+              <p className="card text-center text-sm text-muted-fg">
+                Belum ada live siap — muat naik screenshot pada Pending Schedule
+                dan ia akan berpindah ke sini.
+              </p>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  {/* Read-only: a live with results reported is a record, and
+                      editing it after the fact would rewrite history. */}
+                  {pageItems.map((b) => (
+                    <BookingCard key={b.id} b={b} reload={load} readOnly />
+                  ))}
+                </div>
+                <Pagination page={page} total={doneRows.length} />
               </>
             )}
           </>
@@ -364,7 +401,7 @@ function ScheduleModal({ open, onClose, profiles, brands, reload }: {
             onChange={(e) => setProfileId(e.target.value)} required>
             <option value="">Select a profile…</option>
             {profiles.map((p) => (
-              <option key={p.id} value={p.id}>{p.label} — {p.url}</option>
+              <option key={p.id} value={p.id}>{profileName(p.brand_name, p.url)} — {p.url}</option>
             ))}
           </select>
         </div>
@@ -419,7 +456,9 @@ function ScheduleModal({ open, onClose, profiles, brands, reload }: {
   );
 }
 
-function BookingCard({ b, reload }: { b: Booking; reload: () => void }) {
+function BookingCard({
+  b, reload, readOnly,
+}: { b: Booking; reload: () => void; readOnly?: boolean }) {
   const [uploading, setUploading] = useState(false);
   const [aiError, setAiError] = useState("");
   const [note, setNote] = useState("");
@@ -509,7 +548,7 @@ function BookingCard({ b, reload }: { b: Booking; reload: () => void }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-bold text-ink">{b.profile_label}</span>
+            <span className="font-bold text-ink">{profileName(b.profile_brand, b.profile_url)}</span>
             <StatusBadge status={b.status} />
             {b.brand_name && (
               <span className="chip bg-primary/10 text-primary">
@@ -584,7 +623,7 @@ function BookingCard({ b, reload }: { b: Booking; reload: () => void }) {
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          {canEdit && !editingWhen && (
+          {canEdit && !editingWhen && !readOnly && (
             <button onClick={() => {
               setEDate(b.live_date);
               setEStart(b.start_time);
@@ -597,17 +636,19 @@ function BookingCard({ b, reload }: { b: Booking; reload: () => void }) {
               <Pencil className="h-4 w-4" aria-hidden="true" />
             </button>
           )}
-          <button onClick={del}
-            className="cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger"
-            aria-label="Delete booking">
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-          </button>
+          {!readOnly && (
+            <button onClick={del}
+              className="cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger"
+              aria-label="Delete booking">
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
         </div>
       </div>
 
       <div className="mt-4 border-t border-line pt-4">
         {hasResult ? (
-          <ResultView b={b} reload={reload} />
+          <ResultView b={b} reload={reload} readOnly={readOnly} />
         ) : (
           <div className="flex flex-wrap items-center gap-3">
             <label className={`btn-ghost ${uploading ? "pointer-events-none opacity-60" : ""}`}>
@@ -655,7 +696,9 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function ResultView({ b, reload }: { b: Booking; reload: () => void }) {
+function ResultView({
+  b, reload, readOnly,
+}: { b: Booking; reload: () => void; readOnly?: boolean }) {
   const [edit, setEdit] = useState(false);
   const [gmv, setGmv] = useState<any>(b.gmv ?? "");
   const [viewers, setViewers] = useState<any>(b.viewers ?? "");
@@ -696,7 +739,7 @@ function ResultView({ b, reload }: { b: Booking; reload: () => void }) {
             <Sparkles className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
             Live Results
           </p>
-          {!edit ? (
+          {readOnly ? null : !edit ? (
             <button onClick={() => setEdit(true)}
               className="flex cursor-pointer items-center gap-1 text-xs font-semibold text-accent hover:underline">
               <Pencil className="h-3 w-3" aria-hidden="true" />Correct

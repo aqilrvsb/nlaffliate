@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { handleFromUrl } from "@/lib/tiktok";
 
 /**
  * A link is editable by its owner, or by an admin acting on their behalf.
@@ -130,10 +131,12 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const scope = await canEdit(params.id);
   if (!scope) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
-  const { label, url } = await req.json();
-  if (!label || !url) {
-    return NextResponse.json({ error: "Label and URL required." }, { status: 400 });
+  const body = await req.json();
+  const url = String(body.url ?? "").trim();
+  if (!url) {
+    return NextResponse.json({ error: "TikTok URL is required." }, { status: 400 });
   }
+  const label = String(body.label ?? "").trim() || handleFromUrl(url);
 
   const info = scope.adminOverride
     ? await db.prepare("UPDATE tiktok_profiles SET label = ?, url = ? WHERE id = ?")

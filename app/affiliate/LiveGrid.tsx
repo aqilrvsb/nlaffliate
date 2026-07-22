@@ -10,10 +10,12 @@ import Pagination from "@/components/Pagination";
 import { getPage, paginate } from "@/lib/pagination";
 import { fmtDate, fmtTimeRange } from "@/lib/format";
 import { useSearchParams } from "next/navigation";
+import { profileName } from "@/lib/tiktok";
 
 export type GridItem = {
   id: number;
   profile_label: string;
+  profile_brand?: string | null;
   profile_url: string;
   live_date: string;
   start_time: string;
@@ -130,7 +132,7 @@ function LiveCard({ it, reload }: { it: GridItem; reload: () => void }) {
         )}
 
         <span className="absolute left-2 top-2 max-w-[70%] truncate rounded-lg bg-white/85 px-2 py-1 text-[10px] font-bold text-ink backdrop-blur">
-          {it.profile_label}
+          {profileName(it.profile_brand, it.profile_url)}
         </span>
         <span className={`absolute right-2 top-2 rounded-lg px-2 py-1 text-[10px] font-bold backdrop-blur ${
           done ? "bg-emerald-500/90 text-white" : "bg-amber-400/90 text-amber-950"

@@ -54,7 +54,17 @@ export async function GET() {
   const byRequest = new Map<number, any[]>();
   for (const it of items) {
     const list = byRequest.get(it.request_id) || [];
-    list.push({ id: it.id, name: it.name, image_url: it.image_url });
+    // Everything the affiliate needs once the parcel is coming: what it is,
+    // where to see it, how to use it, and the spec sheet.
+    list.push({
+      id: it.id,
+      name: it.name,
+      image_url: it.image_url,
+      sku: it.sku,
+      product_url: it.product_url,
+      document_url: it.document_url,
+      info: it.info,
+    });
     byRequest.set(it.request_id, list);
   }
 

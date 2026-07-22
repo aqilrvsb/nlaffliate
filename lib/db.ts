@@ -41,23 +41,43 @@ function client(): postgres.Sql {
   return globalForDb._sql;
 }
 
-/** `?` -> `$1, $2, ...` (ignores `?` inside quoted strings). */
+/**
+ * `?` -> `$1, $2, ...`, ignoring `?` inside quoted strings and comments.
+ *
+ * Comments matter as much as quotes: an apostrophe in a `-- marketer's copy`
+ * comment used to flip the scanner into string mode, so every placeholder
+ * after it was left as a literal `?` and Postgres rejected the statement.
+ */
 function toPg(query: string): string {
   let i = 0;
   let out = "";
   let quote: string | null = null;
+  let comment: "line" | "block" | null = null;
+
   for (let c = 0; c < query.length; c++) {
     const ch = query[c];
+    const next = query[c + 1];
+
+    if (comment === "line") {
+      out += ch;
+      if (ch === "\n") comment = null;
+      continue;
+    }
+    if (comment === "block") {
+      out += ch;
+      if (ch === "*" && next === "/") { out += next; c++; comment = null; }
+      continue;
+    }
     if (quote) {
       if (ch === quote) quote = null;
       out += ch;
       continue;
     }
-    if (ch === "'" || ch === '"') {
-      quote = ch;
-      out += ch;
-      continue;
-    }
+
+    if (ch === "-" && next === "-") { comment = "line"; out += ch; continue; }
+    if (ch === "/" && next === "*") { comment = "block"; out += ch; continue; }
+    if (ch === "'" || ch === '"') { quote = ch; out += ch; continue; }
+
     out += ch === "?" ? `$${++i}` : ch;
   }
   return out;

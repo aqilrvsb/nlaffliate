@@ -75,7 +75,7 @@ export async function POST(req: Request) {
   const brandId = await assignableBrand(brandRaw);
   if (brandId === "bad") {
     return NextResponse.json(
-      { error: "Pick a brand that belongs to a marketer." },
+      { error: "Pick a brand from the company list." },
       { status: 400 }
     );
   }

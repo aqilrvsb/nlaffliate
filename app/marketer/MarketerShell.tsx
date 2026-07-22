@@ -1699,35 +1699,14 @@ function ProductGmvTab({ products }: { products: Product[] }) {
   );
   // "" = All Brands, the default.
   const [brand, setBrand] = useState("");
-  // Click a header to sort; click again to reverse. Default newest-first is
-  // preserved as the null state so the tab opens as it always has.
-  const [sort, setSort] = useState<{ k: string; dir: 1 | -1 } | null>(null);
-  const rows = products.filter((p) => {
+  const unsorted = products.filter((p) => {
     if (from && p.report_date < from) return false;
     if (to && p.report_date > to) return false;
     if (brand && String(p.brand_id ?? "") !== brand) return false;
     return true;
   });
 
-  if (sort) {
-    const { k, dir } = sort;
-    rows.sort((a: any, b: any) => {
-      const x = a[k], y = b[k];
-      // Nulls sink to the bottom either way — an empty cell is not a value.
-      if (x == null && y == null) return 0;
-      if (x == null) return 1;
-      if (y == null) return -1;
-      return (typeof x === "number" && typeof y === "number"
-        ? x - y
-        : String(x).localeCompare(String(y))) * dir;
-    });
-  }
-
-  function toggleSort(k: string) {
-    setSort((cur) =>
-      cur && cur.k === k ? (cur.dir === 1 ? { k, dir: -1 } : null) : { k, dir: 1 }
-    );
-  }
+  const { sorted: rows, sort, toggleSort } = useTableSort(unsorted);
 
   const spend = rows.reduce((s, r) => s + (r.spend || 0), 0);
   const orders = rows.reduce((s, r) => s + (r.sku_orders || 0), 0);
@@ -1916,12 +1895,13 @@ function OverallTab({ overall }: { overall: Overall[] }) {
   );
   // "" = All Brands, the default.
   const [brand, setBrand] = useState("");
-  const rows = overall.filter((o) => {
+  const unsorted = overall.filter((o) => {
     if (from && o.report_date < from) return false;
     if (to && o.report_date > to) return false;
     if (brand && String(o.brand_id ?? "") !== brand) return false;
     return true;
   });
+  const { sorted: rows, sort, toggleSort } = useTableSort(unsorted);
 
   const sum = (k: keyof Overall) => rows.reduce((s, r) => s + ((r[k] as number) || 0), 0);
   const cost = sum("cost"), gross = sum("gross_revenue"), gmv = sum("gmv");
@@ -1955,16 +1935,16 @@ function OverallTab({ overall }: { overall: Overall[] }) {
           <table className="w-full min-w-[1040px] text-sm">
             <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
               <tr>
-                <th className="px-4 py-3 font-semibold">Date</th>
-                <th className="px-4 py-3 font-semibold">Brand</th>
-                <th className="px-4 py-3 text-right font-semibold">Overall GMV</th>
-                <th className="px-4 py-3 text-right font-semibold">Overall Spend</th>
-                <th className="px-4 py-3 text-right font-semibold">Gross Revenue</th>
-                <th className="px-4 py-3 text-right font-semibold">ROI</th>
-                <th className="px-4 py-3 text-right font-semibold">SKU Orders</th>
-                <th className="px-4 py-3 text-right font-semibold">Visitors</th>
-                <th className="px-4 py-3 text-right font-semibold">Impressions</th>
-                <th className="px-4 py-3 text-right font-semibold">Clicks</th>
+                <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
+                <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
+                <SortTh k="gmv" sort={sort} on={toggleSort} right>Overall GMV</SortTh>
+                <SortTh k="cost" sort={sort} on={toggleSort} right>Overall Spend</SortTh>
+                <SortTh k="gross_revenue" sort={sort} on={toggleSort} right>Gross Revenue</SortTh>
+                <SortTh k="roi" sort={sort} on={toggleSort} right>ROI</SortTh>
+                <SortTh k="sku_orders" sort={sort} on={toggleSort} right>SKU Orders</SortTh>
+                <SortTh k="visitors" sort={sort} on={toggleSort} right>Visitors</SortTh>
+                <SortTh k="product_impressions" sort={sort} on={toggleSort} right>Impressions</SortTh>
+                <SortTh k="product_clicks" sort={sort} on={toggleSort} right>Clicks</SortTh>
                 <th className="px-4 py-3 font-semibold">Proof</th>
               </tr>
             </thead>
@@ -2205,6 +2185,36 @@ function NavIcon({ Icon, busy }: { Icon: typeof Users; busy: boolean }) {
 }
 
 /** Clickable table header: asc -> desc -> back to the default order. */
+/**
+ * Click-to-sort for a table. Third click clears back to the tab's own default
+ * order, so sorting is always escapable. Nulls sink to the bottom in both
+ * directions — an empty cell is not a value, and floating them to the top
+ * buries the rows you asked to see.
+ */
+function useTableSort<T>(rows: T[]) {
+  const [sort, setSort] = useState<{ k: string; dir: 1 | -1 } | null>(null);
+
+  const sorted = sort
+    ? [...rows].sort((a: any, b: any) => {
+        const x = a[sort.k], y = b[sort.k];
+        if (x == null && y == null) return 0;
+        if (x == null) return 1;
+        if (y == null) return -1;
+        return (typeof x === "number" && typeof y === "number"
+          ? x - y
+          : String(x).localeCompare(String(y))) * sort.dir;
+      })
+    : rows;
+
+  function toggleSort(k: string) {
+    setSort((cur) =>
+      cur && cur.k === k ? (cur.dir === 1 ? { k, dir: -1 } : null) : { k, dir: 1 }
+    );
+  }
+
+  return { sorted, sort, toggleSort };
+}
+
 function SortTh({
   k, sort, on, right, children,
 }: {

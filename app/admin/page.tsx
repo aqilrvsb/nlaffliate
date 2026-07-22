@@ -7,10 +7,13 @@ import { resolveRange } from "@/lib/daterange";
 
 export const dynamic = "force-dynamic";
 
-// A page render is a handful of small queries. If it has not finished well
-// inside this, something is wedged — fail fast rather than holding the
-// invocation open for the platform's five-minute maximum.
-export const maxDuration = 20;
+/*
+ * Longer than the other consoles on purpose. This page aggregates across every
+ * affiliate rather than one person's rows, so under contention it is the one
+ * render that can legitimately take a while. There are only ever one or two
+ * admins, so waiting is the right trade against a 504.
+ */
+export const maxDuration = 60;
 
 
 export default async function AdminPage({

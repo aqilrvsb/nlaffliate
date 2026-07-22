@@ -24,7 +24,7 @@ import ImageModal from "@/components/ImageModal";
 import { getPage, paginate } from "@/lib/pagination";
 import {
   fmtDate, fmtTime, fmtTimeRange, sumDurations,
-  durationToSeconds, billableHours, commissionFor,
+  scheduledHours, commissionFor,
 } from "@/lib/format";
 import { resolveRange } from "@/lib/daterange";
 import { useSearchParams } from "next/navigation";
@@ -1171,15 +1171,15 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
     return [...byProfile.entries()].map(([pid, ls]) => {
       const agg = aggregate(ls);
       const link = a.links.find((x) => x.id === pid);
-      // Bill only completed lives, matching the Duration column —
-      // aggregate() counts airtime the same way. Paying on pending lives
-      // would pay for airtime nobody has verified yet.
-      const secs = ls
+      // Hourly pay follows the booked slot, not the streamed duration, and
+      // only for lives that actually completed — a pending slot has not been
+      // verified as having happened.
+      const hours = ls
         .filter((l) => l.status === "completed")
-        .reduce((s, l) => s + durationToSeconds(l.duration_live), 0);
-      const commission = link ? commissionFor(link, agg.gmv, secs) : 0;
+        .reduce((s, l) => s + scheduledHours(l.start_time, l.end_time), 0);
+      const commission = link ? commissionFor(link, agg.gmv, hours) : 0;
       return {
-        pid, agg, link, secs, commission,
+        pid, agg, link, hours, commission,
         label: link?.label ?? ls[0]?.profile_label ?? "—",
       };
     });
@@ -1281,7 +1281,7 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
                         {s.agg.duration}
                         {s.link?.commission_type === "hour" && (
                           <span className="ml-1 text-[11px] text-muted-fg">
-                            ({billableHours(s.secs)}j dikira)
+                            ({s.hours}j jadual)
                           </span>
                         )}
                       </td>

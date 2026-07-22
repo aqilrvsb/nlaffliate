@@ -96,15 +96,22 @@ export function joinDuration(h: number, m: number, s: number): string {
 }
 
 /**
- * Whole hours used for hourly commission.
+ * Hours in a booked slot, from the schedule rather than the streamed
+ * duration: an hourly rate pays for the time booked, so 9:00 PM - 11:00 PM
+ * is 2 hours regardless of whether the stream ran 1h57m or 2h03m.
  *
- * Part-hours are dropped rather than pro-rated: the rule is "1-5 minit
- * bundarkan ke 0", i.e. a stray remainder is not paid for. 2h 05m bills as
- * 2 hours. Kept here beside the other duration maths so the payout rule and
- * the parsing never drift apart.
+ * Not rounded — 90 minutes bills as 1.5 hours. Returns 0 when the slot has
+ * no end time, since there is no range to pay for.
  */
-export function billableHours(totalSeconds: number): number {
-  return Math.floor(Math.max(0, totalSeconds) / 3600);
+export function scheduledHours(start?: string | null, end?: string | null): number {
+  if (!start || !end) return 0;
+  const [sh, sm] = String(start).split(":").map(Number);
+  const [eh, em] = String(end).split(":").map(Number);
+  if (![sh, sm, eh, em].every((n) => Number.isFinite(n))) return 0;
+
+  let mins = eh * 60 + em - (sh * 60 + sm);
+  if (mins < 0) mins += 24 * 60; // slot crosses midnight
+  return mins / 60;
 }
 
 export type CommissionInput = {
@@ -115,19 +122,19 @@ export type CommissionInput = {
 /**
  * What one TikTok link earned.
  *   percent -> rate% of sales
- *   hour    -> rate x whole hours streamed
+ *   hour    -> rate x hours booked (see scheduledHours)
  * Returns 0 when no commission is configured, so totals stay additive.
  */
 export function commissionFor(
   c: CommissionInput,
   sales: number,
-  totalSeconds: number
+  hours: number
 ): number {
   if (!c.commission_type || c.commission_value == null) return 0;
   const amount =
     c.commission_type === "percent"
       ? (sales * c.commission_value) / 100
-      : billableHours(totalSeconds) * c.commission_value;
+      : hours * c.commission_value;
   return Math.round(amount * 100) / 100;
 }
 

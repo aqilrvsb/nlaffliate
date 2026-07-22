@@ -37,7 +37,7 @@ function client(): postgres.Sql {
      * down the shared client; with that fixed, queries simply queue for the
      * few milliseconds these take.
      */
-    max: 1,
+    max: 2,
     idle_timeout: 5,
     connect_timeout: 15,
     // A frozen serverless container wakes with a socket the pooler has long
@@ -120,7 +120,14 @@ export type RunResult = {
  * its own limit, which is how a healthy database produced 300-second page
  * timeouts. Failing here instead turns a five-minute hang into a fast error.
  */
-const QUERY_TIMEOUT_MS = 12_000;
+/*
+ * Deliberately generous. With one or two connections per instance, queries
+ * queue behind each other under burst — that queueing is healthy back-pressure,
+ * not a fault, and a tight limit turned it into manufactured 500s. The
+ * server-side statement_timeout still caps anything genuinely runaway; this
+ * only exists so a caller cannot wait forever on a dead socket.
+ */
+const QUERY_TIMEOUT_MS = 25_000;
 
 async function withTimeout<T>(work: Promise<T>): Promise<T> {
   let timer: NodeJS.Timeout | undefined;

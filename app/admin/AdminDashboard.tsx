@@ -6,11 +6,13 @@ import {
   TrendingUp, Users, ShoppingBag, UserRound, Bot, Check, ExternalLink,
   Loader2, KeyRound, Clock, AlertTriangle, CalendarDays, Timer,
   LayoutDashboard, Package, Boxes, Link2, Trash2, Plus, AlertCircle, BarChart3, MessageCircle,
+  Tag,
 } from "lucide-react";
 import Modal from "@/components/Modal";
 import CommissionEditor, { commissionLabel } from "@/components/CommissionEditor";
 import TabBar from "@/components/TabBar";
 import ProductsTab from "./ProductsTab";
+import AdminBrandsTab from "./BrandsTab";
 import SamplesTab from "./SamplesTab";
 import AdminReportingTab, { type AdminLive, type AdminLink } from "./ReportingTab";
 import DateRangeFilter from "@/components/DateRangeFilter";
@@ -111,11 +113,13 @@ export default function AdminDashboard({
 
       <TabBar active={tab} tabs={[
         { key: "overview", label: "Overview", icon: LayoutDashboard },
+        { key: "brand",    label: "Brand",    icon: Tag },
         { key: "product",  label: "Product",  icon: Package },
         { key: "reporting", label: "Reporting Affiliate", icon: BarChart3 },
         { key: "sample",   label: "Sample",   icon: Boxes },
       ]} />
 
+      {tab === "brand" && <AdminBrandsTab />}
       {tab === "product" && <ProductsTab />}
       {tab === "sample" && <SamplesTab />}
       {tab === "reporting" && (

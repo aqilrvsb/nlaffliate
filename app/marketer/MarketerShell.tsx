@@ -9,8 +9,9 @@ import {
   Mail, Phone, MapPin, Link2, Menu, ChevronDown, List, Check, Loader2, Wallet,
   HelpCircle, Upload, ImagePlus, TrendingDown, Pencil, BarChart3,
   PackageSearch, FileSpreadsheet, ShoppingCart, Layers, Eye, MousePointerClick,
-  Send, Boxes, ClipboardList, Tag, CalendarPlus, Trash2, AlertCircle, Settings,
+  Send, Boxes, ClipboardList, Tag, CalendarPlus, Trash2, AlertCircle, Settings, Plus,
 } from "lucide-react";
+import { AffiliateModal, AffiliateActions, type ManagedAffiliate } from "./AffiliateManager";
 import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
 import Modal from "@/components/Modal";
 import ExampleHint from "@/components/ExampleHint";
@@ -446,20 +447,46 @@ function DashboardTab({ affiliates, inRange, pending, success, products, overall
 /* ── List Of Affiliate ─────────────────────────────────── */
 
 function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: Live[] }) {
-  if (affiliates.length === 0) {
-    return <p className="card text-center text-sm text-muted-fg">
-      No affiliates assigned to you yet. Ask your admin to assign affiliates.
-    </p>;
-  }
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<ManagedAffiliate | null>(null);
+
+  const openAdd = () => { setEditing(null); setOpen(true); };
+  const openEdit = (a: Affiliate) => {
+    setEditing({ id: a.id, name: a.name, email: a.email, phone: a.phone, address: a.address });
+    setOpen(true);
+  };
+
   return (
-    <div className="grid gap-3 md:grid-cols-2">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="section-title">List Affiliate</h2>
+          <p className="text-sm text-muted-fg">
+            Affiliate di bawah anda. Yang anda daftar sendiri terus boleh login.
+          </p>
+        </div>
+        <button className="btn !py-2" onClick={openAdd}>
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          Add Affiliate
+        </button>
+      </div>
+
+      {affiliates.length === 0 ? (
+        <p className="card text-center text-sm text-muted-fg">
+          Belum ada affiliate — klik Add Affiliate, atau minta admin assign kepada anda.
+        </p>
+      ) : (
+      <div className="grid gap-3 md:grid-cols-2">
       {affiliates.map((a) => (
         <div key={a.id} className="card flex flex-col gap-3">
           <div className="flex items-center gap-2.5">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary text-sm font-bold text-white">
               {a.name.charAt(0).toUpperCase()}
             </span>
-            <p className="truncate font-bold text-ink">{a.name}</p>
+            <p className="min-w-0 flex-1 truncate font-bold text-ink">{a.name}</p>
+            <AffiliateActions
+              affiliate={{ id: a.id, name: a.name, email: a.email, phone: a.phone, address: a.address }}
+              onEdit={() => openEdit(a)} />
           </div>
 
           <div className="space-y-1 text-xs text-muted-fg">
@@ -505,6 +532,10 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
           </div>
         </div>
       ))}
+      </div>
+      )}
+
+      <AffiliateModal open={open} affiliate={editing} onClose={() => setOpen(false)} />
     </div>
   );
 }

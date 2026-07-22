@@ -7,7 +7,8 @@ import {
 // Tag doubles as the brand-filter icon below.
 import Modal from "@/components/Modal";
 
-export type Brand = { id: number; name: string };
+export type Brand = { id: number; name: string; catalogue_id?: number | null };
+type CatalogueBrand = { id: number; name: string };
 
 export default function BrandsTab({ onChange }: { onChange?: () => void }) {
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -55,13 +56,14 @@ export default function BrandsTab({ onChange }: { onChange?: () => void }) {
         <div>
           <h2 className="section-title">Brand</h2>
           <p className="text-sm text-muted-fg">
-            Brand anda. Overall dan Pillar disimpan mengikut brand.
+            Brand anda. Pilih dari senarai brand admin — Overall dan Pillar
+            disimpan mengikut brand.
           </p>
         </div>
         <button className="btn !py-2"
           onClick={() => { setEditing(null); setOpen(true); }}>
           <Plus className="h-4 w-4" aria-hidden="true" />
-          Create Brand
+          Add Brand
         </button>
       </div>
 
@@ -73,7 +75,7 @@ export default function BrandsTab({ onChange }: { onChange?: () => void }) {
 
       {brands.length === 0 ? (
         <p className="card text-center text-sm text-muted-fg">
-          Belum ada brand — tambah brand pertama anda dahulu.
+          Belum ada brand — klik Add Brand dan pilih dari senarai admin.
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -84,11 +86,15 @@ export default function BrandsTab({ onChange }: { onChange?: () => void }) {
               </span>
               <p className="min-w-0 flex-1 truncate font-bold text-ink">{b.name}</p>
               <div className="flex shrink-0 items-center gap-1">
+                {/* Adopted brands carry the admin's name, so only a brand the
+                    marketer typed themselves is theirs to rename. */}
+                {!b.catalogue_id && (
                 <button onClick={() => { setEditing(b); setOpen(true); }}
                   className="cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-accent/10 hover:text-accent"
                   aria-label={`Edit ${b.name}`}>
                   <Pencil className="h-4 w-4" aria-hidden="true" />
                 </button>
+                )}
                 <button onClick={() => remove(b)}
                   className="cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger"
                   aria-label={`Delete ${b.name}`}>
@@ -114,13 +120,24 @@ function BrandModal({
   onClose: () => void; onSaved: () => void;
 }) {
   const [name, setName] = useState("");
+  const [pick, setPick] = useState("");
+  const [catalogue, setCatalogue] = useState<CatalogueBrand[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setName(brand?.name || "");
+    setPick("");
     setError("");
+    // Adding is picking from admin's master list, so load it each time the
+    // modal opens — admin may have added a brand since the page loaded.
+    if (!brand) {
+      fetch("/api/brands?scope=catalogue")
+        .then((r) => r.json())
+        .then((d) => setCatalogue(d.brands || []))
+        .catch(() => setCatalogue([]));
+    }
   }, [open, brand]);
 
   async function submit(e: React.FormEvent) {
@@ -129,7 +146,7 @@ function BrandModal({
     const res = await fetch(brand ? `/api/brands/${brand.id}` : "/api/brands", {
       method: brand ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(brand ? { name } : { catalogue_id: pick }),
     });
     const data = await res.json();
     setSaving(false);
@@ -138,14 +155,32 @@ function BrandModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={brand ? "Edit Brand" : "Create Brand"}>
+    <Modal open={open} onClose={onClose} title={brand ? "Edit Brand" : "Add Brand"}>
       <form onSubmit={submit} className="space-y-4">
-        <div>
-          <label className="label" htmlFor="brand-name">Name Brand</label>
-          <input id="brand-name" className="input" value={name} autoFocus
-            onChange={(e) => setName(e.target.value)} required
-            placeholder="e.g. Bloom & Grow" />
-        </div>
+        {brand ? (
+          <div>
+            <label className="label" htmlFor="brand-name">Name Brand</label>
+            <input id="brand-name" className="input" value={name} autoFocus
+              onChange={(e) => setName(e.target.value)} required
+              placeholder="e.g. Bloom & Grow" />
+          </div>
+        ) : (
+          <div>
+            <label className="label" htmlFor="brand-pick">Pilih Brand</label>
+            <select id="brand-pick" className="input cursor-pointer" value={pick}
+              onChange={(e) => setPick(e.target.value)} required autoFocus>
+              <option value="">— Pilih brand —</option>
+              {catalogue.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-muted-fg">
+              {catalogue.length === 0
+                ? "Admin belum tambah sebarang brand — minta admin tambah dahulu."
+                : "Senarai brand dari admin. Brand yang dipilih menjadi brand anda."}
+            </p>
+          </div>
+        )}
 
         {error && (
           <p className="flex items-center gap-1.5 text-sm text-danger">

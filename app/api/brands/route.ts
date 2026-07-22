@@ -6,24 +6,49 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * A marketer owns their brands; admin sees everyone's; an affiliate sees the
- * brands of the marketer they're assigned to, so they can tag a scheduled
- * live without being able to create or edit brands themselves.
+ * Brands come in two shapes, distinguished by marketer_id:
+ *
+ *   marketer_id IS NULL  -> the admin catalogue. One master list of every
+ *                           brand the company works with.
+ *   marketer_id = <id>   -> a marketer's own brand, adopted from the
+ *                           catalogue. catalogue_id links it back so an admin
+ *                           rename flows through to everyone who took it.
+ *
+ * Everything brand-scoped (Overall, Pillar, Product GMV, lives) hangs off the
+ * marketer's copy, so a marketer only ever sees and reports on brands they
+ * chose to work.
  */
-export async function GET() {
+export async function GET(req: Request) {
   const user = await getSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // ?scope=catalogue is the admin master list — also what a marketer picks
+  // from when adopting, so both roles may read it.
+  const scope = new URL(req.url).searchParams.get("scope");
+  if (scope === "catalogue") {
+    const brands = await db.prepare(
+        `SELECT b.id, b.name,
+                (SELECT COUNT(*)::int FROM brands m WHERE m.catalogue_id = b.id) AS adopted
+           FROM brands b
+          WHERE b.marketer_id IS NULL
+          ORDER BY b.name`
+      ).all();
+    return NextResponse.json({ brands });
+  }
+
   let brands;
   if (user.role === "admin") {
+    // Admin's working list is every brand in play, catalogue entries included,
+    // so the product and report filters can reach anything.
     brands = await db.prepare(
         `SELECT b.id, b.name, b.marketer_id, u.name AS marketer_name
-           FROM brands b JOIN users u ON u.id = b.marketer_id
-          ORDER BY b.name`
+           FROM brands b LEFT JOIN users u ON u.id = b.marketer_id
+          ORDER BY b.name, u.name`
       ).all();
   } else if (user.role === "marketer") {
     brands = await db.prepare(
-        "SELECT id, name, marketer_id FROM brands WHERE marketer_id = ? ORDER BY name"
+        `SELECT id, name, marketer_id, catalogue_id
+           FROM brands WHERE marketer_id = ? ORDER BY name`
       ).all(user.id);
   } else {
     brands = await db.prepare(
@@ -40,26 +65,57 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const user = await getSession();
-  if (!user || user.role !== "marketer") {
-    return NextResponse.json({ error: "Marketers only." }, { status: 403 });
+  if (!user || (user.role !== "marketer" && user.role !== "admin")) {
+    return NextResponse.json({ error: "Not allowed." }, { status: 403 });
   }
 
-  const { name } = await req.json().catch(() => ({}));
-  const clean = String(name || "").trim();
-  if (!clean) {
-    return NextResponse.json({ error: "Brand name is required." }, { status: 400 });
+  const body = await req.json().catch(() => ({}));
+
+  /* ── Admin: add to the master catalogue ─────────────── */
+  if (user.role === "admin") {
+    const clean = String(body.name || "").trim();
+    if (!clean) {
+      return NextResponse.json({ error: "Brand name is required." }, { status: 400 });
+    }
+    const dupe = await db
+      .prepare("SELECT id FROM brands WHERE marketer_id IS NULL AND lower(name) = lower(?)")
+      .get(clean);
+    if (dupe) {
+      return NextResponse.json(
+        { error: "That brand is already in the catalogue." },
+        { status: 409 }
+      );
+    }
+    const info = await db
+      .prepare("INSERT INTO brands (marketer_id, name) VALUES (NULL, ?) RETURNING id")
+      .run(clean);
+    return NextResponse.json({ ok: true, id: Number(info.lastInsertRowid) });
   }
 
-  const dupe = await db
+  /* ── Marketer: adopt one of admin's brands ──────────── */
+  const raw = String(body.catalogue_id ?? "").trim();
+  if (!raw) {
+    return NextResponse.json({ error: "Pick a brand from the list." }, { status: 400 });
+  }
+  const cat = await db
+    .prepare("SELECT id, name FROM brands WHERE id = ? AND marketer_id IS NULL")
+    .get<{ id: number; name: string }>(Number(raw));
+  if (!cat) {
+    return NextResponse.json({ error: "That brand is no longer available." }, { status: 404 });
+  }
+
+  const mine = await db
     .prepare("SELECT id FROM brands WHERE marketer_id = ? AND lower(name) = lower(?)")
-    .get(user.id, clean);
-  if (dupe) {
-    return NextResponse.json({ error: "You already have a brand with that name." }, { status: 409 });
+    .get(user.id, cat.name);
+  if (mine) {
+    return NextResponse.json({ error: "You already have that brand." }, { status: 409 });
   }
 
   const info = await db
-    .prepare("INSERT INTO brands (marketer_id, name) VALUES (?, ?) RETURNING id")
-    .run(user.id, clean);
+    .prepare(
+      "INSERT INTO brands (marketer_id, name, catalogue_id) VALUES (?, ?, ?) RETURNING id"
+    )
+    .run(user.id, cat.name, cat.id);
 
-  return NextResponse.json({ ok: true, id: Number(info.lastInsertRowid) });
+  return NextResponse.json({ ok: true, id: Number(info.lastInsertRowid), name: cat.name });
 }

@@ -7,13 +7,15 @@ import SortTh, { useTableSort } from "@/components/SortableTable";
 import {
   sumDurations, durationHours, commissionFor, durationToSeconds,
 } from "@/lib/format";
-import { profileName } from "@/lib/tiktok";
+import { handleFromUrl } from "@/lib/tiktok";
+import type { LinkBrand } from "@/components/BrandCommission";
 
 export type AdminLive = {
   booking_id: number; affiliate_id: number; affiliate: string;
   marketer: string | null;
   profile_id: number; profile_label: string;
   live_date: string; start_time: string; end_time: string | null; status: string;
+  brand_id: number | null;
   ads_budget: number | null; ad_spend: number | null;
   gross_revenue: number | null; roi: number | null;
   gmv: number | null; viewers: number | null; items_sold: number | null;
@@ -23,6 +25,7 @@ export type AdminLive = {
 export type AdminLink = {
   id: number; user_id: number; label: string; url: string;
   brand_name?: string | null;
+  brands?: LinkBrand[] | null;
   commission_type: "percent" | "hour" | null; commission_value: number | null;
 };
 
@@ -77,27 +80,49 @@ export default function AdminReportingTab({
   // Drop affiliates with nothing in range so the table isn't all-zero rows.
   const active = scoped.filter((a) => rows.some((l) => l.affiliate_id === a.id));
 
+  /**
+   * Per-link-per-brand breakdown. One account can run several brands on
+   * different deals, so the rate belongs to the (link, brand) pair, and the
+   * live's own brand decides which pair pays it.
+   */
   function subsFor(a: AdminAffiliate) {
     const mine = rows.filter((l) => l.affiliate_id === a.id);
-    const byProfile = new Map<number, AdminLive[]>();
+    const groups = new Map<string, AdminLive[]>();
     for (const l of mine) {
-      const list = byProfile.get(l.profile_id) || [];
+      const key = `${l.profile_id}:${l.brand_id ?? 0}`;
+      const list = groups.get(key) || [];
       list.push(l);
-      byProfile.set(l.profile_id, list);
+      groups.set(key, list);
     }
-    return [...byProfile.entries()].map(([pid, ls]) => {
+
+    return [...groups.entries()].map(([key, ls]) => {
+      const [pidStr, bidStr] = key.split(":");
+      const pid = Number(pidStr);
+      const bid = Number(bidStr);
       const agg = aggregate(ls);
       const link = links.find((x) => x.id === pid);
+      const brand = (link?.brands ?? []).find((b) => b.id === bid) ?? null;
+
       // Paid on the duration actually streamed, not the booked slot.
       const hours = ls
         .filter((l) => l.status === "completed")
         .reduce((s, l) => s + durationHours(l.duration_live), 0);
+
+      const commission = brand
+        ? commissionFor(
+            {
+              commission_type: brand.commission_type ?? null,
+              commission_value:
+                brand.commission_value == null ? null : Number(brand.commission_value),
+            },
+            agg.gmv,
+            hours
+          )
+        : 0;
+
       return {
-        pid, agg, link, hours,
-        commission: link ? commissionFor(link, agg.gmv, hours) : 0,
-        label: link
-          ? profileName(link.brand_name, link.url)
-          : ls[0]?.profile_label ?? "—",
+        key, pid, agg, hours, commission, rate: brand,
+        label: `${handleFromUrl(link?.url)}${brand ? ` · ${brand.name}` : " · tiada brand"}`,
       };
     });
   }
@@ -220,7 +245,7 @@ export default function AdminReportingTab({
                   </tr>
 
                   {showSubs && subs.map((s) => (
-                    <tr key={`${a.id}-${s.pid}`} className="border-t border-line/40 text-[13px]">
+                    <tr key={`${a.id}-${s.key}`} className="border-t border-line/40 text-[13px]">
                       <td className="py-2 pl-10 pr-4">
                         <span className="flex items-center gap-1.5 text-muted-fg">
                           <Link2 className="h-3 w-3 shrink-0" aria-hidden="true" />
@@ -233,7 +258,7 @@ export default function AdminReportingTab({
                       <td className="px-4 py-2 text-right">{s.agg.items}</td>
                       <td className="px-4 py-2">
                         {s.agg.duration}
-                        {s.link?.commission_type === "hour" && (
+                        {s.rate?.commission_type === "hour" && (
                           <span className="ml-1 text-[11px] text-muted-fg">({s.hours.toFixed(2)}j dibayar)</span>
                         )}
                       </td>
@@ -242,21 +267,21 @@ export default function AdminReportingTab({
                       <td className="px-4 py-2 text-right">{rm(s.agg.gross, s.agg.hasGross)}</td>
                       <td className="px-4 py-2 text-right">{s.agg.roi != null ? s.agg.roi : "—"}</td>
                       <td className="px-4 py-2">
-                        {s.link?.commission_type
+                        {s.rate?.commission_type
                           ? <span className="chip bg-emerald-100 text-emerald-700">
-                              {s.link.commission_type === "percent" ? "Percent" : "Hour"}
+                              {s.rate.commission_type === "percent" ? "Percent" : "Hour"}
                             </span>
                           : <span className="text-muted-fg/50">—</span>}
                       </td>
                       <td className="px-4 py-2 text-right">
-                        {s.link?.commission_value != null
-                          ? (s.link.commission_type === "percent"
-                              ? `${s.link.commission_value}%`
-                              : `RM${s.link.commission_value}/j`)
+                        {s.rate?.commission_value != null
+                          ? (s.rate.commission_type === "percent"
+                              ? `${s.rate.commission_value}%`
+                              : `RM${s.rate.commission_value}/j`)
                           : "—"}
                       </td>
                       <td className="px-4 py-2 text-right font-semibold text-emerald-700">
-                        {s.link?.commission_type ? `RM${s.commission.toFixed(2)}` : "—"}
+                        {s.rate?.commission_type ? `RM${s.commission.toFixed(2)}` : "—"}
                       </td>
                     </tr>
                   ))}

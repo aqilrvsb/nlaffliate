@@ -9,7 +9,11 @@ import {
   Tag,
 } from "lucide-react";
 import Modal from "@/components/Modal";
-import CommissionEditor, { commissionLabel } from "@/components/CommissionEditor";
+import {
+  BrandCommissionModal, CommissionSummary, CommissionButton, rateLabel,
+  type LinkBrand,
+} from "@/components/BrandCommission";
+import { handleFromUrl } from "@/lib/tiktok";
 import TabBar from "@/components/TabBar";
 import ProductsTab from "./ProductsTab";
 import AdminBrandsTab from "./BrandsTab";
@@ -21,7 +25,6 @@ import { getPage, paginate } from "@/lib/pagination";
 import { useSearchParams } from "next/navigation";
 import { fmtDate, fmtTimeRange, sumDurations } from "@/lib/format";
 import { confirmDialog, alertDialog } from "@/lib/swal";
-import { profileName } from "@/lib/tiktok";
 
 type Marketer = { id: number; name: string; email: string };
 type Affiliate = {
@@ -338,6 +341,9 @@ function TikTokLinksModal({
   affiliate, onClose,
 }: { affiliate: Affiliate | null; onClose: () => void }) {
   const [links, setLinks] = useState<any[]>([]);
+  // Which (link, brand) rate is open, and which link's summary.
+  const [rateFor, setRateFor] = useState<{ pid: number; brand: LinkBrand } | null>(null);
+  const [ratesFor, setRatesFor] = useState<{ pid: number; brands: LinkBrand[] } | null>(null);
   const [label, setLabel] = useState("");
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
@@ -389,13 +395,18 @@ function TikTokLinksModal({
             className="rounded-xl border border-line bg-white/60 px-3 py-2.5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="flex items-center gap-2 text-sm font-semibold text-ink">
-                  {profileName(p.brand_name, p.url)}
-                  {commissionLabel(p) && (
-                    <span className="chip bg-emerald-100 text-emerald-700">
-                      {commissionLabel(p)}
-                    </span>
-                  )}
+                <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-ink">
+                  {handleFromUrl(p.url)}
+                  {/* Each brand carries its own rate on this link. */}
+                  {(p.brands ?? []).map((b: LinkBrand) => (
+                    <button key={b.id} type="button"
+                      onClick={() => setRateFor({ pid: p.id, brand: b })}
+                      title={`Set komisyen ${b.name}`}
+                      className="chip cursor-pointer bg-primary/10 text-primary transition-colors duration-200 hover:bg-primary/20">
+                      {b.name}
+                      {rateLabel(b) && <span className="ml-1 font-bold">· {rateLabel(b)}</span>}
+                    </button>
+                  ))}
                 </p>
                 <a href={p.url} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-1 truncate text-xs text-accent hover:underline">
@@ -403,14 +414,17 @@ function TikTokLinksModal({
                   <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
                 </a>
               </div>
-              <button onClick={() => remove(p.id, profileName(p.brand_name, p.url))}
+              <button onClick={() => remove(p.id, handleFromUrl(p.url))}
                 className="shrink-0 cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger"
-                aria-label={`Delete ${profileName(p.brand_name, p.url)}`}>
+                aria-label={`Delete ${handleFromUrl(p.url)}`}>
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
-            {/* Admin sets commission on the same links they manage here. */}
-            <CommissionEditor profileId={p.id} initial={p} onSaved={load} />
+            {/* Rates hang off each brand, so the summary lists them all. */}
+            <div className="mt-2">
+              <CommissionButton
+                onClick={() => setRatesFor({ pid: p.id, brands: p.brands ?? [] })} />
+            </div>
           </div>
         ))}
         {links.length === 0 && (
@@ -418,6 +432,13 @@ function TikTokLinksModal({
             No TikTok links yet.
           </p>
         )}
+
+        <CommissionSummary open={!!ratesFor} brands={ratesFor?.brands ?? []}
+          onClose={() => setRatesFor(null)}
+          onPick={(b) => setRateFor({ pid: ratesFor!.pid, brand: b })} />
+        <BrandCommissionModal open={!!rateFor} profileId={rateFor?.pid ?? 0}
+          brand={rateFor?.brand ?? null}
+          onClose={() => { setRateFor(null); load(); }} />
       </div>
 
       {links.length < 4 && (

@@ -62,7 +62,7 @@ export default async function AdminPage({
               u.name AS affiliate, m.name AS marketer,
               b.profile_id, p.label AS profile_label, p.url AS profile_url,
               pb.name AS profile_brand,
-              b.live_date, b.start_time, b.end_time, b.status,
+              b.live_date, b.start_time, b.end_time, b.status, b.brand_id,
               b.ads_budget, b.ad_spend, b.gross_revenue, b.roi,
               r.gmv, r.viewers, r.items_sold, r.duration_live, r.screenshot_path
        FROM bookings b
@@ -80,7 +80,18 @@ export default async function AdminPage({
   // per link exactly as the marketer console does.
   const links = plain(await db.prepare(
       `SELECT p.id, p.user_id, p.label, p.url, p.commission_type, p.commission_value,
-              pb.name AS brand_name
+              pb.name AS brand_name,
+              COALESCE(
+                (SELECT json_agg(json_build_object(
+                          'id', xb.id, 'name', xb.name,
+                          'commission_type', x.commission_type,
+                          'commission_value', x.commission_value
+                        ) ORDER BY xb.name)
+                   FROM tiktok_profile_brands x
+                   JOIN brands xb ON xb.id = x.brand_id
+                  WHERE x.profile_id = p.id),
+                '[]'::json
+              ) AS brands
          FROM tiktok_profiles p
          LEFT JOIN brands pb ON pb.id = p.brand_id
          JOIN users u ON u.id = p.user_id

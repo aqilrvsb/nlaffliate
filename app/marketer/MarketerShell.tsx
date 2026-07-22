@@ -15,13 +15,16 @@ import {
 import { AffiliateModal, AffiliateActions, type ManagedAffiliate } from "./AffiliateManager";
 import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
 import ProfileBrandPicker from "@/components/ProfileBrandPicker";
+import {
+  BrandCommissionModal, CommissionSummary, CommissionButton, rateLabel,
+  type LinkBrand,
+} from "@/components/BrandCommission";
 import AddProfileLink, { DeleteProfileLink } from "@/components/AddProfileLink";
 import ProductsTab from "@/app/admin/ProductsTab";
 import AffiliatePosts from "./AffiliatePosts";
 import SortTh, { useTableSort } from "@/components/SortableTable";
 import Modal from "@/components/Modal";
 import ExampleHint from "@/components/ExampleHint";
-import CommissionEditor, { commissionLabel } from "@/components/CommissionEditor";
 import DurationInput from "@/components/DurationInput";
 import { compressScreenshot } from "@/lib/image";
 import PillarCreate from "./PillarCreate";
@@ -45,6 +48,7 @@ type TikTokLink = {
   brand_id?: number | null;
   brand_ids?: number[] | null;
   brand_names?: string[] | null;
+  brands?: LinkBrand[] | null;
   brand_name?: string | null;
   id: number; label: string; url: string;
   commission_type: "percent" | "hour" | null; commission_value: number | null;
@@ -487,6 +491,10 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<ManagedAffiliate | null>(null);
 
+  // Which (link, brand) rate is being edited, and which link's summary is open.
+  const [rateFor, setRateFor] = useState<{ pid: number; brand: LinkBrand } | null>(null);
+  const [ratesFor, setRatesFor] = useState<{ pid: number; brands: LinkBrand[] } | null>(null);
+
   const openAdd = () => { setEditing(null); setOpen(true); };
   const openEdit = (a: Affiliate) => {
     setEditing({ id: a.id, name: a.name, email: a.email, phone: a.phone, address: a.address });
@@ -551,8 +559,19 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
                             several and only the first would otherwise show. */}
                         <span className="flex flex-wrap items-center gap-1 text-xs font-semibold text-ink">
                           {handleFromUrl(l.url)}
-                          {(l.brand_names ?? []).map((n) => (
-                            <span key={n} className="chip bg-primary/10 text-primary">{n}</span>
+                          {/* Each brand chip opens that brand's rate — one
+                              account can run four brands on four different
+                              deals, so the rate hangs off the pair. */}
+                          {(l.brands ?? []).map((b) => (
+                            <button key={b.id} type="button"
+                              onClick={() => setRateFor({ pid: l.id, brand: b })}
+                              title={`Set komisyen ${b.name}`}
+                              className="chip cursor-pointer bg-primary/10 text-primary transition-colors duration-200 hover:bg-primary/20">
+                              {b.name}
+                              {rateLabel(b) && (
+                                <span className="ml-1 font-bold">· {rateLabel(b)}</span>
+                              )}
+                            </button>
                           ))}
                         </span>
                         <a href={l.url} target="_blank" rel="noopener noreferrer"
@@ -562,20 +581,13 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
                         </a>
                       </span>
                       <span className="flex shrink-0 items-center gap-1">
-                        {commissionLabel(l) && (
-                          <span className="chip bg-emerald-100 text-emerald-700">
-                            {commissionLabel(l)}
-                          </span>
-                        )}
-                        <DeleteProfileLink id={l.id}
-                          name={profileName(l.brand_name, l.url)} />
+                        <CommissionButton
+                          onClick={() => setRatesFor({ pid: l.id, brands: l.brands ?? [] })} />
+                        <DeleteProfileLink id={l.id} name={handleFromUrl(l.url)} />
                       </span>
                     </div>
-                    {/* Commission is per link — one creator can run one account
-                        on a percentage and another on an hourly rate. */}
-                    <CommissionEditor profileId={l.id} initial={l} />
-                    {/* The brand decides which WhatsApp group the affiliate
-                        sees against this account. */}
+                    {/* The brands decide which WhatsApp groups the affiliate
+                        sees against this account, and what each one pays. */}
                     <ProfileBrandPicker profileId={l.id} initial={l.brand_ids ?? []} />
                   </li>
                 ))}
@@ -591,6 +603,12 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
       )}
 
       <AffiliateModal open={open} affiliate={editing} onClose={() => setOpen(false)} />
+
+      <CommissionSummary open={!!ratesFor} brands={ratesFor?.brands ?? []}
+        onClose={() => setRatesFor(null)}
+        onPick={(b) => setRateFor({ pid: ratesFor!.pid, brand: b })} />
+      <BrandCommissionModal open={!!rateFor} profileId={rateFor?.pid ?? 0}
+        brand={rateFor?.brand ?? null} onClose={() => setRateFor(null)} />
     </div>
   );
 }
@@ -1474,29 +1492,55 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
     ? affiliates.filter((a) => shown.some((l) => l.affiliate_id === a.id))
     : affiliates;
 
-  /** Per-link breakdown for one affiliate, with what each link earned. */
+  /**
+   * Per-link-per-brand breakdown, with what each pair earned.
+   *
+   * One account can run several brands on different deals, so the rate hangs
+   * off the (link, brand) pair — and a live already carries its brand, which
+   * is what decides the group it is paid under. Lives with no brand tag fall
+   * into their own row: they earn nothing, but hiding them would make the
+   * sub-rows stop adding up to the affiliate total.
+   */
   function subsFor(a: Affiliate) {
     const mine = shown.filter((l) => l.affiliate_id === a.id);
-    const byProfile = new Map<number, Live[]>();
+    const groups = new Map<string, Live[]>();
     for (const l of mine) {
-      const list = byProfile.get(l.profile_id) || [];
+      const key = `${l.profile_id}:${l.brand_id ?? 0}`;
+      const list = groups.get(key) || [];
       list.push(l);
-      byProfile.set(l.profile_id, list);
+      groups.set(key, list);
     }
-    return [...byProfile.entries()].map(([pid, ls]) => {
+
+    return [...groups.entries()].map(([key, ls]) => {
+      const [pidStr, bidStr] = key.split(":");
+      const pid = Number(pidStr);
+      const bid = Number(bidStr);
       const agg = aggregate(ls);
       const link = a.links.find((x) => x.id === pid);
-      // Hourly pay follows the duration actually streamed. A booked slot is
-      // only a plan; the recorded duration is what happened, down to the
-      // second. Still restricted to completed lives — a pending slot has not
-      // been verified as having taken place.
+      const brand = (link?.brands ?? []).find((b) => b.id === bid) ?? null;
+
+      // Hourly pay follows the duration actually streamed, and only for
+      // completed lives — a pending slot has not been verified as happening.
       const hours = ls
         .filter((l) => l.status === "completed")
         .reduce((s, l) => s + durationHours(l.duration_live), 0);
-      const commission = link ? commissionFor(link, agg.gmv, hours) : 0;
+
+      const commission = brand
+        ? commissionFor(
+            {
+              commission_type: brand.commission_type ?? null,
+              commission_value:
+                brand.commission_value == null ? null : Number(brand.commission_value),
+            },
+            agg.gmv,
+            hours
+          )
+        : 0;
+
       return {
-        pid, agg, link, hours, commission,
-        label: link?.label ?? ls[0]?.profile_label ?? "—",
+        key, pid, agg, hours, commission, brand,
+        rate: brand,
+        label: `${handleFromUrl(link?.url)}${brand ? ` · ${brand.name}` : " · tiada brand"}`,
       };
     });
   }
@@ -1596,7 +1640,7 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
                   </tr>
 
                   {showSubs && subs.map((s) => (
-                    <tr key={`${a.id}-${s.pid}`} className="border-t border-line/40 text-[13px]">
+                    <tr key={`${a.id}-${s.key}`} className="border-t border-line/40 text-[13px]">
                       <td className="py-2 pl-10 pr-4">
                         <span className="flex items-center gap-1.5 text-muted-fg">
                           <Link2 className="h-3 w-3 shrink-0" aria-hidden="true" />
@@ -1608,7 +1652,7 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
                       <td className="px-4 py-2 text-right">{s.agg.items}</td>
                       <td className="px-4 py-2">
                         {s.agg.duration}
-                        {s.link?.commission_type === "hour" && (
+                        {s.rate?.commission_type === "hour" && (
                           <span className="ml-1 text-[11px] text-muted-fg">
                             ({s.hours.toFixed(2)}j dibayar)
                           </span>
@@ -1619,21 +1663,21 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
                       <td className="px-4 py-2 text-right">{rm(s.agg.gross, s.agg.hasGross)}</td>
                       <td className="px-4 py-2 text-right">{s.agg.roi != null ? s.agg.roi : "—"}</td>
                       <td className="px-4 py-2">
-                        {s.link?.commission_type
+                        {s.rate?.commission_type
                           ? <span className="chip bg-emerald-100 text-emerald-700">
-                              {s.link.commission_type === "percent" ? "Percent" : "Hour"}
+                              {s.rate.commission_type === "percent" ? "Percent" : "Hour"}
                             </span>
                           : <span className="text-muted-fg/50">—</span>}
                       </td>
                       <td className="px-4 py-2 text-right">
-                        {s.link?.commission_value != null
-                          ? (s.link.commission_type === "percent"
-                              ? `${s.link.commission_value}%`
-                              : `RM${s.link.commission_value}/j`)
+                        {s.rate?.commission_value != null
+                          ? (s.rate.commission_type === "percent"
+                              ? `${s.rate.commission_value}%`
+                              : `RM${s.rate.commission_value}/j`)
                           : "—"}
                       </td>
                       <td className="px-4 py-2 text-right font-semibold text-emerald-700">
-                        {s.link?.commission_type ? `RM${s.commission.toFixed(2)}` : "—"}
+                        {s.rate?.commission_type ? `RM${s.commission.toFixed(2)}` : "—"}
                       </td>
                     </tr>
                   ))}

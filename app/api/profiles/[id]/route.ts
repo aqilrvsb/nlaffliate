@@ -115,6 +115,63 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ ok: true, brand_ids: ids });
   }
 
+  /**
+   * Commission for one brand on this link.
+   *
+   * A creator can run four brands off one account at four different rates, so
+   * the rate belongs to the (link, brand) pair, not the link. Body carries
+   * brand_id alongside the usual commission fields.
+   */
+  if ("brand_id" in body && "commission_type" in body) {
+    const bid = Number(body.brand_id);
+    if (!Number.isFinite(bid)) {
+      return NextResponse.json({ error: "Pick a brand." }, { status: 400 });
+    }
+    const pair = await db
+      .prepare("SELECT 1 AS ok FROM tiktok_profile_brands WHERE profile_id = ? AND brand_id = ?")
+      .get(params.id, bid);
+    if (!pair) {
+      return NextResponse.json(
+        { error: "That brand is not on this link." },
+        { status: 404 }
+      );
+    }
+
+    const t = String(body.commission_type ?? "").trim();
+    if (!t) {
+      await db
+        .prepare(
+          `UPDATE tiktok_profile_brands SET commission_type = NULL, commission_value = NULL
+            WHERE profile_id = ? AND brand_id = ?`
+        )
+        .run(params.id, bid);
+      return NextResponse.json({ ok: true, brand_id: bid, commission_type: null });
+    }
+    if (t !== "percent" && t !== "hour") {
+      return NextResponse.json(
+        { error: "Commission type must be 'percent' or 'hour'." },
+        { status: 400 }
+      );
+    }
+    const v = Number(body.commission_value);
+    if (!Number.isFinite(v) || v < 0) {
+      return NextResponse.json({ error: "Enter a commission amount." }, { status: 400 });
+    }
+    if (t === "percent" && v > 100) {
+      return NextResponse.json({ error: "Percentage cannot exceed 100." }, { status: 400 });
+    }
+
+    await db
+      .prepare(
+        `UPDATE tiktok_profile_brands SET commission_type = ?, commission_value = ?
+          WHERE profile_id = ? AND brand_id = ?`
+      )
+      .run(t, v, params.id, bid);
+    return NextResponse.json({
+      ok: true, brand_id: bid, commission_type: t, commission_value: v,
+    });
+  }
+
   const rawType = String(body.commission_type ?? "").trim();
 
   // Empty type clears the commission entirely.

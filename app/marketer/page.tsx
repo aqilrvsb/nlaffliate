@@ -40,7 +40,18 @@ export default async function MarketerPage() {
                        JOIN brands xb ON xb.id = x.brand_id
                       WHERE x.profile_id = p.id),
                     '{}'
-                  ) AS brand_names
+                  ) AS brand_names,
+                  COALESCE(
+                    (SELECT json_agg(json_build_object(
+                              'id', xb.id, 'name', xb.name,
+                              'commission_type', x.commission_type,
+                              'commission_value', x.commission_value
+                            ) ORDER BY xb.name)
+                       FROM tiktok_profile_brands x
+                       JOIN brands xb ON xb.id = x.brand_id
+                      WHERE x.profile_id = p.id),
+                    '[]'::json
+                  ) AS brands
              FROM tiktok_profiles p
              LEFT JOIN brands pb ON pb.id = p.brand_id
              JOIN users u ON u.id = p.user_id

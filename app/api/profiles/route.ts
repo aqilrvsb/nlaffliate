@@ -58,7 +58,8 @@ export async function GET(req: Request) {
   const links = rows.length
     ? ((await db
         .prepare(
-          `SELECT pb.profile_id, b.id, b.name, b.wa_group_url
+          `SELECT pb.profile_id, b.id, b.name, b.wa_group_url,
+                  pb.commission_type, pb.commission_value
              FROM tiktok_profile_brands pb
              JOIN brands b ON b.id = pb.brand_id
              JOIN tiktok_profiles p ON p.id = pb.profile_id
@@ -71,7 +72,10 @@ export async function GET(req: Request) {
   const profiles = rows.map((r) => {
     const brands = links
       .filter((l) => l.profile_id === r.id)
-      .map(({ id, name, wa_group_url }) => ({ id, name, wa_group_url }));
+      .map(({ id, name, wa_group_url, commission_type, commission_value }) => ({
+        id, name, wa_group_url,
+        commission_type, commission_value,
+      }));
     return {
       ...r,
       brands,

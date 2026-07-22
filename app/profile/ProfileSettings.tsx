@@ -8,7 +8,11 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-type Profile = { id: number; label: string; url: string };
+type Profile = {
+  id: number; label: string; url: string;
+  brand_name?: string | null;
+  wa_group_url?: string | null;
+};
 const MAX_PROFILES = 4;
 
 export default function ProfileSettings({ role }: { role: string }) {
@@ -355,12 +359,26 @@ function ProfileRow({
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-white/60 px-3 py-2.5">
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-ink">{p.label}</p>
+        <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+          {p.label}
+          {p.brand_name && (
+            <span className="chip bg-primary/10 text-primary">{p.brand_name}</span>
+          )}
+        </p>
         <a href={p.url} target="_blank" rel="noopener noreferrer"
           className="flex items-center gap-1 truncate text-xs text-accent hover:underline">
           <span className="truncate">{p.url}</span>
           <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
         </a>
+        {/* The group belongs to this profile's brand, so a creator running two
+            brands gets each brand's group beside the right account. */}
+        {p.wa_group_url && (
+          <a href={p.wa_group_url} target="_blank" rel="noopener noreferrer"
+            className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors duration-200 hover:bg-emerald-700">
+            <MessageCircle className="h-3 w-3" aria-hidden="true" />
+            Link Group WhatsApp
+          </a>
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <button onClick={() => setEdit(true)}

@@ -34,9 +34,15 @@ export async function GET(req: Request) {
   const id = await targetUserId(user, url.searchParams.get("user_id"));
   if (!id) return NextResponse.json({ error: "Not allowed." }, { status: 403 });
 
+  // The brand's group link rides along, so the affiliate sees the right
+  // WhatsApp group against each profile without a second round trip.
   const rows = await db
-    .prepare(`SELECT id, label, url, commission_type, commission_value, created_at
-       FROM tiktok_profiles WHERE user_id = ? ORDER BY id`)
+    .prepare(`SELECT p.id, p.label, p.url, p.commission_type, p.commission_value,
+                     p.created_at, p.brand_id, b.name AS brand_name,
+                     b.wa_group_url
+                FROM tiktok_profiles p
+                LEFT JOIN brands b ON b.id = p.brand_id
+               WHERE p.user_id = ? ORDER BY p.id`)
     .all(id);
   return NextResponse.json({ profiles: rows });
 }

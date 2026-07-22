@@ -25,7 +25,7 @@ export default async function MarketerPage() {
 
       db.prepare(
           `SELECT p.id, p.user_id, p.label, p.url,
-                  p.commission_type, p.commission_value
+                  p.commission_type, p.commission_value, p.brand_id
              FROM tiktok_profiles p
              JOIN users u ON u.id = p.user_id
             WHERE u.marketer_id = ?

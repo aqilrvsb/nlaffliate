@@ -35,7 +35,6 @@ export default async function AffiliatePage() {
           <AffiliateDashboard
             userName={user.name}
             marketerName={me.marketer_name}
-            waGroupUrl={me.wa_group_url}
           />
         ) : (
           <PendingApproval userName={user.name} />

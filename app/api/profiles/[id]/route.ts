@@ -53,6 +53,38 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 
   const body = await req.json().catch(() => ({}));
+
+  /**
+   * Tag the link with a brand. This is what decides which WhatsApp group the
+   * affiliate sees against that profile, so it is set by the same people who
+   * set commission — the marketer running the brand, or admin.
+   */
+  if ("brand_id" in body) {
+    const raw = String(body.brand_id ?? "").trim();
+    if (!raw) {
+      await db.prepare("UPDATE tiktok_profiles SET brand_id = NULL WHERE id = ?")
+        .run(params.id);
+      return NextResponse.json({ ok: true, brand_id: null });
+    }
+    const n = Number(raw);
+    // Scope the lookup to the marketer's own brands so a link cannot be
+    // pointed at someone else's brand (and their group).
+    const owned = Number.isFinite(n)
+      ? await db
+          .prepare(
+            user.role === "admin"
+              ? "SELECT id FROM brands WHERE id = ? AND marketer_id IS NOT NULL"
+              : "SELECT id FROM brands WHERE id = ? AND marketer_id = ?"
+          )
+          .get(...(user.role === "admin" ? [n] : [n, user.id]))
+      : null;
+    if (!owned) {
+      return NextResponse.json({ error: "That brand is not yours." }, { status: 403 });
+    }
+    await db.prepare("UPDATE tiktok_profiles SET brand_id = ? WHERE id = ?").run(n, params.id);
+    return NextResponse.json({ ok: true, brand_id: n });
+  }
+
   const rawType = String(body.commission_type ?? "").trim();
 
   // Empty type clears the commission entirely.

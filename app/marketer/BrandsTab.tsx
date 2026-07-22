@@ -2,12 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Tag, Plus, Pencil, Trash2, Loader2, AlertCircle, Check,
+  Tag, Plus, Pencil, Trash2, Loader2, AlertCircle, Check, MessageCircle,
 } from "lucide-react";
 // Tag doubles as the brand-filter icon below.
 import Modal from "@/components/Modal";
 
-export type Brand = { id: number; name: string; catalogue_id?: number | null };
+export type Brand = {
+  id: number; name: string;
+  catalogue_id?: number | null;
+  wa_group_url?: string | null;
+};
 type CatalogueBrand = { id: number; name: string };
 
 export default function BrandsTab({ onChange }: { onChange?: () => void }) {
@@ -80,7 +84,8 @@ export default function BrandsTab({ onChange }: { onChange?: () => void }) {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {brands.map((b) => (
-            <div key={b.id} className="card flex items-center gap-3">
+            <div key={b.id} className="card flex flex-col gap-3">
+              <div className="flex items-center gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <Tag className="h-4 w-4" aria-hidden="true" />
               </span>
@@ -97,6 +102,9 @@ export default function BrandsTab({ onChange }: { onChange?: () => void }) {
                   <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
+              </div>
+
+              <GroupLinkEditor brand={b} onSaved={load} />
             </div>
           ))}
         </div>
@@ -105,6 +113,58 @@ export default function BrandsTab({ onChange }: { onChange?: () => void }) {
       <BrandModal open={open} brand={editing}
         onClose={() => setOpen(false)}
         onSaved={() => { load(); onChange?.(); }} />
+    </div>
+  );
+}
+
+/**
+ * The brand's WhatsApp group. An affiliate sees it against whichever of their
+ * TikTok profiles is tagged with this brand, so one creator running two brands
+ * gets the right group next to the right account.
+ */
+function GroupLinkEditor({ brand, onSaved }: { brand: Brand; onSaved: () => void }) {
+  const [url, setUrl] = useState(brand.wa_group_url || "");
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => { setUrl(brand.wa_group_url || ""); }, [brand.wa_group_url]);
+
+  async function save() {
+    setSaving(true); setError(""); setDone(false);
+    const res = await fetch(`/api/brands/${brand.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wa_group_url: url }),
+    });
+    const data = await res.json();
+    setSaving(false);
+    if (!res.ok) return setError(data.error || "Save failed.");
+    setDone(true);
+    onSaved();
+  }
+
+  return (
+    <div className="border-t border-line pt-2.5">
+      <label className="mb-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-fg"
+        htmlFor={`wa-${brand.id}`}>
+        <MessageCircle className="h-3 w-3" aria-hidden="true" />
+        Link Group WhatsApp
+      </label>
+      <div className="flex items-center gap-1.5">
+        <input id={`wa-${brand.id}`} className="input !py-1.5 text-xs"
+          value={url} placeholder="https://chat.whatsapp.com/…"
+          onChange={(e) => { setUrl(e.target.value); setDone(false); }} />
+        <button onClick={save} disabled={saving}
+          className="btn shrink-0 !px-3 !py-1.5 text-xs">
+          {saving
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            : done
+              ? <Check className="h-3.5 w-3.5" aria-hidden="true" />
+              : "Simpan"}
+        </button>
+      </div>
+      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
     </div>
   );
 }

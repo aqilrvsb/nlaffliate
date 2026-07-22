@@ -30,8 +30,33 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   if (!hit) return NextResponse.json({ error: "Brand not found." }, { status: 404 });
   const { user, row } = hit;
 
-  const { name } = await req.json().catch(() => ({}));
-  const clean = String(name || "").trim();
+  const body = await req.json().catch(() => ({}));
+
+  /**
+   * The WhatsApp group is the marketer's own — two marketers working the same
+   * brand run different groups — so it lives on their copy, never on the
+   * shared catalogue row, and is saved on its own without touching the name.
+   */
+  if ("wa_group_url" in body) {
+    if (user.role !== "marketer") {
+      return NextResponse.json(
+        { error: "The group link belongs to the marketer working the brand." },
+        { status: 403 }
+      );
+    }
+    const link = String(body.wa_group_url ?? "").trim();
+    if (link && !/^https?:\/\//i.test(link)) {
+      return NextResponse.json(
+        { error: "Group link must start with http:// or https://" },
+        { status: 400 }
+      );
+    }
+    await db.prepare("UPDATE brands SET wa_group_url = ? WHERE id = ?")
+      .run(link || null, id);
+    return NextResponse.json({ ok: true, wa_group_url: link || null });
+  }
+
+  const clean = String(body.name || "").trim();
   if (!clean) {
     return NextResponse.json({ error: "Brand name is required." }, { status: 400 });
   }

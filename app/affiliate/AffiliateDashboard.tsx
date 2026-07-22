@@ -7,7 +7,7 @@ import {
   Link2, CalendarPlus, CalendarDays, Clock, Camera, Settings,
   Sparkles, Check, AlertCircle, Pencil, TrendingUp, Trash2,
   Users, ShoppingBag, Timer, Loader2, Image as ImageIcon, Send, Lock,
-  MessageCircle, Package, Tag,
+  Package, Tag,
 } from "lucide-react";
 import TabBar from "@/components/TabBar";
 import SampleTab from "./SampleTab";
@@ -40,11 +40,9 @@ const MAX_PROFILES = 4;
 export default function AffiliateDashboard({
   userName,
   marketerName,
-  waGroupUrl,
 }: {
   userName: string;
   marketerName?: string | null;
-  waGroupUrl?: string | null;
 }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -139,14 +137,9 @@ export default function AffiliateDashboard({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* Appears the moment the assigned marketer sets a group link. */}
-          {waGroupUrl && (
-            <a href={waGroupUrl} target="_blank" rel="noopener noreferrer"
-              className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-lift transition-colors duration-200 hover:bg-emerald-700">
-              <MessageCircle className="h-4 w-4" aria-hidden="true" />
-              Link Group WhatsApp
-            </a>
-          )}
+          {/* The group link moved onto each TikTok profile, where it is scoped
+              to that profile's brand — a creator running two brands belongs to
+              two different groups, which one button here could never express. */}
           <Link href="/profile" className="btn-ghost !py-2">
             <Settings className="h-4 w-4" aria-hidden="true" />
             Profile &amp; TikTok links

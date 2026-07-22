@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { AffiliateModal, AffiliateActions, type ManagedAffiliate } from "./AffiliateManager";
 import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
+import ProfileBrandPicker from "@/components/ProfileBrandPicker";
 import Modal from "@/components/Modal";
 import ExampleHint from "@/components/ExampleHint";
 import CommissionEditor, { commissionLabel } from "@/components/CommissionEditor";
@@ -34,6 +35,7 @@ import { useSearchParams } from "next/navigation";
 import type { SessionUser } from "@/lib/session";
 
 type TikTokLink = {
+  brand_id?: number | null;
   id: number; label: string; url: string;
   commission_type: "percent" | "hour" | null; commission_value: number | null;
 };
@@ -525,6 +527,9 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
                     {/* Commission is per link — one creator can run one account
                         on a percentage and another on an hourly rate. */}
                     <CommissionEditor profileId={l.id} initial={l} />
+                    {/* The brand decides which WhatsApp group the affiliate
+                        sees against this account. */}
+                    <ProfileBrandPicker profileId={l.id} initial={l.brand_id} />
                   </li>
                 ))}
               </ul>

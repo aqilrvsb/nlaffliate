@@ -47,7 +47,7 @@ export async function GET(req: Request) {
       ).all();
   } else if (user.role === "marketer") {
     brands = await db.prepare(
-        `SELECT id, name, marketer_id, catalogue_id
+        `SELECT id, name, marketer_id, catalogue_id, wa_group_url
            FROM brands WHERE marketer_id = ? ORDER BY name`
       ).all(user.id);
   } else {

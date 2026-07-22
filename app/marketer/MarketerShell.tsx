@@ -519,6 +519,7 @@ function ScheduleTab({ title, rows, kind, showUpload, affiliates, defaultMode = 
   const params = useSearchParams();
   // "" = All Brands, the default.
   const [brand, setBrand] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
   const shown = rows.filter((l) => !brand || String(l.brand_id ?? "") === brand);
 
   const page = getPage(params.get("page"));
@@ -527,6 +528,15 @@ function ScheduleTab({ title, rows, kind, showUpload, affiliates, defaultMode = 
   return (
     <>
       <DateRangeFilter count={shown.length} defaultMode={defaultMode} />
+
+      {showUpload && (
+        <div className="flex justify-end">
+          <button className="btn !py-2" onClick={() => setAddOpen(true)}>
+            <CalendarPlus className="h-4 w-4" aria-hidden="true" />
+            Add Schedule
+          </button>
+        </div>
+      )}
 
       {showUpload && (
         <div className="grid gap-3 lg:grid-cols-2">
@@ -548,7 +558,119 @@ function ScheduleTab({ title, rows, kind, showUpload, affiliates, defaultMode = 
           <Pagination page={page} total={shown.length} size={10} />
         </>
       )}
+
+      <AddScheduleModal open={addOpen} affiliates={affiliates ?? []}
+        onClose={() => setAddOpen(false)} />
     </>
+  );
+}
+
+/**
+ * Marketer books a live for an affiliate.
+ *
+ * Planning a week shouldn't require waiting on each affiliate to schedule
+ * their own — and one who is locked out would otherwise block the plan.
+ */
+function AddScheduleModal({
+  open, affiliates, onClose,
+}: { open: boolean; affiliates: Affiliate[]; onClose: () => void }) {
+  const router = useRouter();
+  const [profileId, setProfileId] = useState("");
+  const [brand, setBrand] = useState("");
+  const [date, setDate] = useState("");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [budget, setBudget] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setProfileId(""); setBrand(""); setDate(""); setStart("");
+    setEnd(""); setBudget(""); setNote(""); setError("");
+  }, [open]);
+
+  // One dropdown identifies both affiliate and account.
+  const options = affiliates.flatMap((a) =>
+    (a.links || []).map((p) => ({ id: p.id, label: `${a.name} — ${p.label}` }))
+  );
+
+  async function save() {
+    setBusy(true); setError("");
+    const res = await fetch("/api/marketer/bookings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        profile_id: profileId, brand_id: brand, live_date: date,
+        start_time: start, end_time: end || null,
+        ads_budget: budget, note,
+      }),
+    });
+    const d = await res.json();
+    setBusy(false);
+    if (!res.ok) return setError(d.error || "Could not create.");
+    onClose(); router.refresh();
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Add Schedule"
+      subtitle="Waktu Malaysia (GMT+8). Jadual baru bermula sebagai Pending.">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <label className="label" htmlFor="as-profile">Affiliate / profile</label>
+          <select id="as-profile" className="input cursor-pointer" value={profileId}
+            onChange={(e) => setProfileId(e.target.value)} required>
+            <option value="">— Pilih profile —</option>
+            {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label" htmlFor="as-brand">Brand</label>
+          <BrandSelect id="as-brand" value={brand} onChange={setBrand} />
+        </div>
+        <div>
+          <label className="label" htmlFor="as-date">Date</label>
+          <input id="as-date" type="date" className="input cursor-pointer"
+            value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+        <div>
+          <label className="label" htmlFor="as-start">Start</label>
+          <input id="as-start" type="time" className="input cursor-pointer"
+            value={start} onChange={(e) => setStart(e.target.value)} />
+        </div>
+        <div>
+          <label className="label" htmlFor="as-end">End</label>
+          <input id="as-end" type="time" className="input cursor-pointer"
+            value={end} onChange={(e) => setEnd(e.target.value)} />
+        </div>
+        <div>
+          <label className="label" htmlFor="as-budget">Budget Ads (RM)</label>
+          <input id="as-budget" type="number" min="0" step="any" className="input"
+            value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="0.00" />
+        </div>
+        <div>
+          <label className="label" htmlFor="as-note">Nota</label>
+          <input id="as-note" className="input" value={note}
+            onChange={(e) => setNote(e.target.value)} placeholder="optional" />
+        </div>
+      </div>
+
+      {error && (
+        <p className="mt-3 flex items-center gap-1.5 text-sm text-danger">
+          <AlertCircle className="h-4 w-4" aria-hidden="true" />{error}
+        </p>
+      )}
+
+      <div className="mt-4 flex justify-end gap-2">
+        <button className="btn-ghost" onClick={onClose}>Cancel</button>
+        <button className="btn" onClick={save} disabled={busy}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                : <CalendarPlus className="h-4 w-4" aria-hidden="true" />}
+          Add Schedule
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -599,6 +721,20 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
   const [whenErr, setWhenErr] = useState("");
   const [brandMsg, setBrandMsg] = useState("");
 
+  async function removeLive() {
+    if (!confirm(`Padam jadual ${l.affiliate} — ${fmtDate(l.live_date)}?`)) return;
+    let r = await fetch(`/api/marketer/bookings/${l.booking_id}`, { method: "DELETE" });
+    let d = await r.json();
+    if (r.status === 409 && d.needsConfirm) {
+      if (!confirm(`${d.error}
+
+Teruskan?`)) return;
+      r = await fetch(`/api/marketer/bookings/${l.booking_id}?force=1`, { method: "DELETE" });
+      d = await r.json();
+    }
+    if (r.ok) router.refresh();
+  }
+
   async function saveBrand(next: string) {
     setEBrand(next);
     setBrandMsg("");
@@ -628,8 +764,16 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
   const [resultsOpen, setResultsOpen] = useState(false);
   const [spend, setSpend] = useState(l.ad_spend != null ? String(l.ad_spend) : "");
   const [gross, setGross] = useState(l.gross_revenue != null ? String(l.gross_revenue) : "");
-  const [roi, setRoi] = useState(l.roi != null ? String(l.roi) : "");
   const [dur, setDur] = useState(l.duration_live ?? "");
+
+  // ROI = Gross Revenue / Spend, to 2 dp. Derived rather than typed: it is a
+  // definition, so a hand-entered value could only ever disagree with the two
+  // numbers sitting next to it.
+  const roi = (() => {
+    const sp = Number(spend), gr = Number(gross);
+    if (!Number.isFinite(sp) || !Number.isFinite(gr) || sp <= 0) return "";
+    return (Math.round((gr / sp) * 100) / 100).toFixed(2);
+  })();
 
   async function saveResults() {
     const d = await patch({
@@ -788,11 +932,17 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
             </span>
           </label>
 
-          <button onClick={() => setResultsOpen((o) => !o)}
-            className="btn-ghost ml-auto !py-1.5 text-xs" title="Enter results manually">
-            <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-            Enter results
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <button onClick={() => setResultsOpen((o) => !o)}
+              className="btn-ghost !py-1.5 text-xs" title="Enter results manually">
+              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+              Enter results
+            </button>
+            <button onClick={removeLive} title="Padam jadual" aria-label="Padam jadual"
+              className="cursor-pointer rounded-lg p-1.5 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger">
+              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -828,9 +978,13 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
               value={gross} onChange={(e) => setGross(e.target.value)} />
           </div>
           <div>
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg">ROI</label>
-            <input type="number" step="any" className="input !py-1.5 text-sm"
-              value={roi} onChange={(e) => setRoi(e.target.value)} />
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg">
+              ROI <span className="font-normal normal-case opacity-70">(auto)</span>
+            </label>
+            <input readOnly tabIndex={-1} aria-readonly="true"
+              className="input !py-1.5 text-sm cursor-not-allowed bg-muted/40"
+              value={roi} placeholder="—"
+              title="Gross Revenue ÷ Spend" />
           </div>
           <div>
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"

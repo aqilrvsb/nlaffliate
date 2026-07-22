@@ -23,7 +23,15 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     return NextResponse.json({ error: "Product name is required." }, { status: 400 });
   }
 
-  await db.prepare("UPDATE products SET name = ? WHERE id = ?").run(name, id);
+  const brandRaw = String(form.get("brand_id") ?? "").trim();
+  const sku = String(form.get("sku") ?? "").trim() || null;
+  const productUrl = String(form.get("product_url") ?? "").trim() || null;
+  if (productUrl && !/^https?:\/\//i.test(productUrl))
+    return NextResponse.json({ error: "Link must start with http:// or https://" }, { status: 400 });
+  await db
+    .prepare("UPDATE products SET name = ?, sku = ?, product_url = ?, info = ?, brand_id = ? WHERE id = ?")
+    .run(name, sku, productUrl, String(form.get("info") ?? "").trim() || null,
+         brandRaw ? Number(brandRaw) : null, id);
 
   const file = form.get("image") as File | null;
   if (file && file.size > 0) {
@@ -32,6 +40,16 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
     const url = await uploadImage(`product_${id}.${ext}`, bytes, mime);
     await db.prepare("UPDATE products SET image_url = ? WHERE id = ?").run(url, id);
+  }
+
+  // A second image slot for spec sheets / product info the affiliate reads.
+  const att = form.get("attachment") as File | null;
+  if (att && att.size > 0) {
+    const bytes = Buffer.from(await att.arrayBuffer());
+    const mime = att.type || "image/png";
+    const ext = (att.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const url = await uploadImage(`product_att_${id}.${ext}`, bytes, mime);
+    await db.prepare("UPDATE products SET attachment_url = ? WHERE id = ?").run(url, id);
   }
 
   return NextResponse.json({ ok: true });

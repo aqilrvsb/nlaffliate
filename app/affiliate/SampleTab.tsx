@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   PackagePlus, Package, Truck, Check, Clock, Loader2, AlertCircle,
-  Trash2, PackageCheck, MapPin, Phone, UserRound, StickyNote,
+  Trash2, PackageCheck, MapPin, Phone, UserRound, StickyNote, ExternalLink,
 } from "lucide-react";
 import Modal from "@/components/Modal";
 import { fmtDate } from "@/lib/format";
@@ -196,6 +196,7 @@ function RequestModal({
   const [note, setNote] = useState("");
   const [brand, setBrand] = useState("");
   const [brands, setBrands] = useState<{ id: number; name: string }[]>([]);
+  const [catalogue, setCatalogue] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
@@ -217,6 +218,16 @@ function RequestModal({
       setReady(true);
     });
   }, [open]);
+
+  // Show what exists for the chosen brand — an affiliate asking for a sample
+  // should be able to see what they can actually ask for.
+  useEffect(() => {
+    if (!brand) { setCatalogue([]); return; }
+    fetch(`/api/products?brand=${brand}`)
+      .then((r) => r.json())
+      .then((d) => setCatalogue(d.products || []))
+      .catch(() => setCatalogue([]));
+  }, [brand]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -255,6 +266,53 @@ function RequestModal({
               </p>
             )}
           </div>
+
+          {catalogue.length > 0 && (
+            <div>
+              <p className="label">Produk untuk brand ini ({catalogue.length})</p>
+              <div className="space-y-2">
+                {catalogue.map((p: any) => (
+                  <div key={p.id}
+                    className="flex items-start gap-2 rounded-xl border border-line bg-white/60 p-2">
+                    {p.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.image_url} alt="" className="h-9 w-9 rounded-lg object-cover" />
+                    ) : (
+                      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-fg">
+                        <Package className="h-4 w-4" aria-hidden="true" />
+                      </span>
+                    )}
+                    <span className="leading-tight">
+                      <span className="block text-sm font-semibold text-ink">{p.name}</span>
+                      {p.sku && <span className="block font-mono text-[10px] text-muted-fg">{p.sku}</span>}
+                      {p.info && (
+                        <span className="mt-1 block whitespace-pre-line text-[11px] leading-snug text-muted-fg">
+                          {p.info}
+                        </span>
+                      )}
+                      <span className="mt-1 flex flex-wrap gap-3">
+                        {p.product_url && (
+                          <a href={p.product_url} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[10px] font-semibold text-accent hover:underline">
+                            Lihat produk <ExternalLink className="h-2.5 w-2.5" aria-hidden="true" />
+                          </a>
+                        )}
+                        {p.attachment_url && (
+                          <a href={p.attachment_url} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[10px] font-semibold text-accent hover:underline">
+                            Attachment <ExternalLink className="h-2.5 w-2.5" aria-hidden="true" />
+                          </a>
+                        )}
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1 text-[11px] text-muted-fg">
+                Admin akan pilih yang mana untuk dihantar.
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="label" htmlFor="s-name">Full Name</label>

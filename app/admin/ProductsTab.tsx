@@ -2,12 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Package, Plus, Pencil, Trash2, Loader2, AlertCircle, ImagePlus, Check,
+  Package, Plus, Pencil, Trash2, Loader2, AlertCircle, ImagePlus, Check, ExternalLink,
 } from "lucide-react";
 import Modal from "@/components/Modal";
 import { compressScreenshot, fmtBytes, MAX_UPLOAD_BYTES } from "@/lib/image";
 
-export type Product = { id: number; name: string; image_url: string | null };
+export type Product = {
+  id: number; name: string; image_url: string | null;
+  sku: string | null; product_url: string | null;
+  info: string | null; attachment_url: string | null;
+  brand_id: number | null; brand_name: string | null;
+};
 
 export default function ProductsTab() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -74,7 +79,19 @@ export default function ProductsTab() {
                 </span>
               )}
 
-              <p className="min-w-0 flex-1 truncate font-bold text-ink">{p.name}</p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-bold text-ink">{p.name}</p>
+                {p.sku && <p className="truncate font-mono text-[11px] text-muted-fg">{p.sku}</p>}
+                {p.brand_name
+                  ? <span className="chip mt-1 bg-primary/10 text-primary">{p.brand_name}</span>
+                  : <span className="mt-1 block text-[11px] text-muted-fg/60">Tiada brand</span>}
+                {p.product_url && (
+                  <a href={p.product_url} target="_blank" rel="noopener noreferrer"
+                    className="mt-1 flex items-center gap-1 truncate text-[11px] text-accent hover:underline">
+                    <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />Buka link
+                  </a>
+                )}
+              </div>
 
               <div className="flex shrink-0 items-center gap-1">
                 <button onClick={() => { setEditing(p); setOpen(true); }}
@@ -108,6 +125,12 @@ function ProductModal({
   onSaved: () => void;
 }) {
   const [name, setName] = useState("");
+  const [sku, setSku] = useState("");
+  const [link, setLink] = useState("");
+  const [info, setInfo] = useState("");
+  const [att, setAtt] = useState<File | null>(null);
+  const [brand, setBrand] = useState("");
+  const [brands, setBrands] = useState<{ id: number; name: string }[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -116,9 +139,15 @@ function ProductModal({
   useEffect(() => {
     if (!open) return;
     setName(product?.name || "");
+    setSku(product?.sku || "");
+    setLink(product?.product_url || "");
+    setInfo(product?.info || "");
+    setAtt(null);
+    setBrand(product?.brand_id != null ? String(product.brand_id) : "");
     setPreview(product?.image_url || null);
     setFile(null);
     setError("");
+    fetch("/api/brands").then((r) => r.json()).then((d) => setBrands(d.brands || []));
   }, [open, product]);
 
   async function pick(f: File | null) {
@@ -145,6 +174,11 @@ function ProductModal({
 
     const fd = new FormData();
     fd.append("name", name);
+    fd.append("sku", sku);
+    fd.append("product_url", link);
+    fd.append("info", info);
+    if (att) fd.append("attachment", att);
+    fd.append("brand_id", brand);
     if (file) fd.append("image", file);
 
     const res = await fetch(
@@ -166,6 +200,57 @@ function ProductModal({
           <input id="pr-name" className="input" value={name}
             onChange={(e) => setName(e.target.value)} required
             placeholder="e.g. Bloom & Grow Hair Serum" />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="pr-brand">Brand</label>
+            <select id="pr-brand" className="input cursor-pointer" value={brand}
+              onChange={(e) => setBrand(e.target.value)}>
+              <option value="">— Tiada brand —</option>
+              {brands.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label" htmlFor="pr-sku">SKU</label>
+            <input id="pr-sku" className="input font-mono" value={sku}
+              onChange={(e) => setSku(e.target.value)} placeholder="e.g. BG-SERUM-30ML" />
+          </div>
+        </div>
+
+        <div>
+          <label className="label" htmlFor="pr-link">Product link</label>
+          <input id="pr-link" className="input" type="url" value={link}
+            onChange={(e) => setLink(e.target.value)}
+            placeholder="https://shop.tiktok.com/…" />
+          <p className="mt-1 text-[11px] text-muted-fg">
+            Affiliates can open this from the sample form to see the product.
+          </p>
+        </div>
+
+        <div>
+          <label className="label" htmlFor="pr-info">Product Info</label>
+          <textarea id="pr-info" className="input resize-y" rows={4} value={info}
+            onChange={(e) => setInfo(e.target.value)}
+            placeholder="Cara guna, kandungan, selling points — affiliate akan baca ini." />
+        </div>
+
+        <div>
+          <label className="label" htmlFor="pr-att">Attachment (image)</label>
+          <input id="pr-att" type="file" accept="image/*"
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              setAtt(f ? (await compressScreenshot(f)).file : null);
+            }}
+            className="block w-full cursor-pointer text-sm text-muted-fg file:mr-3 file:cursor-pointer file:rounded-xl file:border-0 file:bg-muted file:px-4 file:py-2 file:text-sm file:font-semibold file:text-ink" />
+          {product?.attachment_url && !att && (
+            <a href={product.attachment_url} target="_blank" rel="noopener noreferrer"
+              className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-accent hover:underline">
+              <ExternalLink className="h-3 w-3" aria-hidden="true" />Attachment semasa
+            </a>
+          )}
         </div>
 
         <div>

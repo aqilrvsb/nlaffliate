@@ -150,3 +150,38 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     affiliate_can_edit: row.affiliate_can_edit,
   });
 }
+
+/**
+ * Marketer removes a schedule belonging to one of their affiliates.
+ *
+ * Deleting takes the recorded result with it, so a completed live — one with
+ * figures already reported — is refused. Those are history; the way to undo a
+ * mistake there is to correct the numbers, not erase the record.
+ */
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  const user = await getSession();
+  if (!user || user.role !== "marketer")
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const row = await db.prepare(
+      `SELECT b.id, b.status
+         FROM bookings b
+         JOIN users u ON u.id = b.user_id
+        WHERE b.id = ? AND u.marketer_id = ?`
+    ).get<{ id: number; status: string }>(params.id, user.id);
+  if (!row) return NextResponse.json({ error: "Live not found." }, { status: 404 });
+
+  const url = new URL(_req.url);
+  if (row.status === "completed" && url.searchParams.get("force") !== "1") {
+    return NextResponse.json(
+      {
+        error: "This live is already completed — deleting it removes its recorded results too.",
+        needsConfirm: true,
+      },
+      { status: 409 }
+    );
+  }
+
+  await db.prepare("DELETE FROM bookings WHERE id = ?").run(params.id);
+  return NextResponse.json({ ok: true });
+}

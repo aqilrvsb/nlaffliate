@@ -34,11 +34,13 @@ const ACTION = {
 };
 
 export default function PostGrid({
-  items, emptyText, reload,
+  items, emptyText, reload, readOnly,
 }: {
   items: PostItem[];
   emptyText: string;
   reload: () => void;
+  /** Marketer/admin viewing someone else's posts: watch, don't publish. */
+  readOnly?: boolean;
 }) {
   const params = useSearchParams();
   const page = getPage(params.get("page"));
@@ -52,7 +54,7 @@ export default function PostGrid({
     <>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {pageItems.map((it) => (
-          <PostCard key={it.id} it={it} reload={reload} />
+          <PostCard key={it.id} it={it} reload={reload} readOnly={readOnly} />
         ))}
       </div>
       <Pagination page={page} total={items.length} size={GRID_SIZE} />
@@ -60,7 +62,9 @@ export default function PostGrid({
   );
 }
 
-function PostCard({ it, reload }: { it: PostItem; reload: () => void }) {
+function PostCard({
+  it, reload, readOnly,
+}: { it: PostItem; reload: () => void; readOnly?: boolean }) {
   const done = it.status === "done";
   const [playing, setPlaying] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
@@ -158,7 +162,7 @@ function PostCard({ it, reload }: { it: PostItem; reload: () => void }) {
         <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-2">
           {/* Download + cover are only useful while the post is still to be
               published — Done Post just needs the link editor. */}
-          {!done && (
+          {(!done || readOnly) && (
             <>
               <a href={it.video_url} target="_blank" rel="noopener noreferrer" download
                 title="Download video" aria-label="Download video"
@@ -174,7 +178,9 @@ function PostCard({ it, reload }: { it: PostItem; reload: () => void }) {
             </>
           )}
 
-          {editing ? (
+          {/* Only the affiliate sets the TikTok link — it is what marks a
+              post published, and that is theirs to confirm. */}
+          {readOnly ? null : editing ? (
             <ActionBtn title="Save TikTok link" bg={ACTION.save}
               onClick={saveLink} disabled={busy}>
               <Check className="h-3.5 w-3.5" strokeWidth={2.4} aria-hidden="true" />

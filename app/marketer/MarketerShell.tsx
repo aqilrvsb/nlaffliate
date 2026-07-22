@@ -17,6 +17,7 @@ import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
 import ProfileBrandPicker from "@/components/ProfileBrandPicker";
 import AddProfileLink from "@/components/AddProfileLink";
 import ProductsTab from "@/app/admin/ProductsTab";
+import AffiliatePosts from "./AffiliatePosts";
 import Modal from "@/components/Modal";
 import ExampleHint from "@/components/ExampleHint";
 import CommissionEditor, { commissionLabel } from "@/components/CommissionEditor";
@@ -130,6 +131,10 @@ export default function MarketerShell({
   const params = useSearchParams();
   const [navOpen, setNavOpen] = useState(false);
   const [navKey, setNavKey] = useState<string | null>(null);
+  // Drill-down from Posting Affiliate into one affiliate's post grid.
+  const [postsFor, setPostsFor] = useState<
+    { a: Affiliate; status: "pending" | "done" } | null
+  >(null);
 
   const active = params.get("tab") || "dashboard";
   const inAffiliateGroup = AFFILIATE_CHILDREN.some((c) => c.key === active);
@@ -204,6 +209,26 @@ export default function MarketerShell({
               Dashboard
             </button>
 
+            {/* Brand leads: everything below is scoped by it. */}
+            <button onClick={() => go("brand")}
+              className={`mt-1 flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
+                active === "brand" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
+              }`}>
+              <NavIcon Icon={Tag} busy={navPending && navKey === "brand"} />
+              Brand
+            </button>
+
+            {/* Product — the same shared catalogue admin maintains. Products
+                belong to no single marketer, so this is one list both roles
+                edit; a marketer filling it in when admin is busy is the point. */}
+            <button onClick={() => go("product")}
+              className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
+                active === "product" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
+              }`}>
+              <NavIcon Icon={Package} busy={navPending && navKey === "product"} />
+              Product
+            </button>
+
             {/* Affiliate group */}
             <button onClick={() => setGroupOpen((o) => !o)}
               className={`mt-1 flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
@@ -237,26 +262,6 @@ export default function MarketerShell({
                 })}
               </div>
             )}
-
-            {/* Brand — everything below is scoped by it, so it leads. */}
-            <button onClick={() => go("brand")}
-              className={`mt-1 flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
-                active === "brand" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
-              }`}>
-              <NavIcon Icon={Tag} busy={navPending && navKey === "brand"} />
-              Brand
-            </button>
-
-            {/* Product — the same shared catalogue admin maintains. Products
-                belong to no single marketer, so this is one list both roles
-                edit; a marketer filling it in when admin is busy is the point. */}
-            <button onClick={() => go("product")}
-              className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
-                active === "product" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
-              }`}>
-              <NavIcon Icon={Package} busy={navPending && navKey === "product"} />
-              Product
-            </button>
 
             {/* Product GMV — its own main category */}
             <button onClick={() => go("product-gmv")}
@@ -368,7 +373,13 @@ export default function MarketerShell({
               defaultMode="month" />
           )}
           {active === "posting" && (
-            <PostingTab affiliates={affiliates} posts={posts} />
+            postsFor ? (
+              <AffiliatePosts affiliateId={postsFor.a.id} affiliateName={postsFor.a.name}
+                status={postsFor.status} onBack={() => setPostsFor(null)} />
+            ) : (
+              <PostingTab affiliates={affiliates} posts={posts}
+                onOpen={(a, status) => setPostsFor({ a, status })} />
+            )
           )}
           {active === "reporting" && (
             <ReportingTab affiliates={affiliates} lives={inRange} />
@@ -1328,7 +1339,12 @@ function LivePerformanceImport() {
 
 /* ── Posting Affiliate ─────────────────────────────────── */
 
-function PostingTab({ affiliates, posts }: { affiliates: Affiliate[]; posts: Post[] }) {
+function PostingTab({
+  affiliates, posts, onOpen,
+}: {
+  affiliates: Affiliate[]; posts: Post[];
+  onOpen: (a: Affiliate, status: "pending" | "done") => void;
+}) {
   const params = useSearchParams();
   const { from, to } = resolveRange(
     { from: params.get("from"), to: params.get("to"), all: params.get("all") },
@@ -1377,10 +1393,18 @@ function PostingTab({ affiliates, posts }: { affiliates: Affiliate[]; posts: Pos
                     <td className="px-4 py-3 text-muted-fg">{a.email}</td>
                     <td className="px-4 py-3 text-muted-fg">{a.phone || "—"}</td>
                     <td className="px-4 py-3 text-right">
-                      <span className="chip bg-amber-100 text-amber-700">{pend}</span>
+                      <button onClick={() => onOpen(a, "pending")}
+                        className="chip cursor-pointer bg-amber-100 text-amber-700 transition-transform duration-200 hover:scale-105"
+                        title={`Lihat pending post ${a.name}`}>
+                        {pend}
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <span className="chip bg-emerald-100 text-emerald-700">{done}</span>
+                      <button onClick={() => onOpen(a, "done")}
+                        className="chip cursor-pointer bg-emerald-100 text-emerald-700 transition-transform duration-200 hover:scale-105"
+                        title={`Lihat done post ${a.name}`}>
+                        {done}
+                      </button>
                     </td>
                   </tr>
                 );

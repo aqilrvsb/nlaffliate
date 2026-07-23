@@ -337,7 +337,7 @@ export default function MarketerShell({
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-ink">{user.name}</p>
-                <p className="truncate text-xs font-mono text-muted-fg">{user.staff_id || user.email}</p>
+                <p className="truncate text-xs font-mono text-muted-fg">{user.staff_id}</p>
               </div>
               <Settings className="h-3.5 w-3.5 shrink-0 text-muted-fg" aria-hidden="true" />
             </Link>
@@ -1456,7 +1456,7 @@ function PostingTab({
             <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
               <tr>
                 <th className="px-4 py-3 font-semibold">Affiliate</th>
-                <th className="px-4 py-3 font-semibold">Email</th>
+                <th className="px-4 py-3 font-semibold">ID Staff</th>
                 <th className="px-4 py-3 font-semibold">No WhatsApp</th>
                 <th className="px-4 py-3 text-right font-semibold">Total Pending Post</th>
                 <th className="px-4 py-3 text-right font-semibold">Total Done Post</th>

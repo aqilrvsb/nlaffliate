@@ -35,7 +35,7 @@ export default function Header({ user }: { user: SessionUser }) {
             title="Profile settings">
             <span className="hidden text-right md:block">
               <span className="block text-sm font-semibold leading-tight text-ink">{user.name}</span>
-              <span className="block text-xs leading-tight text-muted-fg">{user.email}</span>
+              <span className="block font-mono text-xs leading-tight text-muted-fg">{user.staff_id}</span>
             </span>
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary text-sm font-bold text-white shadow-lift transition-transform duration-200 group-hover:scale-105">
               {user.name.charAt(0).toUpperCase()}

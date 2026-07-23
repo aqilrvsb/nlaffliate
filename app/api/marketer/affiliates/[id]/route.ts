@@ -13,9 +13,9 @@ async function mine(id: number) {
   if (!user || user.role !== "marketer") return null;
   const row = await db
     .prepare(
-      "SELECT id, name, email FROM users WHERE id = ? AND role = 'affiliate' AND marketer_id = ?"
+      "SELECT id, name, staff_id FROM users WHERE id = ? AND role = 'affiliate' AND marketer_id = ?"
     )
-    .get<{ id: number; name: string; email: string }>(id, user.id);
+    .get<{ id: number; name: string; staff_id: string | null }>(id, user.id);
   return row ? { user, row } : null;
 }
 
@@ -39,19 +39,6 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       sets.push(`${k} = ?`);
       args.push(v);
     }
-  }
-
-  if ("email" in body) {
-    const email = String(body.email ?? "").trim().toLowerCase();
-    if (!email) return NextResponse.json({ error: "Email cannot be empty." }, { status: 400 });
-    const clash = await db
-      .prepare("SELECT id FROM users WHERE lower(email) = ? AND id <> ?")
-      .get(email, id);
-    if (clash) {
-      return NextResponse.json({ error: "That email is already registered." }, { status: 409 });
-    }
-    sets.push("email = ?");
-    args.push(email);
   }
 
   // Password is optional — blank means "leave it alone", so a marketer can fix
@@ -98,7 +85,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
       {
         needsConfirm: true,
         name: row.name,
-        email: row.email,
+        staff_id: row.staff_id,
         impact,
         note: "All of this affiliate's history is deleted permanently.",
       },

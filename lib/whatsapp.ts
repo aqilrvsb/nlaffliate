@@ -116,18 +116,18 @@ export function welcomeMessage(name: string) {
 }
 
 /**
- * Sent when a marketer registers an affiliate: they never chose a password,
- * so the account is unusable unless we tell them what it is.
+ * Sent when an account is provisioned. The staff member never chose a Staff ID
+ * or a password, so the account is unusable unless we hand both over.
  */
 export function accountCreatedMessage(opts: {
-  name: string; email: string; password: string;
+  name: string; staffId: string; password: string;
 }) {
   return compose([
     `Selamat Datang ${opts.name}`,
     "",
     "Akaun anda sudah dibuka. Butiran log masuk:",
     "",
-    `Email: ${opts.email}`,
+    `ID Staff: ${opts.staffId}`,
     `Password: ${opts.password}`,
     "",
     `Link login: ${LOGIN_URL}`,

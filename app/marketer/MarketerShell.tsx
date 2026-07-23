@@ -7,6 +7,7 @@ import {
   Radio, LayoutDashboard, Users, Clock, CheckCircle2, LogOut,
   TrendingUp, ShoppingBag, Timer, CalendarDays, ExternalLink,
   Mail, Phone, MapPin, Link2, Menu, ChevronDown, List, Check, Loader2, Wallet,
+  IdCard,
   HelpCircle, Upload, ImagePlus, TrendingDown, Pencil, BarChart3,
   PackageSearch, FileSpreadsheet, ShoppingCart, Layers, Eye, MousePointerClick,
   Send, Boxes, ClipboardList, Tag, CalendarPlus, Trash2, AlertCircle, Settings, Plus,
@@ -55,7 +56,7 @@ type TikTokLink = {
   commission_type: "percent" | "hour" | null; commission_value: number | null;
 };
 type Affiliate = {
-  id: number; name: string; email: string;
+  id: number; name: string; email: string | null; staff_id: string | null;
   phone: string | null; address: string | null; links: TikTokLink[];
 };
 type Live = {
@@ -336,7 +337,7 @@ export default function MarketerShell({
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-ink">{user.name}</p>
-                <p className="truncate text-xs text-muted-fg">{user.email}</p>
+                <p className="truncate text-xs font-mono text-muted-fg">{user.staff_id || user.email}</p>
               </div>
               <Settings className="h-3.5 w-3.5 shrink-0 text-muted-fg" aria-hidden="true" />
             </Link>
@@ -501,7 +502,7 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
 
   const openAdd = () => { setEditing(null); setOpen(true); };
   const openEdit = (a: Affiliate) => {
-    setEditing({ id: a.id, name: a.name, email: a.email, phone: a.phone, address: a.address });
+    setEditing({ id: a.id, name: a.name, staff_id: a.staff_id, phone: a.phone, address: a.address });
     setOpen(true);
   };
 
@@ -534,12 +535,16 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
             </span>
             <p className="min-w-0 flex-1 truncate font-bold text-ink">{a.name}</p>
             <AffiliateActions
-              affiliate={{ id: a.id, name: a.name, email: a.email, phone: a.phone, address: a.address }}
+              affiliate={{ id: a.id, name: a.name, staff_id: a.staff_id, phone: a.phone, address: a.address }}
               onEdit={() => openEdit(a)} />
           </div>
 
           <div className="space-y-1 text-xs text-muted-fg">
-            <p className="flex items-center gap-1.5"><Mail className="h-3 w-3 shrink-0" aria-hidden="true" />{a.email}</p>
+            {a.staff_id && (
+              <p className="flex items-center gap-1.5 font-mono font-semibold text-ink">
+                <IdCard className="h-3 w-3 shrink-0" aria-hidden="true" />{a.staff_id}
+              </p>
+            )}
             {a.phone && <p className="flex items-center gap-1.5"><Phone className="h-3 w-3 shrink-0" aria-hidden="true" />{a.phone}</p>}
             {a.address && <p className="flex items-start gap-1.5"><MapPin className="mt-px h-3 w-3 shrink-0" aria-hidden="true" />{a.address}</p>}
           </div>
@@ -737,7 +742,7 @@ function AddScheduleModal({
             onChange={(e) => { setAffId(e.target.value); setProfileId(""); }} required>
             <option value="">— Pilih affiliate —</option>
             {people.map((a) => (
-              <option key={a.id} value={a.id}>{a.email} — {a.name}</option>
+              <option key={a.id} value={a.id}>{a.staff_id ? `${a.staff_id} — ` : ""}{a.name}</option>
             ))}
             <option value="inhouse">Inhouse (bukan affiliate)</option>
           </select>
@@ -1465,7 +1470,7 @@ function PostingTab({
                 return (
                   <tr key={a.id} className="border-t border-line/60 hover:bg-white/50">
                     <td className="px-4 py-3 font-semibold text-ink">{a.name}</td>
-                    <td className="px-4 py-3 text-muted-fg">{a.email}</td>
+                    <td className="px-4 py-3 font-mono text-muted-fg">{a.staff_id ?? "—"}</td>
                     <td className="px-4 py-3 text-muted-fg">{a.phone || "—"}</td>
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => onOpen(a, "pending")}
@@ -1664,7 +1669,7 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
                   <tr className="border-t border-line bg-white/40">
                     <td className="px-4 py-3">
                       <div className="font-semibold text-ink">{a.name}</div>
-                      <div className="text-xs text-muted-fg">{a.email}</div>
+                      <div className="text-xs font-mono text-muted-fg">{a.staff_id ?? ""}</div>
                       {a.phone && <div className="text-xs text-muted-fg">{a.phone}</div>}
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">RM{r.gmv.toFixed(2)}</td>

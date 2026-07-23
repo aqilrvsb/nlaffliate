@@ -106,13 +106,13 @@ function AccountCard({ me, reload, refresh }: { me: any; reload: () => void; ref
         </div>
 
         <div>
-          <label className="label" htmlFor="p-email">Email</label>
+          <label className="label" htmlFor="p-staff">ID Staff</label>
           <div className="relative">
             <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-fg"
               aria-hidden="true" />
-            <input id="p-email" className="input pl-9 opacity-60" value={me.email} disabled readOnly />
+            <input id="p-staff" className="input pl-9 font-mono opacity-60" value={me.staff_id || ""} disabled readOnly />
           </div>
-          <p className="mt-1 text-xs text-muted-fg">Email cannot be changed.</p>
+          <p className="mt-1 text-xs text-muted-fg">ID Staff tidak boleh ditukar.</p>
         </div>
 
         <div>

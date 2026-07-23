@@ -9,6 +9,7 @@ import {
   Tag,
 } from "lucide-react";
 import Modal from "@/components/Modal";
+import StaffCreateModal from "./StaffCreateModal";
 import {
   BrandCommissionModal, CommissionSummary, CommissionButton, rateLabel,
   type LinkBrand,
@@ -26,9 +27,9 @@ import { useSearchParams } from "next/navigation";
 import { fmtDate, fmtTimeRange, sumDurations } from "@/lib/format";
 import { confirmDialog, alertDialog } from "@/lib/swal";
 
-type Marketer = { id: number; name: string; email: string };
+type Marketer = { id: number; name: string; email?: string | null; staff_id?: string | null; phone?: string | null };
 type Affiliate = {
-  id: number; name: string; email: string; phone: string | null;
+  id: number; name: string; email?: string | null; staff_id?: string | null; phone: string | null;
   marketer_id: number | null; marketer_name: string | null;
   lives: number; done: number; gmv: number; items: number; viewers: number;
 };
@@ -49,6 +50,7 @@ export default function AdminDashboard({
   const [savingId, setSavingId] = useState<number | null>(null);
   const [linksFor, setLinksFor] = useState<Affiliate | null>(null);
   const [deleteErr, setDeleteErr] = useState("");
+  const [addMarketer, setAddMarketer] = useState(false);
 
   /**
    * Two-step delete: the first call reports what would be destroyed, and the
@@ -68,7 +70,7 @@ export default function AdminDashboard({
         (lines ? `This affects:\n${lines}\n\n` : "") +
         `${data.note}\n\nThis cannot be undone.`;
       const go = await confirmDialog({
-        title: `Delete ${data.role} "${name}" (${data.email})?`,
+        title: `Padam ${data.role} "${name}" (${data.staff_id ?? ""})?`,
         text: body,
         danger: true,
       });
@@ -163,14 +165,21 @@ export default function AdminDashboard({
       <AiSettingsCard />
       <WhatsAppCard />
 
+      <StaffCreateModal open={addMarketer} onClose={() => setAddMarketer(false)} />
+
       <section>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="section-title">Marketers</h2>
-          {deleteErr && (
-            <span className="flex items-center gap-1.5 text-sm text-danger">
-              <AlertCircle className="h-4 w-4" aria-hidden="true" />{deleteErr}
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {deleteErr && (
+              <span className="flex items-center gap-1.5 text-sm text-danger">
+                <AlertCircle className="h-4 w-4" aria-hidden="true" />{deleteErr}
+              </span>
+            )}
+            <button className="btn !py-2" onClick={() => setAddMarketer(true)}>
+              <Plus className="h-4 w-4" aria-hidden="true" />Add Marketer
+            </button>
+          </div>
         </div>
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {marketers.map((m) => {
@@ -182,7 +191,7 @@ export default function AdminDashboard({
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-bold text-ink">{m.name}</p>
-                  <p className="truncate text-xs text-muted-fg">{m.email}</p>
+                  <p className="truncate text-xs font-mono text-muted-fg">{m.staff_id}</p>
                   <p className="text-xs text-muted-fg">
                     {owned} affiliate{owned === 1 ? "" : "s"}
                   </p>
@@ -210,7 +219,7 @@ export default function AdminDashboard({
                 <div className="min-w-0">
                   <p className="truncate font-bold text-ink">{a.name}</p>
                   <p className="truncate text-xs text-muted-fg">
-                    {a.email}{a.phone ? ` · ${a.phone}` : ""}
+                    <span className="font-mono">{a.staff_id}</span>{a.phone ? ` · ${a.phone}` : ""}
                   </p>
                 </div>
                 <span className="chip shrink-0 bg-primary/10 text-primary">

@@ -2,13 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { AlertCircle, LogIn } from "lucide-react";
 import AuthShell from "@/components/AuthShell";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -20,7 +19,7 @@ export default function LoginPage() {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ login, password }),
     });
     const data = await res.json();
     setLoading(false);
@@ -44,9 +43,10 @@ export default function LoginPage() {
         )}
 
         <div>
-          <label className="label" htmlFor="email">Email</label>
-          <input id="email" className="input" type="email" autoComplete="email"
-            value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <label className="label" htmlFor="login">ID Staff</label>
+          <input id="login" className="input font-mono" autoComplete="username"
+            placeholder="MNL-001 / AFL-001"
+            value={login} onChange={(e) => setLogin(e.target.value)} required autoFocus />
         </div>
         <div>
           <label className="label" htmlFor="password">Password</label>
@@ -59,12 +59,6 @@ export default function LoginPage() {
           {loading ? "Logging in…" : "Log in"}
         </button>
 
-        <p className="text-center text-sm text-muted-fg">
-          No account?{" "}
-          <Link href="/register" className="font-semibold text-primary hover:underline">
-            Register
-          </Link>
-        </p>
       </form>
     </AuthShell>
   );

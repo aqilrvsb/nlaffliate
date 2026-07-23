@@ -1,42 +1,65 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import db from "@/lib/db";
-import { createSession } from "@/lib/session";
-import { normalisePhone } from "@/lib/whatsapp";
+import { getSession } from "@/lib/session";
+import { nextStaffId } from "@/lib/staff";
+import { sendWhatsApp, accountCreatedMessage, normalisePhone } from "@/lib/whatsapp";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+/**
+ * Admin creates a staff account (a marketer, or an affiliate).
+ *
+ * This used to be an open self-registration that trusted `role` from the body
+ * — so anyone could mint themselves an admin. It is now admin-only, and
+ * accounts are provisioned rather than self-served: the Staff ID is generated,
+ * the first password is the Staff ID itself, and both are handed over by
+ * WhatsApp. The staff member changes the password after first login.
+ */
 export async function POST(req: Request) {
-  const { name, email, phone, address, password, role } = await req.json();
-
-  if (!name || !email || !phone || !address || !password || !role) {
-    return NextResponse.json({ error: "All fields are required." }, { status: 400 });
-  }
-  if (!["marketer", "affiliate", "admin"].includes(role)) {
-    return NextResponse.json({ error: "Invalid role." }, { status: 400 });
-  }
-  if (String(password).length < 6) {
-    return NextResponse.json({ error: "Password must be at least 6 characters." }, { status: 400 });
+  const admin = await getSession();
+  if (!admin || admin.role !== "admin") {
+    return NextResponse.json({ error: "Admin sahaja." }, { status: 403 });
   }
 
-  const existing = await db.prepare("SELECT id FROM users WHERE email = ?").get(email);
-  if (existing) {
-    return NextResponse.json({ error: "Email already registered." }, { status: 409 });
+  const body = await req.json().catch(() => ({}));
+  const name = String(body.name ?? "").trim();
+  const phone = normalisePhone(body.phone);
+  const address = String(body.address ?? "").trim();
+  const role = String(body.role ?? "");
+
+  if (role !== "marketer" && role !== "affiliate") {
+    return NextResponse.json({ error: "Peranan mesti marketer atau affiliate." }, { status: 400 });
+  }
+  if (!name || !phone) {
+    return NextResponse.json({ error: "Nama dan No WhatsApp diperlukan." }, { status: 400 });
   }
 
-  // Stored in one canonical shape (60XXXXXXXXX) so every notification and
-  // every lookup agrees, whatever the user typed.
-  const tel = normalisePhone(phone);
-  const hash = bcrypt.hashSync(String(password), 10);
+  // Staff ID and first password are generated, never chosen. The sequence
+  // makes the ID collision-free even under concurrent creation.
+  const staffId = await nextStaffId(role);
+  const hash = bcrypt.hashSync(staffId, 10);
+
   const info = await db.prepare(
-      "INSERT INTO users (name, email, phone, address, password_hash, role) VALUES (?, ?, ?, ?, ?, ?) RETURNING id"
+      `INSERT INTO users (name, phone, address, password_hash, role, staff_id)
+       VALUES (?, ?, ?, ?, ?, ?) RETURNING id`
     )
-    .run(name, email, tel, address, hash, role);
+    .run(name, phone, address || null, hash, role, staffId);
 
-  const user = {
+  // Hand over the login details. Best-effort: a failed message must not undo a
+  // created account, but it is reported so nobody is left waiting.
+  const wa = await sendWhatsApp(
+    phone,
+    accountCreatedMessage({ name, staffId, password: staffId })
+  );
+
+  return NextResponse.json({
+    ok: true,
     id: Number(info.lastInsertRowid),
-    name,
-    email,
-    role,
-  };
-  await createSession(user);
-  return NextResponse.json({ ok: true, role });
+    staff_id: staffId,
+    password: staffId,
+    notified: wa.ok,
+    notify_note: wa.skipped || wa.error || null,
+  });
 }

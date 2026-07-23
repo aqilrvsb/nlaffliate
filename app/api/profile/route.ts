@@ -8,7 +8,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const row = await db.prepare(
-      "SELECT id, name, email, phone, address, role, marketer_id, wa_group_url FROM users WHERE id = ?"
+      "SELECT id, name, email, staff_id, phone, address, role, marketer_id, wa_group_url FROM users WHERE id = ?"
     ).get(user.id) as any;
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 

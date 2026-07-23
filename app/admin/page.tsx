@@ -42,12 +42,12 @@ export default async function AdminPage({
   const plain = <T,>(rows: T[]): T[] => rows.map((r) => ({ ...r }));
 
   const marketers = plain(
-    await db.prepare("SELECT id, name, email FROM users WHERE role = 'marketer' ORDER BY name")
+    await db.prepare("SELECT id, name, email, staff_id, phone FROM users WHERE role = 'marketer' ORDER BY name")
       .all() as any[]
   );
 
   const affiliates = plain(await db.prepare(
-      `SELECT u.id, u.name, u.email, u.phone, u.marketer_id,
+      `SELECT u.id, u.name, u.email, u.staff_id, u.phone, u.marketer_id,
               m.name AS marketer_name,
               COUNT(b.id) AS lives,
               SUM(CASE WHEN b.status = 'completed' THEN 1 ELSE 0 END) AS done,
@@ -61,7 +61,7 @@ export default async function AdminPage({
        WHERE u.role = 'affiliate'
        -- Postgres needs every non-aggregated column in GROUP BY
        -- (SQLite allowed bare columns).
-       GROUP BY u.id, u.name, u.email, u.phone, u.marketer_id, m.name
+       GROUP BY u.id, u.name, u.email, u.staff_id, u.phone, u.marketer_id, m.name
        ORDER BY gmv DESC, u.name`
     )
     .all(...dateArgs) as any[]);

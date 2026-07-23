@@ -7,7 +7,7 @@ import Modal from "@/components/Modal";
 import { confirmDialog, alertDialog } from "@/lib/swal";
 
 export type ManagedAffiliate = {
-  id: number; name: string; email: string;
+  id: number; name: string; email?: string | null; staff_id?: string | null;
   phone: string | null; address: string | null;
 };
 
@@ -23,7 +23,7 @@ export function AffiliateModal({
   open: boolean; affiliate: ManagedAffiliate | null; onClose: () => void;
 }) {
   const router = useRouter();
-  const [f, setF] = useState({ name: "", email: "", phone: "", address: "", password: "" });
+  const [f, setF] = useState({ name: "", phone: "", address: "", password: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
@@ -32,7 +32,6 @@ export function AffiliateModal({
     if (!open) return;
     setF({
       name: affiliate?.name || "",
-      email: affiliate?.email || "",
       phone: affiliate?.phone || "",
       address: affiliate?.address || "",
       password: "",
@@ -47,12 +46,13 @@ export function AffiliateModal({
     e.preventDefault();
     setSaving(true); setError(""); setNote("");
 
-    // On edit an empty password means "leave the login alone", so it is only
-    // sent when the marketer actually typed a new one.
+    // On edit an empty password means "leave the login alone". On create there
+    // is no password field: the Staff ID and its matching first password are
+    // generated server-side.
     const body: Record<string, string> = {
-      name: f.name, email: f.email, phone: f.phone, address: f.address,
+      name: f.name, phone: f.phone, address: f.address,
     };
-    if (f.password || !affiliate) body.password = f.password;
+    if (affiliate && f.password) body.password = f.password;
 
     const res = await fetch(
       affiliate ? `/api/marketer/affiliates/${affiliate.id}` : "/api/marketer/affiliates",
@@ -66,13 +66,16 @@ export function AffiliateModal({
     setSaving(false);
     if (!res.ok) return setError(data.error || "Save failed.");
 
-    // Say plainly when the welcome message did not go out — silence would read
-    // as "notified" and the affiliate would be left waiting for a link.
-    if (!affiliate && data.notified === false && data.notify_note) {
+    // Hand the generated login over to the marketer, and say plainly if the
+    // WhatsApp did not go out — otherwise nobody knows the affiliate's details.
+    if (!affiliate && data.staff_id) {
+      const sent = data.notified
+        ? "Butiran juga dihantar melalui WhatsApp."
+        : `WhatsApp TIDAK dihantar${data.notify_note ? `: ${data.notify_note}` : ""}. Sila beri butiran ini secara manual.`;
       await alertDialog({
-        title: "Affiliate created",
-        text: `WhatsApp not sent: ${data.notify_note}`,
-        variant: "warning",
+        title: "Affiliate dibuka",
+        text: `ID Staff: ${data.staff_id}\nPassword: ${data.password}\n\n${sent}`,
+        variant: data.notified ? "success" : "warning",
       });
     }
     onClose();
@@ -88,36 +91,33 @@ export function AffiliateModal({
           <input id="af-name" className="input" value={f.name} onChange={set("name")}
             required autoFocus placeholder="e.g. Nur Aisyah" />
         </div>
-        <div>
-          <label className="label" htmlFor="af-email">Email</label>
-          <input id="af-email" type="email" className="input" value={f.email}
-            onChange={set("email")} required placeholder="nama@email.com" />
-        </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="label" htmlFor="af-phone">No WhatsApp</label>
             <input id="af-phone" className="input" value={f.phone} onChange={set("phone")}
               required placeholder="0123456789" />
           </div>
-          <div>
-            <label className="label" htmlFor="af-pass">
-              Password {affiliate && <span className="font-normal text-muted-fg">(biar kosong = tak tukar)</span>}
-            </label>
-            <input id="af-pass" type="text" className="input" value={f.password}
-              onChange={set("password")} required={!affiliate}
-              placeholder={affiliate ? "••••••" : "min. 6 aksara"} />
-          </div>
+          {affiliate && (
+            <div>
+              <label className="label" htmlFor="af-pass">
+                Reset Password <span className="font-normal text-muted-fg">(biar kosong = tak tukar)</span>
+              </label>
+              <input id="af-pass" type="text" className="input" value={f.password}
+                onChange={set("password")} placeholder="••••••" />
+            </div>
+          )}
         </div>
         <div>
-          <label className="label" htmlFor="af-addr">Alamat</label>
+          <label className="label" htmlFor="af-addr">Alamat <span className="font-normal text-muted-fg">(optional)</span></label>
           <input id="af-addr" className="input" value={f.address} onChange={set("address")}
-            required placeholder="Alamat penghantaran sample" />
+            placeholder="Alamat penghantaran sample" />
         </div>
 
         {!affiliate && (
           <p className="rounded-xl bg-primary/5 px-3 py-2 text-xs text-muted-fg">
-            Affiliate ini terus di bawah anda — boleh login serta-merta dan akan
-            terima notifikasi WhatsApp selamat datang.
+            ID Staff (AFL-###) dan password akan dijana automatik dan dihantar
+            melalui WhatsApp. Affiliate boleh login serta-merta dan tukar
+            password kemudian.
           </p>
         )}
 
@@ -163,7 +163,7 @@ export function AffiliateActions({
         .map(([k, n]) => `  • ${n} ${k.replace(/_/g, " ")}`)
         .join("\n");
       const ok = await confirmDialog({
-        title: `Delete affiliate "${data.name}" (${data.email})?`,
+        title: `Padam affiliate "${data.name}" (${data.staff_id ?? ""})?`,
         text:
           (lines ? `This affects:\n${lines}\n\n` : "") +
           `${data.note}\n\nThis cannot be undone.`,

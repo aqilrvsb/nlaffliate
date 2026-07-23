@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { nextStaffId } from "@/lib/staff";
 import { sendWhatsApp, accountCreatedMessage, normalisePhone } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
@@ -10,55 +11,47 @@ export const dynamic = "force-dynamic";
 /**
  * A marketer registers an affiliate directly under themselves.
  *
- * Self-registration leaves an affiliate locked until an admin assigns them a
- * marketer — that assignment is the approval. Here the marketer IS the one
- * approving, so marketer_id is set on creation and the account is usable
- * immediately. Either way the affiliate gets the same welcome message.
+ * The account is provisioned, not self-served: the Staff ID (AFL-###) and the
+ * first password (the Staff ID itself) are generated and handed over by
+ * WhatsApp. marketer_id is set on creation, so the affiliate can log in and
+ * work straight away, then change the password.
  */
 export async function POST(req: Request) {
   const user = await getSession();
   if (!user || user.role !== "marketer")
     return NextResponse.json({ error: "Marketers only." }, { status: 403 });
 
-  const { name, email, phone, address, password } = await req.json().catch(() => ({}));
-  const clean = {
-    name: String(name || "").trim(),
-    email: String(email || "").trim().toLowerCase(),
-    phone: normalisePhone(phone),
-    address: String(address || "").trim(),
-  };
+  const body = await req.json().catch(() => ({}));
+  const name = String(body.name ?? "").trim();
+  const phone = normalisePhone(body.phone);
+  const address = String(body.address ?? "").trim();
 
-  if (!clean.name || !clean.email || !clean.phone || !clean.address) {
-    return NextResponse.json({ error: "Name, email, phone and address are required." }, { status: 400 });
-  }
-  if (String(password || "").length < 6) {
-    return NextResponse.json({ error: "Password must be at least 6 characters." }, { status: 400 });
+  if (!name || !phone) {
+    return NextResponse.json({ error: "Nama dan No WhatsApp diperlukan." }, { status: 400 });
   }
 
-  const existing = await db.prepare("SELECT id FROM users WHERE lower(email) = ?").get(clean.email);
-  if (existing) {
-    return NextResponse.json({ error: "That email is already registered." }, { status: 409 });
-  }
+  // Staff ID and first password are generated, never chosen. The sequence
+  // keeps the ID collision-free even under concurrent creation.
+  const staffId = await nextStaffId("affiliate");
+  const hash = bcrypt.hashSync(staffId, 10);
 
-  const hash = bcrypt.hashSync(String(password), 10);
   const info = await db.prepare(
-      `INSERT INTO users (name, email, phone, address, password_hash, role, marketer_id)
-       VALUES (?, ?, ?, ?, ?, 'affiliate', ?) RETURNING id`
-    ).run(clean.name, clean.email, clean.phone, clean.address, hash, user.id);
+      `INSERT INTO users (name, phone, address, password_hash, role, marketer_id, staff_id)
+       VALUES (?, ?, ?, ?, 'affiliate', ?, ?) RETURNING id`
+    ).run(name, phone, address || null, hash, user.id, staffId);
 
-  // The affiliate never chose this password, so the account is unusable
-  // unless we hand it over. Best-effort: a failed message must not undo a
+  // Hand over the login details. Best-effort: a failed message must not undo a
   // created account, but it is reported so nobody is left waiting.
   const wa = await sendWhatsApp(
-    clean.phone,
-    accountCreatedMessage({
-      name: clean.name, email: clean.email, password: String(password),
-    })
+    phone,
+    accountCreatedMessage({ name, staffId, password: staffId })
   );
 
   return NextResponse.json({
     ok: true,
     id: Number(info.lastInsertRowid),
+    staff_id: staffId,
+    password: staffId,
     notified: wa.ok,
     notify_note: wa.skipped || wa.error || null,
   });

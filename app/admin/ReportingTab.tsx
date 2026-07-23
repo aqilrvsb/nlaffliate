@@ -30,7 +30,7 @@ export type AdminLink = {
 };
 
 export type AdminAffiliate = {
-  id: number; name: string; email: string; phone: string | null;
+  id: number; name: string; email?: string | null; staff_id?: string | null; phone: string | null;
   marketer_id: number | null; marketer_name: string | null;
 };
 
@@ -223,7 +223,7 @@ export default function AdminReportingTab({
                   <tr className="border-t border-line bg-white/40">
                     <td className="px-4 py-3">
                       <div className="font-semibold text-ink">{a.name}</div>
-                      <div className="text-xs text-muted-fg">{a.email}</div>
+                      <div className="text-xs font-mono text-muted-fg">{a.staff_id ?? ""}</div>
                     </td>
                     <td className="px-4 py-3">
                       {a.marketer_name

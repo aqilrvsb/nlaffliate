@@ -23,7 +23,7 @@ export default async function MarketerPage() {
   const [affiliateRows, profileRows, lives, unknowns, products, posts, overall] =
     await Promise.all([
       db.prepare(
-          `SELECT u.id, u.name, u.email, u.phone, u.address
+          `SELECT u.id, u.name, u.email, u.staff_id, u.phone, u.address
              FROM users u
             WHERE u.role = 'affiliate' AND u.marketer_id = ?
             ORDER BY u.name`

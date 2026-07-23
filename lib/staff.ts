@@ -2,7 +2,7 @@ import db from "@/lib/db";
 
 /**
  * Staff IDs are the login identity — MNL-001 for marketers, AFL-001 for
- * affiliates, HQNL-001 for admins — and are immutable once assigned.
+ * affiliates, and a fixed HQNL for admin — and are immutable once assigned.
  *
  * Generation goes through a Postgres sequence per role, so two accounts
  * created at the same instant can never receive the same number. The sequence
@@ -17,6 +17,9 @@ const PREFIX: Record<string, { seq: string; code: string }> = {
 
 /** The next staff ID for a role, e.g. "AFL-007". Atomic and collision-free. */
 export async function nextStaffId(role: string): Promise<string> {
+  // The company has one HQ account, so admin is a fixed "HQNL" rather than a
+  // numbered series.
+  if (role === "admin") return "HQNL";
   const p = PREFIX[role];
   if (!p) throw new Error(`No staff-ID scheme for role "${role}".`);
   // nextval is atomic even under concurrency, so no two callers collide.

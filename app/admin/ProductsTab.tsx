@@ -11,7 +11,7 @@ import { confirmDialog } from "@/lib/swal";
 export type Product = {
   id: number; name: string; image_url: string | null;
   sku: string | null; product_url: string | null;
-  info: string | null; document_url: string | null;
+  info: string | null; knowledge: string | null; document_url: string | null;
   brand_id: number | null; brand_name: string | null;
 };
 
@@ -161,6 +161,7 @@ function ProductModal({
   const [sku, setSku] = useState("");
   const [link, setLink] = useState("");
   const [info, setInfo] = useState("");
+  const [knowledge, setKnowledge] = useState("");
   const [doc, setDoc] = useState<File | null>(null);
   const [brand, setBrand] = useState("");
   const [brands, setBrands] = useState<
@@ -177,6 +178,7 @@ function ProductModal({
     setSku(product?.sku || "");
     setLink(product?.product_url || "");
     setInfo(product?.info || "");
+    setKnowledge(product?.knowledge || "");
     setDoc(null);
     setBrand(product?.brand_id != null ? String(product.brand_id) : "");
     setPreview(product?.image_url || null);
@@ -212,6 +214,7 @@ function ProductModal({
     fd.append("sku", sku);
     fd.append("product_url", link);
     fd.append("info", info);
+    fd.append("knowledge", knowledge);
     if (doc) fd.append("document", doc);
     fd.append("brand_id", brand);
     if (file) fd.append("image", file);
@@ -272,6 +275,16 @@ function ProductModal({
           <textarea id="pr-info" className="input resize-y" rows={4} value={info}
             onChange={(e) => setInfo(e.target.value)}
             placeholder="Cara guna, kandungan, selling points — affiliate akan baca ini." />
+        </div>
+
+        <div>
+          <label className="label" htmlFor="pr-knowledge">Product Knowledge</label>
+          <textarea id="pr-knowledge" className="input resize-y" rows={5} value={knowledge}
+            onChange={(e) => setKnowledge(e.target.value)}
+            placeholder="Pengetahuan produk untuk live: skrip jualan, soalan lazim (FAQ), objection handling, fakta bahan — affiliate akan rujuk ini." />
+          <p className="mt-1 text-[11px] text-muted-fg">
+            Nota mendalam untuk affiliate rujuk semasa live. Affiliate boleh lihat ini.
+          </p>
         </div>
 
         <div>

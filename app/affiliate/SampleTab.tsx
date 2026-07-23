@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   PackagePlus, Package, Truck, Check, Clock, Loader2, AlertCircle,
-  Trash2, PackageCheck, MapPin, Phone, UserRound, StickyNote, ExternalLink, FileDown,
+  Trash2, PackageCheck, MapPin, Phone, UserRound, StickyNote, ExternalLink, FileDown, BookOpen,
 } from "lucide-react";
 import Modal from "@/components/Modal";
 import { fmtDate } from "@/lib/format";
@@ -12,7 +12,7 @@ import { confirmDialog } from "@/lib/swal";
 export type SampleProduct = {
   id: number; name: string; image_url: string | null;
   sku?: string | null; product_url?: string | null; document_url?: string | null;
-  info?: string | null;
+  info?: string | null; knowledge?: string | null;
 };
 export type SampleRequest = {
   id: number;
@@ -176,6 +176,16 @@ export default function SampleTab() {
                             <span className="mt-1 block whitespace-pre-line text-[11px] leading-snug text-muted-fg">
                               {p.info}
                             </span>
+                          )}
+                          {p.knowledge && (
+                            <details className="mt-1.5 rounded-lg bg-primary/5 px-2 py-1.5">
+                              <summary className="flex cursor-pointer items-center gap-1 text-[11px] font-semibold text-primary">
+                                <BookOpen className="h-3 w-3" aria-hidden="true" />Product Knowledge
+                              </summary>
+                              <span className="mt-1 block whitespace-pre-line text-[11px] leading-snug text-muted-fg">
+                                {p.knowledge}
+                              </span>
+                            </details>
                           )}
                           <span className="mt-1 flex flex-wrap items-center gap-3">
                             {p.product_url && (

@@ -52,9 +52,9 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   if (productUrl && !/^https?:\/\//i.test(productUrl))
     return NextResponse.json({ error: "Link must start with http:// or https://" }, { status: 400 });
   await db
-    .prepare("UPDATE products SET name = ?, sku = ?, product_url = ?, info = ?, brand_id = ? WHERE id = ?")
+    .prepare("UPDATE products SET name = ?, sku = ?, product_url = ?, info = ?, knowledge = ?, brand_id = ? WHERE id = ?")
     .run(name, sku, productUrl, String(form.get("info") ?? "").trim() || null,
-         brandId, id);
+         String(form.get("knowledge") ?? "").trim() || null, brandId, id);
 
   const file = form.get("image") as File | null;
   if (file && file.size > 0) {

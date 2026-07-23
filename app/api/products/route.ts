@@ -34,7 +34,7 @@ export async function GET(req: Request) {
   // filter lives here rather than being done client-side over everything.
   const products = brand
     ? await db.prepare(
-        `SELECT p.id, p.name, p.sku, p.product_url, p.info, p.document_url,
+        `SELECT p.id, p.name, p.sku, p.product_url, p.info, p.knowledge, p.document_url,
                   p.image_url, p.brand_id, b.name AS brand_name, p.created_at
            FROM products p LEFT JOIN brands b ON b.id = p.brand_id
           -- The caller may pass a marketer's copy of a brand; products live
@@ -45,7 +45,7 @@ export async function GET(req: Request) {
           ORDER BY p.name`
       ).all(Number(brand))
     : await db.prepare(
-        `SELECT p.id, p.name, p.sku, p.product_url, p.info, p.document_url,
+        `SELECT p.id, p.name, p.sku, p.product_url, p.info, p.knowledge, p.document_url,
                   p.image_url, p.brand_id, b.name AS brand_name, p.created_at
            FROM products p LEFT JOIN brands b ON b.id = p.brand_id
           ORDER BY b.name NULLS LAST, p.name`
@@ -86,9 +86,10 @@ export async function POST(req: Request) {
 
   const info = await db
     .prepare(
-      "INSERT INTO products (name, sku, product_url, info, brand_id, image_url) VALUES (?, ?, ?, ?, ?, NULL) RETURNING id"
+      "INSERT INTO products (name, sku, product_url, info, knowledge, brand_id, image_url) VALUES (?, ?, ?, ?, ?, ?, NULL) RETURNING id"
     )
-    .run(name, sku, productUrl, String(form.get("info") ?? "").trim() || null, brandId);
+    .run(name, sku, productUrl, String(form.get("info") ?? "").trim() || null,
+         String(form.get("knowledge") ?? "").trim() || null, brandId);
   const id = Number(info.lastInsertRowid);
 
   // Named after the row id so re-uploading a product image replaces the old one

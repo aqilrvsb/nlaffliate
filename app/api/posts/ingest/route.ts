@@ -42,14 +42,18 @@ function bearer(req: Request) {
  * GET /api/posts/ingest
  *
  * Without a key: returns the contract, so PeningLab can self-serve the spec.
- * With a valid key: also returns the affiliate roster (id + staff_id + name) so
- * PeningLab can map a video to the right account before pushing it.
+ * With a valid key:
+ *   • ?staff_id=AFL-009 (or ?affiliate_id=12) → single lookup: PeningLab enters
+ *     just the ID Staff and gets back { id, name, staff_id, phone } to save.
+ *   • no query → the full affiliate roster (id + name + staff_id + phone) so
+ *     PeningLab can map a video to the right account before pushing it.
  */
 export async function GET(req: Request) {
   const spec = {
     endpoint: "POST /api/posts/ingest",
     auth: "Authorization: Bearer <INGEST_API_KEY>",
     content_type: "application/json",
+    lookup: "GET /api/posts/ingest?staff_id=AFL-009  → { ok, affiliate: { id, name, staff_id, phone } }",
     body: {
       staff_id: "AFL-009  (required — ID Staff; or affiliate_id)",
       output_url: "https://.../video.mp4  (required)",
@@ -81,10 +85,30 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, spec });
   }
 
-  // Roster keyed by staff_id — email is no longer collected, so PeningLab maps
-  // a video to the right account by ID Staff (MNL-/AFL-###).
+  // Single-affiliate lookup: PeningLab types only the ID Staff and gets the
+  // name + WhatsApp number back to store on its side. `phone` is the canonical
+  // WhatsApp number (60XXXXXXXXX).
+  const url = new URL(req.url);
+  const lookupStaff = String(url.searchParams.get("staff_id") ?? "").trim().toUpperCase();
+  const lookupId = url.searchParams.get("affiliate_id") ?? url.searchParams.get("id");
+  if (lookupStaff || lookupId) {
+    const affiliate = lookupId
+      ? await db.prepare("SELECT id, name, staff_id, phone FROM users WHERE id = ? AND role = 'affiliate'").get(lookupId)
+      : await db.prepare("SELECT id, name, staff_id, phone FROM users WHERE staff_id = ? AND role = 'affiliate'").get(lookupStaff);
+    if (!affiliate) {
+      return NextResponse.json(
+        { ok: false, error: "Affiliate not found for that staff_id/id." },
+        { status: 404 }
+      );
+    }
+    return NextResponse.json({ ok: true, affiliate });
+  }
+
+  // Full roster keyed by staff_id — email is no longer collected, so PeningLab
+  // maps a video to the right account by ID Staff (AFL-###). Includes the
+  // WhatsApp number so an import fills name + phone in one shot.
   const affiliates = await db
-    .prepare("SELECT id, name, staff_id FROM users WHERE role = 'affiliate' ORDER BY name")
+    .prepare("SELECT id, name, staff_id, phone FROM users WHERE role = 'affiliate' ORDER BY name")
     .all();
 
   return NextResponse.json({ ok: true, spec, affiliates });

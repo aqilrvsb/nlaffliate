@@ -66,9 +66,8 @@ export default function RegisterForm({ role }: { role: Role }) {
             <h2 className="text-lg font-bold">Akaun berjaya dibuka</h2>
           </div>
           <p className="text-sm text-muted-fg">
-            {done.activated
-              ? "Ini ID Staff anda. Password dihantar melalui WhatsApp — boleh ditukar selepas log masuk."
-              : "Ini ID Staff anda. Simpan ID ini. Akaun anda belum aktif — tunggu marketer aktifkan, dan password akan dihantar melalui WhatsApp."}
+            Ini ID Staff anda. Butiran login telah dihantar melalui WhatsApp —
+            boleh ditukar selepas log masuk.
           </p>
 
           <div>
@@ -76,24 +75,25 @@ export default function RegisterForm({ role }: { role: Role }) {
             <input className="input font-mono font-bold" value={done.staff_id} readOnly />
           </div>
 
-          {/* Password is never shown on screen — it goes only to WhatsApp. For a
-              marketer it is sent now; for an affiliate it is sent when the
-              marketer presses Activate. The fallback is safe either way: the
-              first password is the ID Staff itself, so nobody is locked out. */}
-          {done.activated ? (
-            <p className={`flex items-start gap-1.5 rounded-xl px-3 py-2 text-xs ${
-              done.notified ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"
-            }`}>
+          {/* Password is never shown on screen — it goes only to WhatsApp, and
+              since the first password is the ID Staff itself a failed message
+              never locks anyone out. */}
+          <p className={`flex items-start gap-1.5 rounded-xl px-3 py-2 text-xs ${
+            done.notified ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"
+          }`}>
+            <MessageCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            {done.notified
+              ? "ID Staff dan password telah dihantar melalui WhatsApp."
+              : `WhatsApp tidak dihantar${done.notify_note ? `: ${done.notify_note}` : ""}. Password pertama anda ialah ID Staff anda (${done.staff_id}).`}
+          </p>
+
+          {/* An affiliate can log in but lands on a waiting page until their
+              marketer activates them. */}
+          {!done.activated && (
+            <p className="flex items-start gap-1.5 rounded-xl bg-primary/5 px-3 py-2 text-xs text-muted-fg">
               <MessageCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              {done.notified
-                ? "Password telah dihantar melalui WhatsApp."
-                : `WhatsApp tidak dihantar${done.notify_note ? `: ${done.notify_note}` : ""}. Password pertama anda ialah ID Staff anda (${done.staff_id}).`}
-            </p>
-          ) : (
-            <p className="flex items-start gap-1.5 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              <MessageCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              Menunggu marketer mengaktifkan akaun anda. Selepas aktif, ID Staff
-              dan password akan dihantar melalui WhatsApp dan anda boleh log masuk.
+              Akaun anda belum aktif. Anda boleh log masuk, tetapi dashboard akan
+              terbuka selepas marketer mengaktifkan akaun anda.
             </p>
           )}
 

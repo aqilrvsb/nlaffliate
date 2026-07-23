@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
-import { normalisePhone, sendWhatsApp, accountCreatedMessage } from "@/lib/whatsapp";
+import { normalisePhone, sendWhatsApp, welcomeMessage } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,22 +27,17 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const body = await req.json().catch(() => ({}));
 
   /**
-   * Activate — the one-time button. Opens the affiliate's frozen dashboard and
-   * sends their login details (Staff ID + first password + link) by WhatsApp.
-   * The first password is the Staff ID, so a failed message never locks anyone
-   * out. Idempotent: activating an already-active account is a no-op, not a
-   * second notification.
+   * Activate — the one-time button. The affiliate already has their login
+   * (WhatsApp #1, sent at create); this opens their frozen dashboard and sends
+   * the "system ready, you can log in now" WhatsApp #2. Idempotent: activating
+   * an already-active account is a no-op, not a second notification.
    */
   if (body.activate === true) {
     if (hit.row.activated) {
       return NextResponse.json({ ok: true, already: true });
     }
     await db.prepare("UPDATE users SET activated = true WHERE id = ?").run(id);
-    const staffId = hit.row.staff_id ?? "";
-    const wa = await sendWhatsApp(
-      hit.row.phone,
-      accountCreatedMessage({ name: hit.row.name, staffId, password: staffId })
-    );
+    const wa = await sendWhatsApp(hit.row.phone, welcomeMessage(hit.row.name));
     return NextResponse.json({
       ok: true,
       activated: true,

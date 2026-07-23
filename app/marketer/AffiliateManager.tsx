@@ -12,10 +12,10 @@ export type ManagedAffiliate = {
 };
 
 /**
- * Registering an affiliate here assigns them to this marketer immediately, so
- * unlike self-registration there is no waiting for admin approval — the
- * marketer adding them IS the approval. The affiliate still gets the same
- * welcome WhatsApp.
+ * Registering an affiliate here assigns them to this marketer immediately and
+ * sends their login details by WhatsApp (message #1). The account is still
+ * frozen until the marketer presses Aktifkan, which opens the dashboard and
+ * sends the "system ready" WhatsApp (message #2).
  */
 export function AffiliateModal({
   open, affiliate, onClose,
@@ -66,15 +66,16 @@ export function AffiliateModal({
     setSaving(false);
     if (!res.ok) return setError(data.error || "Save failed.");
 
-    // Hand the generated login over to the marketer, and say plainly if the
-    // WhatsApp did not go out — otherwise nobody knows the affiliate's details.
+    // Login details (WhatsApp #1) are sent at create. The account is still
+    // frozen: point the marketer at setting up TikTok links then pressing
+    // Aktifkan, and say plainly if the message did not go out.
     if (!affiliate && data.staff_id) {
       const sent = data.notified
-        ? "Butiran juga dihantar melalui WhatsApp."
-        : `WhatsApp TIDAK dihantar${data.notify_note ? `: ${data.notify_note}` : ""}. Sila beri butiran ini secara manual.`;
+        ? `Butiran login (ID Staff + password) telah dihantar kepada affiliate melalui WhatsApp.`
+        : `WhatsApp TIDAK dihantar${data.notify_note ? `: ${data.notify_note}` : ""}. Sila beri ID Staff kepada affiliate secara manual (password = ID Staff).`;
       await alertDialog({
-        title: "Affiliate dibuka",
-        text: `ID Staff: ${data.staff_id}\nPassword: ${data.password}\n\n${sent}`,
+        title: "Affiliate didaftarkan",
+        text: `ID Staff: ${data.staff_id}\n\n${sent}\n\nAkaun belum aktif. Sediakan link TikTok mereka, kemudian tekan "Aktifkan" untuk buka dashboard dan hantar notifikasi kedua "sistem sedia".`,
         variant: data.notified ? "success" : "warning",
       });
     }
@@ -115,9 +116,10 @@ export function AffiliateModal({
 
         {!affiliate && (
           <p className="rounded-xl bg-primary/5 px-3 py-2 text-xs text-muted-fg">
-            ID Staff (AFL-###) dan password akan dijana automatik dan dihantar
-            melalui WhatsApp. Affiliate boleh login serta-merta dan tukar
-            password kemudian.
+            ID Staff (AFL-###) dijana automatik dan butiran login dihantar terus
+            melalui WhatsApp. Affiliate belum aktif — sediakan link TikTok mereka,
+            kemudian tekan "Aktifkan" untuk buka dashboard dan hantar notifikasi
+            "sistem sedia".
           </p>
         )}
 
@@ -225,7 +227,7 @@ export function ActivateAffiliate({
   async function activate() {
     const ok = await confirmDialog({
       title: `Aktifkan ${name}?`,
-      text: "Dashboard mereka akan terbuka dan butiran login dihantar melalui WhatsApp. Pastikan link TikTok sudah disediakan.",
+      text: "Dashboard mereka akan terbuka dan notifikasi \"sistem sedia\" dihantar melalui WhatsApp. Pastikan link TikTok sudah disediakan.",
       confirmText: "Aktifkan",
     });
     if (!ok) return;
@@ -243,7 +245,7 @@ export function ActivateAffiliate({
     if (d.notified === false) {
       await alertDialog({
         title: "Diaktifkan",
-        text: `WhatsApp tidak dihantar${d.notify_note ? `: ${d.notify_note}` : ""}. Sila beri ID Staff kepada affiliate secara manual (password = ID Staff).`,
+        text: `Akaun sudah aktif, tetapi notifikasi "sistem sedia" tidak dihantar${d.notify_note ? `: ${d.notify_note}` : ""}. Affiliate masih boleh log masuk — butiran login sudah dihantar semasa pendaftaran.`,
         variant: "warning",
       });
     }

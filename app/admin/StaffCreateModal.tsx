@@ -45,11 +45,11 @@ export default function StaffCreateModal({
     if (!res.ok) return setError(data.error || "Gagal.");
 
     const sent = data.notified
-      ? "Butiran juga dihantar melalui WhatsApp."
-      : `WhatsApp TIDAK dihantar${data.notify_note ? `: ${data.notify_note}` : ""}. Sila beri butiran ini secara manual.`;
+      ? "Butiran login (ID Staff + password) telah dihantar kepada marketer melalui WhatsApp."
+      : `WhatsApp TIDAK dihantar${data.notify_note ? `: ${data.notify_note}` : ""}. Sila beri ID Staff kepada marketer secara manual (password = ID Staff).`;
     await alertDialog({
       title: "Marketer dibuka",
-      text: `ID Staff: ${data.staff_id}\nPassword: ${data.password}\n\n${sent}`,
+      text: `ID Staff: ${data.staff_id}\n\n${sent}`,
       variant: data.notified ? "success" : "warning",
     });
     onClose();

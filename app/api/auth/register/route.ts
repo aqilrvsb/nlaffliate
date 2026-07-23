@@ -41,9 +41,9 @@ export async function POST(req: Request) {
   const staffId = await nextStaffId(role);
   const hash = bcrypt.hashSync(staffId, 10);
 
-  // A marketer is usable at once. An affiliate stays frozen until their
-  // marketer presses Activate, so it is created inactive and the login details
-  // are NOT sent yet — that WhatsApp is the activation signal.
+  // A marketer is usable at once. An affiliate is created frozen — it can log
+  // in but sits on a waiting page until its marketer presses Activate, which
+  // opens the dashboard and sends the "system ready" WhatsApp #2.
   const activated = role === "marketer";
 
   const info = await db.prepare(
@@ -52,11 +52,11 @@ export async function POST(req: Request) {
     )
     .run(name, phone, address || null, hash, role, staffId, activated);
 
-  // Only the marketer gets their login now. Best-effort: a failed message must
-  // not undo a created account.
-  const wa = activated
-    ? await sendWhatsApp(phone, accountCreatedMessage({ name, staffId, password: staffId }))
-    : { ok: false, skipped: null, error: null };
+  // Everyone gets their login details at once (WhatsApp #1) so they know their
+  // Staff ID and password — an affiliate simply can't reach the dashboard yet.
+  // Best-effort: a failed message must not undo a created account, and the
+  // first password is the Staff ID itself so nobody is locked out.
+  const wa = await sendWhatsApp(phone, accountCreatedMessage({ name, staffId, password: staffId }));
 
   return NextResponse.json({
     ok: true,

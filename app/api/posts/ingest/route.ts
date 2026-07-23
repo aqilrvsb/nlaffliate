@@ -11,7 +11,7 @@ import { getSetting } from "@/lib/settings";
  *
  * Accepts PeningLab's NATIVE shape:
  *   {
- *     "email": "ida@test.com",
+ *     "staff_id": "AFL-009",             // ID Staff — replaces email
  *     "output_url": "https://.../out.mp4",
  *     "caption": "…",
  *     "metadata": {
@@ -23,7 +23,7 @@ import { getSetting } from "@/lib/settings";
  *     "source_id": "peninglab-history-id" // optional, prevents duplicates
  *   }
  *
- * Flat aliases also work: affiliate_email/affiliate_id, video_url,
+ * Flat aliases also work: affiliate_staff_id/affiliate_id, video_url,
  * cover_title/cover_subtitle/cover_thumbnail_url, post_date.
  * tiktok_url starts NULL and status starts 'pending'.
  */
@@ -42,7 +42,7 @@ function bearer(req: Request) {
  * GET /api/posts/ingest
  *
  * Without a key: returns the contract, so PeningLab can self-serve the spec.
- * With a valid key: also returns the affiliate roster (id + email + name) so
+ * With a valid key: also returns the affiliate roster (id + staff_id + name) so
  * PeningLab can map a video to the right account before pushing it.
  */
 export async function GET(req: Request) {
@@ -51,7 +51,7 @@ export async function GET(req: Request) {
     auth: "Authorization: Bearer <INGEST_API_KEY>",
     content_type: "application/json",
     body: {
-      email: "affiliate@example.com  (required — or affiliate_id)",
+      staff_id: "AFL-009  (required — ID Staff; or affiliate_id)",
       output_url: "https://.../video.mp4  (required)",
       caption: "TikTok caption (optional)",
       metadata: {
@@ -66,7 +66,7 @@ export async function GET(req: Request) {
       "200": '{ "ok": true, "id": 123 }  — or { "ok": true, "id": 123, "duplicate": true }',
       "400": "video link missing",
       "401": "bad ingest key",
-      "404": "affiliate not found for that email/id",
+      "404": "affiliate not found for that staff_id/id",
       "503": "ingest key not configured",
     },
     notes: [
@@ -81,8 +81,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, spec });
   }
 
+  // Roster keyed by staff_id — email is no longer collected, so PeningLab maps
+  // a video to the right account by ID Staff (MNL-/AFL-###).
   const affiliates = await db
-    .prepare("SELECT id, name, email FROM users WHERE role = 'affiliate' ORDER BY name")
+    .prepare("SELECT id, name, staff_id FROM users WHERE role = 'affiliate' ORDER BY name")
     .all();
 
   return NextResponse.json({ ok: true, spec, affiliates });
@@ -104,8 +106,9 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) || {};
   const meta = body.metadata || {};
 
-  // Accept both PeningLab's native keys and our flat aliases.
-  const affiliate_email = body.email || body.affiliate_email;
+  // Accept both PeningLab's native keys and our flat aliases. The affiliate is
+  // identified by ID Staff now that email is gone.
+  const staff_id = String(body.staff_id || body.affiliate_staff_id || "").trim().toUpperCase();
   const affiliate_id = body.affiliate_id;
   const video_url = body.output_url || body.video_url;
   const caption = body.caption;
@@ -122,16 +125,16 @@ export async function POST(req: Request) {
     );
   }
 
-  // Resolve the affiliate.
+  // Resolve the affiliate by ID Staff (preferred) or internal id.
   const affiliate = affiliate_id
     ? await db.prepare("SELECT id FROM users WHERE id = ? AND role = 'affiliate'").get(affiliate_id)
-    : affiliate_email
-      ? await db.prepare("SELECT id FROM users WHERE email = ? AND role = 'affiliate'").get(affiliate_email)
+    : staff_id
+      ? await db.prepare("SELECT id FROM users WHERE staff_id = ? AND role = 'affiliate'").get(staff_id)
       : null;
 
   if (!affiliate) {
     return NextResponse.json(
-      { error: "Affiliate not found (pass affiliate_email or affiliate_id)." },
+      { error: "Affiliate not found (pass staff_id or affiliate_id)." },
       { status: 404 }
     );
   }

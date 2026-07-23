@@ -41,15 +41,12 @@ export default async function AdminPage({
   // Client Component, so we shallow-clone each into a plain object.
   const plain = <T,>(rows: T[]): T[] => rows.map((r) => ({ ...r }));
 
-  // The four reads are independent, so issue them together rather than paying
-  // four sequential round trips — the same pattern the marketer console uses.
-  // postgres.js pipelines them onto the connection, so the page waits on the
-  // slowest query, not their sum.
-  const [marketerRows, affiliateRows, bookingRows, linkRows] = await Promise.all([
-    db.prepare("SELECT id, name, email FROM users WHERE role = 'marketer' ORDER BY name")
-      .all() as Promise<any[]>,
+  const marketers = plain(
+    await db.prepare("SELECT id, name, email FROM users WHERE role = 'marketer' ORDER BY name")
+      .all() as any[]
+  );
 
-    db.prepare(
+  const affiliates = plain(await db.prepare(
       `SELECT u.id, u.name, u.email, u.phone, u.marketer_id,
               m.name AS marketer_name,
               COUNT(b.id) AS lives,
@@ -66,9 +63,10 @@ export default async function AdminPage({
        -- (SQLite allowed bare columns).
        GROUP BY u.id, u.name, u.email, u.phone, u.marketer_id, m.name
        ORDER BY gmv DESC, u.name`
-    ).all(...dateArgs) as Promise<any[]>,
+    )
+    .all(...dateArgs) as any[]);
 
-    db.prepare(
+  const rows = plain(await db.prepare(
       `SELECT b.id AS booking_id, b.user_id AS affiliate_id,
               u.name AS affiliate, m.name AS marketer,
               b.profile_id, p.label AS profile_label, p.url AS profile_url,
@@ -84,11 +82,12 @@ export default async function AdminPage({
        LEFT JOIN live_results r ON r.booking_id = b.id
        WHERE 1=1${dateWhere}
        ORDER BY b.live_date DESC, b.start_time DESC`
-    ).all(...dateArgs) as Promise<any[]>,
+    )
+    .all(...dateArgs) as any[]);
 
-    // Every affiliate's links, so the reporting tab can break commission down
-    // per link exactly as the marketer console does.
-    db.prepare(
+  // Every affiliate's links, so the reporting tab can break commission down
+  // per link exactly as the marketer console does.
+  const links = plain(await db.prepare(
       `SELECT p.id, p.user_id, p.label, p.url, p.commission_type, p.commission_value,
               pb.name AS brand_name,
               COALESCE(
@@ -107,13 +106,7 @@ export default async function AdminPage({
          JOIN users u ON u.id = p.user_id
         WHERE u.role = 'affiliate'
         ORDER BY p.id`
-    ).all() as Promise<any[]>,
-  ]);
-
-  const marketers = plain(marketerRows);
-  const affiliates = plain(affiliateRows);
-  const rows = plain(bookingRows);
-  const links = plain(linkRows);
+    ).all() as any[]);
 
   return (
     <div className="min-h-screen">

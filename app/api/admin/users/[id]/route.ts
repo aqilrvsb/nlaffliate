@@ -32,8 +32,8 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     );
 
   const target = await db
-    .prepare("SELECT id, name, email, role FROM users WHERE id = ?")
-    .get<{ id: number; name: string; email: string; role: string }>(id);
+    .prepare("SELECT id, name, staff_id, role FROM users WHERE id = ?")
+    .get<{ id: number; name: string; staff_id: string | null; role: string }>(id);
   if (!target)
     return NextResponse.json({ error: "Account not found." }, { status: 404 });
 
@@ -91,7 +91,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
       {
         needsConfirm: true,
         name: target.name,
-        email: target.email,
+        staff_id: target.staff_id,
         role: target.role,
         impact,
         // Spelled out because the two roles differ in a way that matters:

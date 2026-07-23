@@ -41,24 +41,28 @@ export async function POST(req: Request) {
   const staffId = await nextStaffId(role);
   const hash = bcrypt.hashSync(staffId, 10);
 
-  const info = await db.prepare(
-      `INSERT INTO users (name, phone, address, password_hash, role, staff_id)
-       VALUES (?, ?, ?, ?, ?, ?) RETURNING id`
-    )
-    .run(name, phone, address || null, hash, role, staffId);
+  // A marketer is usable at once. An affiliate stays frozen until their
+  // marketer presses Activate, so it is created inactive and the login details
+  // are NOT sent yet — that WhatsApp is the activation signal.
+  const activated = role === "marketer";
 
-  // Hand over the login details. Best-effort: a failed message must not undo a
-  // created account, but it is reported so nobody is left waiting.
-  const wa = await sendWhatsApp(
-    phone,
-    accountCreatedMessage({ name, staffId, password: staffId })
-  );
+  const info = await db.prepare(
+      `INSERT INTO users (name, phone, address, password_hash, role, staff_id, activated)
+       VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`
+    )
+    .run(name, phone, address || null, hash, role, staffId, activated);
+
+  // Only the marketer gets their login now. Best-effort: a failed message must
+  // not undo a created account.
+  const wa = activated
+    ? await sendWhatsApp(phone, accountCreatedMessage({ name, staffId, password: staffId }))
+    : { ok: false, skipped: null, error: null };
 
   return NextResponse.json({
     ok: true,
     id: Number(info.lastInsertRowid),
     staff_id: staffId,
-    password: staffId,
+    activated,
     notified: wa.ok,
     notify_note: wa.skipped || wa.error || null,
   });

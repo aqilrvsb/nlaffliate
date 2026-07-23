@@ -13,7 +13,7 @@ import {
   Send, Boxes, ClipboardList, Tag, CalendarPlus, Trash2, AlertCircle, Settings, Plus,
   Package,
 } from "lucide-react";
-import { AffiliateModal, AffiliateActions, type ManagedAffiliate } from "./AffiliateManager";
+import { AffiliateModal, AffiliateActions, ActivateAffiliate, type ManagedAffiliate } from "./AffiliateManager";
 import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
 import ProfileBrandPicker from "@/components/ProfileBrandPicker";
 import {
@@ -57,10 +57,10 @@ type TikTokLink = {
 };
 type Affiliate = {
   id: number; name: string; email: string | null; staff_id: string | null;
-  phone: string | null; address: string | null; links: TikTokLink[];
+  phone: string | null; address: string | null; activated: boolean; links: TikTokLink[];
 };
 type Live = {
-  booking_id: number; affiliate_id: number; affiliate: string; affiliate_email: string;
+  booking_id: number; affiliate_id: number; affiliate: string;
   profile_id: number; profile_label: string; profile_url: string;
   profile_brand: string | null;
   link_brands?: LinkBrand[] | null;
@@ -534,6 +534,7 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
               {a.name.charAt(0).toUpperCase()}
             </span>
             <p className="min-w-0 flex-1 truncate font-bold text-ink">{a.name}</p>
+            <ActivateAffiliate id={a.id} activated={a.activated} name={a.name} />
             <AffiliateActions
               affiliate={{ id: a.id, name: a.name, staff_id: a.staff_id, phone: a.phone, address: a.address }}
               onEdit={() => openEdit(a)} />

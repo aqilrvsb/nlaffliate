@@ -2,9 +2,9 @@ import Link from "next/link";
 import { Hourglass, Settings, ShieldCheck, UserCheck, Lock } from "lucide-react";
 
 /**
- * Shown instead of the dashboard while an affiliate has no marketer.
- * Everything except profile settings is withheld until admin assigns one,
- * so a half-usable dashboard never appears.
+ * The frozen waiting page. Shown instead of the dashboard until the marketer
+ * presses Activate — which they do only after admin has assigned them and they
+ * have set up the affiliate's TikTok links. Nothing is usable until then.
  */
 export default function PendingApproval({ userName }: { userName: string }) {
   return (
@@ -18,15 +18,15 @@ export default function PendingApproval({ userName }: { userName: string }) {
           Hi {userName}, akaun anda sedang disemak
         </h1>
         <p className="mx-auto mt-3 max-w-md leading-relaxed text-muted-fg">
-          Pendaftaran anda sudah diterima. Admin akan assign anda kepada seorang
-          marketer terlebih dahulu. Selepas itu, semua fungsi dashboard akan
-          terbuka secara automatik.
+          Pendaftaran anda sudah diterima. Marketer anda sedang menyediakan akaun
+          anda. Sebaik sahaja ia siap, anda akan terima notifikasi WhatsApp dan
+          dashboard akan terbuka secara automatik.
         </p>
 
         <div className="mt-6 space-y-2 text-left">
           {[
             { Icon: UserCheck, t: "Pendaftaran diterima", done: true },
-            { Icon: ShieldCheck, t: "Menunggu admin assign marketer", done: false },
+            { Icon: ShieldCheck, t: "Marketer sedang menyediakan akaun anda", done: false },
             { Icon: Lock, t: "Dashboard dibuka", done: false },
           ].map(({ Icon, t, done }) => (
             <div

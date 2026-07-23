@@ -15,7 +15,7 @@ import { alertDialog } from "@/lib/swal";
 
 type AdminSample = SampleRequest & {
   affiliate_name: string;
-  affiliate_email: string;
+  affiliate_staff_id: string | null;
 };
 
 const FILTERS = [
@@ -117,7 +117,7 @@ export default function SamplesTab() {
                   </span>
                 </div>
                 <p className="mt-2 font-bold text-ink">{r.affiliate_name}</p>
-                <p className="text-xs text-muted-fg">{r.affiliate_email}</p>
+                <p className="text-xs font-mono text-muted-fg">{r.affiliate_staff_id}</p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">

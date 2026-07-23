@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { nextStaffId } from "@/lib/staff";
-import { sendWhatsApp, accountCreatedMessage, normalisePhone } from "@/lib/whatsapp";
+import { normalisePhone } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,24 +35,17 @@ export async function POST(req: Request) {
   const staffId = await nextStaffId("affiliate");
   const hash = bcrypt.hashSync(staffId, 10);
 
+  // Created inactive: the affiliate sits on a frozen page until this marketer
+  // presses Activate, which is when the login details are sent. So no WhatsApp
+  // fires here.
   const info = await db.prepare(
-      `INSERT INTO users (name, phone, address, password_hash, role, marketer_id, staff_id)
-       VALUES (?, ?, ?, ?, 'affiliate', ?, ?) RETURNING id`
+      `INSERT INTO users (name, phone, address, password_hash, role, marketer_id, staff_id, activated)
+       VALUES (?, ?, ?, ?, 'affiliate', ?, ?, false) RETURNING id`
     ).run(name, phone, address || null, hash, user.id, staffId);
-
-  // Hand over the login details. Best-effort: a failed message must not undo a
-  // created account, but it is reported so nobody is left waiting.
-  const wa = await sendWhatsApp(
-    phone,
-    accountCreatedMessage({ name, staffId, password: staffId })
-  );
 
   return NextResponse.json({
     ok: true,
     id: Number(info.lastInsertRowid),
     staff_id: staffId,
-    password: staffId,
-    notified: wa.ok,
-    notify_note: wa.skipped || wa.error || null,
   });
 }

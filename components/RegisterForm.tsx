@@ -35,7 +35,7 @@ export default function RegisterForm({ role }: { role: Role }) {
   const [loading, setLoading] = useState(false);
   // Once created, we show the generated login rather than a fresh form.
   const [done, setDone] = useState<{
-    staff_id: string; password: string; notified: boolean; notify_note: string | null;
+    staff_id: string; notified: boolean; notify_note: string | null; activated: boolean;
   } | null>(null);
 
   async function submit(e: React.FormEvent) {
@@ -51,8 +51,9 @@ export default function RegisterForm({ role }: { role: Role }) {
     setLoading(false);
     if (!res.ok) return setError(data.error || "Pendaftaran gagal.");
     setDone({
-      staff_id: data.staff_id, password: data.password,
+      staff_id: data.staff_id,
       notified: data.notified, notify_note: data.notify_note,
+      activated: data.activated,
     });
   }
 
@@ -65,8 +66,9 @@ export default function RegisterForm({ role }: { role: Role }) {
             <h2 className="text-lg font-bold">Akaun berjaya dibuka</h2>
           </div>
           <p className="text-sm text-muted-fg">
-            Ini ID Staff anda. Password dihantar melalui WhatsApp — boleh ditukar
-            selepas log masuk.
+            {done.activated
+              ? "Ini ID Staff anda. Password dihantar melalui WhatsApp — boleh ditukar selepas log masuk."
+              : "Ini ID Staff anda. Simpan ID ini. Akaun anda belum aktif — tunggu marketer aktifkan, dan password akan dihantar melalui WhatsApp."}
           </p>
 
           <div>
@@ -74,17 +76,26 @@ export default function RegisterForm({ role }: { role: Role }) {
             <input className="input font-mono font-bold" value={done.staff_id} readOnly />
           </div>
 
-          {/* Password is never shown on screen — it goes only to WhatsApp. If
-              the message failed, the fallback is safe: the first password is
-              the ID Staff itself, so nobody is ever locked out. */}
-          <p className={`flex items-start gap-1.5 rounded-xl px-3 py-2 text-xs ${
-            done.notified ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"
-          }`}>
-            <MessageCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            {done.notified
-              ? "Password telah dihantar melalui WhatsApp."
-              : `WhatsApp tidak dihantar${done.notify_note ? `: ${done.notify_note}` : ""}. Password pertama anda ialah ID Staff anda (${done.staff_id}).`}
-          </p>
+          {/* Password is never shown on screen — it goes only to WhatsApp. For a
+              marketer it is sent now; for an affiliate it is sent when the
+              marketer presses Activate. The fallback is safe either way: the
+              first password is the ID Staff itself, so nobody is locked out. */}
+          {done.activated ? (
+            <p className={`flex items-start gap-1.5 rounded-xl px-3 py-2 text-xs ${
+              done.notified ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"
+            }`}>
+              <MessageCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              {done.notified
+                ? "Password telah dihantar melalui WhatsApp."
+                : `WhatsApp tidak dihantar${done.notify_note ? `: ${done.notify_note}` : ""}. Password pertama anda ialah ID Staff anda (${done.staff_id}).`}
+            </p>
+          ) : (
+            <p className="flex items-start gap-1.5 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <MessageCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              Menunggu marketer mengaktifkan akaun anda. Selepas aktif, ID Staff
+              dan password akan dihantar melalui WhatsApp dan anda boleh log masuk.
+            </p>
+          )}
 
           <Link href="/login" className="btn w-full">Ke halaman log masuk</Link>
         </div>

@@ -66,7 +66,7 @@ const UGC_COVERS = [
 ];
 
 const STEPS = [
-  { Icon: UserPlus, title: "Daftar", body: "Isi nama, WhatsApp, email dan alamat. Ambil masa bawah 1 minit." },
+  { Icon: UserPlus, title: "Daftar", body: "Isi nama, WhatsApp dan alamat. Ambil masa bawah 1 minit." },
   { Icon: Link2, title: "Letak Link TikTok", body: "Masukkan sampai 4 link profil TikTok anda dalam Profile Settings." },
   { Icon: CalendarClock, title: "Jadual Live", body: "Pilih tarikh & masa live. Status mula sebagai Pending." },
   { Icon: Upload, title: "Upload Result", body: "Habis live, upload screenshot. AI baca GMV, viewers, item sold automatik." },

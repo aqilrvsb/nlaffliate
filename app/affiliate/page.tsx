@@ -18,28 +18,27 @@ export default async function AffiliatePage() {
   if (!user) redirect("/login");
   if (user.role !== "affiliate") redirect("/marketer");
 
-  // A fresh affiliate has no marketer yet. Until admin assigns one there is
-  // nothing meaningful to show, so the whole dashboard stays locked.
+  // The dashboard unlocks only when the marketer presses Activate. Until then
+  // the affiliate sits on a frozen waiting page — even after admin assigns a
+  // marketer, because the marketer still has to set up their TikTok links
+  // first. `activated` is read fresh from the DB so activation takes effect on
+  // the next page load without a re-login.
   const me = (await db
     .prepare(
-      `SELECT u.marketer_id, m.name AS marketer_name, m.wa_group_url
-         FROM users u
-         LEFT JOIN users m ON m.id = u.marketer_id
-        WHERE u.id = ?`
+      `SELECT u.marketer_id, u.activated
+         FROM users u WHERE u.id = ?`
     )
     .get(user.id)) as {
     marketer_id: number | null;
-    marketer_name: string | null;
-    wa_group_url: string | null;
+    activated: boolean;
   } | undefined;
 
   return (
     <div className="min-h-screen">
       <Header user={user} />
       <main className="mx-auto max-w-6xl px-4 py-8">
-        {me?.marketer_id ? (
-          <AffiliateDashboard
-          />
+        {me?.activated ? (
+          <AffiliateDashboard />
         ) : (
           <PendingApproval userName={user.name} />
         )}

@@ -23,7 +23,7 @@ export async function GET() {
 
   const rows = user.role === "admin"
     ? await db.prepare(
-        `SELECT s.*, u.name AS affiliate_name, u.email AS affiliate_email,
+        `SELECT s.*, u.name AS affiliate_name, u.staff_id AS affiliate_staff_id,
                 b.name AS brand_name, m.name AS marketer_name
            FROM sample_requests s
            JOIN users u ON u.id = s.user_id
@@ -32,7 +32,7 @@ export async function GET() {
           ORDER BY s.created_at DESC`
       ).all()
     : await db.prepare(
-        `SELECT s.*, u.name AS affiliate_name, u.email AS affiliate_email,
+        `SELECT s.*, u.name AS affiliate_name, u.staff_id AS affiliate_staff_id,
                 b.name AS brand_name, m.name AS marketer_name
            FROM sample_requests s
            JOIN users u ON u.id = s.user_id

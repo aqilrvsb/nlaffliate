@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, AlertCircle, Check, Pencil, Trash2 } from "lucide-react";
+import { Loader2, AlertCircle, Check, Pencil, Trash2, Power } from "lucide-react";
 import Modal from "@/components/Modal";
 import { confirmDialog, alertDialog } from "@/lib/swal";
 
@@ -196,5 +196,67 @@ export function AffiliateActions({
           : <Trash2 className="h-4 w-4" aria-hidden="true" />}
       </button>
     </div>
+  );
+}
+
+/**
+ * The one-time Activate button.
+ *
+ * An affiliate is created frozen; pressing this opens their dashboard and
+ * sends their login details by WhatsApp. Set up their TikTok links first, then
+ * activate — that is the moment they are told they can log in. Once active it
+ * becomes a plain "Aktif" badge with no way back, since re-notifying would
+ * only confuse.
+ */
+export function ActivateAffiliate({
+  id, activated, name,
+}: { id: number; activated: boolean; name: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+
+  if (activated) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-100 px-2 py-1 text-[11px] font-semibold text-emerald-700">
+        <Check className="h-3 w-3" aria-hidden="true" />Aktif
+      </span>
+    );
+  }
+
+  async function activate() {
+    const ok = await confirmDialog({
+      title: `Aktifkan ${name}?`,
+      text: "Dashboard mereka akan terbuka dan butiran login dihantar melalui WhatsApp. Pastikan link TikTok sudah disediakan.",
+      confirmText: "Aktifkan",
+    });
+    if (!ok) return;
+    setBusy(true);
+    const res = await fetch(`/api/marketer/affiliates/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activate: true }),
+    });
+    const d = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) {
+      return alertDialog({ title: "Tidak boleh aktifkan", text: d.error, variant: "error" });
+    }
+    if (d.notified === false) {
+      await alertDialog({
+        title: "Diaktifkan",
+        text: `WhatsApp tidak dihantar${d.notify_note ? `: ${d.notify_note}` : ""}. Sila beri ID Staff kepada affiliate secara manual (password = ID Staff).`,
+        variant: "warning",
+      });
+    }
+    router.refresh();
+  }
+
+  return (
+    <button onClick={activate} disabled={busy} type="button"
+      className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-fg shadow-lift transition-opacity duration-200 hover:opacity-90 disabled:opacity-50">
+      {busy
+        ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+        : <Power className="h-3.5 w-3.5" aria-hidden="true" />}
+      Aktifkan
+    </button>
   );
 }

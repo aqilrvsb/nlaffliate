@@ -212,7 +212,7 @@ const TAB_LABELS: Record<string, string> = {
   "sales-product-campaign": "Sales · Product Campaign",
   "sales-card": "Sales · Product Card",
   overall: "Overall",
-  creator: "Creator",
+  creator: "Creator Quantity",
   "live-users": "List Live User",
   "live-pending": "Pending Live",
   "live-success": "Success Live",
@@ -463,7 +463,7 @@ export default function MarketerShell({
                 active === "creator" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
               }`}>
               <NavIcon Icon={ShoppingBag} busy={navPending && navKey === "creator"} />
-              Creator
+              Creator Quantity
             </button>
 
             {/* Data Quality — its own main category */}

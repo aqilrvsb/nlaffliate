@@ -2239,14 +2239,12 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
                   <th className="px-4 py-3 font-semibold">No</th>
                   <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
                   <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
-                  <SortTh k="net_cost" sort={sort} on={toggleSort} right>Net Cost</SortTh>
                   <SortTh k="cost" sort={sort} on={toggleSort} right>Cost</SortTh>
                   <SortTh k="sku_orders" sort={sort} on={toggleSort} right>SKU Orders</SortTh>
                   <SortTh k="cost_per_order" sort={sort} on={toggleSort} right>Cost / Order</SortTh>
                   <SortTh k="gross_revenue" sort={sort} on={toggleSort} right>Gross Revenue</SortTh>
                   <SortTh k="roi" sort={sort} on={toggleSort} right>ROI</SortTh>
                   <SortTh k="live_views" sort={sort} on={toggleSort} right>LIVE Views</SortTh>
-                  <SortTh k="current_budget" sort={sort} on={toggleSort} right>Budget</SortTh>
                   <th className="px-4 py-3 font-semibold">Action</th>
                 </tr>
               </thead>
@@ -2256,14 +2254,12 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
                     <td className="px-4 py-3 text-muted-fg">{(page - 1) * 20 + i + 1}</td>
                     <td className="px-4 py-3">{r.brand_name ? <span className="chip bg-primary/10 text-primary">{r.brand_name}</span> : <span className="text-muted-fg/50">—</span>}</td>
                     <td className="px-4 py-3 text-ink">{fmtDMY(r.report_date)}</td>
-                    <td className="px-4 py-3 text-right">{money2(r.net_cost)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{money2(r.cost)}</td>
                     <td className="px-4 py-3 text-right">{int(r.sku_orders)}</td>
                     <td className="px-4 py-3 text-right">{money2(r.cost_per_order)}</td>
                     <td className="px-4 py-3 text-right">{money2(r.gross_revenue)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
                     <td className="px-4 py-3 text-right">{intOr(r.live_views)}</td>
-                    <td className="px-4 py-3 text-right">{money2(r.current_budget)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <button onClick={() => setEditing(r)} className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent" aria-label="Edit"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
@@ -2378,13 +2374,11 @@ function SalesProductTab({ rows: rawAll, cards }: { rows: SalesProduct[]; cards:
                   <th className="px-4 py-3 font-semibold">No</th>
                   <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
                   <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
-                  <SortTh k="net_cost" sort={sort} on={toggleSort} right>Net Cost</SortTh>
                   <SortTh k="cost" sort={sort} on={toggleSort} right>Cost</SortTh>
                   <SortTh k="sku_orders" sort={sort} on={toggleSort} right>SKU Orders</SortTh>
                   <SortTh k="cost_per_order" sort={sort} on={toggleSort} right>Cost / Order</SortTh>
                   <SortTh k="gross_revenue" sort={sort} on={toggleSort} right>Gross Revenue</SortTh>
                   <SortTh k="roi" sort={sort} on={toggleSort} right>ROI</SortTh>
-                  <SortTh k="current_budget" sort={sort} on={toggleSort} right>Budget</SortTh>
                   <th className="px-4 py-3 font-semibold">Action</th>
                 </tr>
               </thead>
@@ -2394,13 +2388,11 @@ function SalesProductTab({ rows: rawAll, cards }: { rows: SalesProduct[]; cards:
                     <td className="px-4 py-3 text-muted-fg">{(page - 1) * 20 + i + 1}</td>
                     <td className="px-4 py-3">{r.brand_name ? <span className="chip bg-primary/10 text-primary">{r.brand_name}</span> : <span className="text-muted-fg/50">—</span>}</td>
                     <td className="px-4 py-3 text-ink">{fmtDMY(r.report_date)}</td>
-                    <td className="px-4 py-3 text-right">{money2(r.net_cost)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{money2(r.cost)}</td>
                     <td className="px-4 py-3 text-right">{int(r.sku_orders)}</td>
                     <td className="px-4 py-3 text-right">{money2(r.cost_per_order)}</td>
                     <td className="px-4 py-3 text-right">{money2(r.gross_revenue)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
-                    <td className="px-4 py-3 text-right">{money2(r.current_budget)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <button onClick={() => setEditing(rawById.get(r.id) ?? r)} className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent" title="Edit nilai import mentah" aria-label="Edit"><Pencil className="h-4 w-4" aria-hidden="true" /></button>

@@ -2467,14 +2467,11 @@ function SalesCampaignTab({ rows: all, kind }: { rows: SalesCampaign[]; kind: "l
                   <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
                   <SortTh k="campaign_name" sort={sort} on={toggleSort}>Campaign</SortTh>
                   <SortTh k="cost" sort={sort} on={toggleSort} right>Cost</SortTh>
-                  <SortTh k="net_cost" sort={sort} on={toggleSort} right>Net Cost</SortTh>
                   <SortTh k="sku_orders" sort={sort} on={toggleSort} right>SKU Orders</SortTh>
                   <SortTh k="cost_per_order" sort={sort} on={toggleSort} right>Cost / Order</SortTh>
                   <SortTh k="gross_revenue" sort={sort} on={toggleSort} right>Gross Revenue</SortTh>
                   <SortTh k="roi" sort={sort} on={toggleSort} right>ROI</SortTh>
-                  {isLive
-                    ? <SortTh k="live_views" sort={sort} on={toggleSort} right>LIVE Views</SortTh>
-                    : <SortTh k="current_budget" sort={sort} on={toggleSort} right>Budget</SortTh>}
+                  {isLive && <SortTh k="live_views" sort={sort} on={toggleSort} right>LIVE Views</SortTh>}
                 </tr>
               </thead>
               <tbody>
@@ -2488,12 +2485,11 @@ function SalesCampaignTab({ rows: all, kind }: { rows: SalesCampaign[]; kind: "l
                       <div className="font-mono text-[11px] text-muted-fg">{r.campaign_id}</div>
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{money2(r.cost)}</td>
-                    <td className="px-4 py-3 text-right">{money2(r.net_cost)}</td>
                     <td className="px-4 py-3 text-right">{int(r.sku_orders)}</td>
                     <td className="px-4 py-3 text-right">{money2(r.cost_per_order)}</td>
                     <td className="px-4 py-3 text-right">{money2(r.gross_revenue)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
-                    <td className="px-4 py-3 text-right">{isLive ? intOr(r.live_views) : money2(r.current_budget)}</td>
+                    {isLive && <td className="px-4 py-3 text-right">{intOr(r.live_views)}</td>}
                   </tr>
                 ))}
               </tbody>

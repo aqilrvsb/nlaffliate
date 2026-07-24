@@ -11,9 +11,14 @@ const OVERVIEW_PROMPT = `You read a TikTok GMV Max "Overview" panel. Return ONLY
 {"cost": number, "sku_orders": number, "cost_per_order": number, "gross_revenue": number, "roi": number}
 Strip "MYR"/"RM"/commas (1,339.16 MYR -> 1339.16). Use null if a value is missing. No prose, no fences.`;
 
-const METRICS_PROMPT = `You read a TikTok "Key metrics" panel. Return ONLY JSON:
-{"gmv": number, "visitors": number, "product_impressions": number, "product_clicks": number}
-Expand K/M suffixes (RM21.8K -> 21800, 1.2M -> 1200000). Strip "RM"/commas. Ignore the green % change. null if missing. No prose, no fences.`;
+const METRICS_PROMPT = `You read a TikTok shop analytics screenshot that has a "Key metrics" panel AND a "GMV breakdown" (By content type) panel. Return ONLY JSON:
+{"gmv": number, "visitors": number, "product_impressions": number, "product_clicks": number,
+ "gmv_live": number, "gmv_live_creator": number, "gmv_live_seller": number,
+ "gmv_video": number, "gmv_video_creator": number, "gmv_video_seller": number,
+ "gmv_product_cards": number}
+Key metrics: gmv, visitors, product_impressions, product_clicks.
+GMV breakdown (the RM amounts, NOT the percentages): gmv_live = the "LIVEs" total; gmv_live_creator and gmv_live_seller = its Creator and Seller rows; gmv_video = the "Videos" total; gmv_video_creator and gmv_video_seller = its Creator and Seller rows; gmv_product_cards = the "Product cards" amount.
+Expand K/M suffixes (RM21.8K -> 21800, 1.2M -> 1200000). Strip "RM"/commas. Ignore the green/red % change. null if a value is missing. No prose, no fences.`;
 
 const num = (v: any) => {
   if (v === "" || v == null) return null;
@@ -97,14 +102,18 @@ export async function POST(req: Request) {
   await db.prepare(
     `INSERT INTO overall_reports
        (marketer_id, brand_id, report_date, cost, sku_orders, cost_per_order, gross_revenue, roi,
-        gmv, visitors, product_impressions, product_clicks, img1_path, img2_path)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        gmv, visitors, product_impressions, product_clicks, img1_path, img2_path,
+        gmv_live, gmv_live_creator, gmv_live_seller, gmv_video, gmv_video_creator, gmv_video_seller, gmv_product_cards)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     user.id, brandId, reportDate,
     num(overview.cost), num(overview.sku_orders), num(overview.cost_per_order),
     num(overview.gross_revenue), num(overview.roi),
     num(metrics.gmv), num(metrics.visitors), num(metrics.product_impressions),
-    num(metrics.product_clicks), img1Path, img2Path
+    num(metrics.product_clicks), img1Path, img2Path,
+    num(metrics.gmv_live), num(metrics.gmv_live_creator), num(metrics.gmv_live_seller),
+    num(metrics.gmv_video), num(metrics.gmv_video_creator), num(metrics.gmv_video_seller),
+    num(metrics.gmv_product_cards)
   );
 
   return NextResponse.json({ ok: true, report_date: reportDate, overview, metrics });

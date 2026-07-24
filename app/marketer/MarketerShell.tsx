@@ -129,6 +129,9 @@ type Overall = {
   gmv: number | null; visitors: number | null;
   product_impressions: number | null; product_clicks: number | null;
   img1_path: string | null; img2_path: string | null;
+  gmv_live: number | null; gmv_live_creator: number | null; gmv_live_seller: number | null;
+  gmv_video: number | null; gmv_video_creator: number | null; gmv_video_seller: number | null;
+  gmv_product_cards: number | null;
 };
 type CreatorReport = {
   id: number; report_date: string;
@@ -603,7 +606,7 @@ export default function MarketerShell({
           {active === "sales-card" && <SalesCardTab rows={salesCard} />}
           {active === "brand" && <BrandsTab />}
           {active === "product" && <ProductsTab />}
-          {active === "overall" && <OverallTab overall={overall} salesLive={salesLive} salesProduct={salesProductAdj} salesCard={salesCard} />}
+          {active === "overall" && <OverallTab overall={overall} salesLive={salesLive} salesProduct={salesProductAdj} salesCard={salesCard} spendTtm={spendTtm} />}
           {active === "creator" && <CreatorTab reports={creatorReports} />}
           {active === "live-users" && <ListLiveUserTab liveUsers={liveUsers} />}
           {active === "live-pending" && <LiveScheduleTab sessions={liveSessions} liveUsers={liveUsers} kind="pending" />}
@@ -2782,7 +2785,7 @@ function OverallImport() {
       </div>
       <p className="text-[11px] text-muted-fg">
         Image 1 = GMV Max <b>Overview</b> (Cost, SKU orders, Cost/order, Gross revenue, ROI).
-        Image 2 = <b>Key metrics</b> (GMV, Visitors, Product impressions, Product clicks). Read by Gemini 2.5 Flash.
+        Image 2 = <b>Key metrics</b> (GMV, Visitors, Impressions, Clicks) <b>+ GMV breakdown</b> (LIVEs / Videos / Product cards). Read by Gemini 2.5 Flash.
       </p>
       {msg && <span className="text-xs font-medium text-emerald-600">{msg}</span>}
       {error && <span className="text-xs text-danger">{error}</span>}
@@ -2790,8 +2793,9 @@ function OverallImport() {
   );
 }
 
-function OverallTab({ overall, salesLive, salesProduct, salesCard }: {
+function OverallTab({ overall, salesLive, salesProduct, salesCard, spendTtm }: {
   overall: Overall[]; salesLive: SalesLive[]; salesProduct: SalesProduct[]; salesCard: SalesCard[];
+  spendTtm: SpendTtm[];
 }) {
   const params = useSearchParams();
   const { from, to } = resolveRange(
@@ -2808,14 +2812,18 @@ function OverallTab({ overall, salesLive, salesProduct, salesCard }: {
   });
   const { sorted: rows, sort, toggleSort } = useTableSort(unsorted);
 
+  const inR = (d: string) => (!from || d >= from) && (!to || d <= to);
+  const inB = (b: number | null) => !brand || String(b ?? "") === brand;
+
   const sum = (k: keyof Overall) => rows.reduce((s, r) => s + ((r[k] as number) || 0), 0);
-  const cost = sum("cost"), gross = sum("gross_revenue"), gmv = sum("gmv");
+  const gross = sum("gross_revenue"), gmv = sum("gmv");
+  // TTM spend from the Spend tab; Overall Spend = imported cost + TTM.
+  const ttmCost = spendTtm.filter((t) => inR(t.report_date) && inB(t.brand_id)).reduce((a, t) => a + (t.ttm_cost || 0), 0);
+  const cost = sum("cost") + ttmCost;
   const roi = cost > 0 ? Math.round((gross / cost) * 100) / 100 : null;
 
   // GMV = Live + Product-only + Card (same date/brand filter). salesProduct is
   // already card-adjusted, so Live + Product-only + Card = the true GMV.
-  const inR = (d: string) => (!from || d >= from) && (!to || d <= to);
-  const inB = (b: number | null) => !brand || String(b ?? "") === brand;
   const gmvSum = (arr: { report_date: string; brand_id: number | null; cost: number | null; gross_revenue: number | null }[], k: "cost" | "gross_revenue") =>
     arr.filter((s) => inR(s.report_date) && inB(s.brand_id)).reduce((a, s) => a + (s[k] || 0), 0);
   const gmvCost = gmvSum(salesLive, "cost") + gmvSum(salesProduct, "cost") + gmvSum(salesCard, "cost");
@@ -2838,6 +2846,7 @@ function OverallTab({ overall, salesLive, salesProduct, salesCard }: {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Kpi Icon={TrendingUp} label="Overall GMV" value={money(gmv)} fill="yellow" />
         <Kpi Icon={Wallet} label="Overall Spend" value={money(cost)} fill="red" />
+        <Kpi Icon={Wallet} label="Spend TTM" value={money(ttmCost)} />
         <Kpi Icon={TrendingUp} label="Overall Gross Revenue" value={money(gross)} fill="emerald" />
         <Kpi Icon={(roi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="Overall ROI" value={roi ?? "—"} />
         <Kpi Icon={ShoppingCart} label="Overall SKU Orders" value={int(sum("sku_orders"))} />
@@ -2847,7 +2856,20 @@ function OverallTab({ overall, salesLive, salesProduct, salesCard }: {
       </div>
 
       <section>
-        <h2 className="section-title mb-2">GMV (Live + Product + Card)</h2>
+        <h2 className="section-title mb-2">GMV Breakdown (by content type)</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+          <Kpi Icon={Radio} label="Total Live" value={money(sum("gmv_live"))} fill="yellow" />
+          <Kpi Icon={Users} label="Live Creator" value={money(sum("gmv_live_creator"))} />
+          <Kpi Icon={ShoppingBag} label="Live Seller" value={money(sum("gmv_live_seller"))} />
+          <Kpi Icon={PackageSearch} label="Videos" value={money(sum("gmv_video"))} fill="yellow" />
+          <Kpi Icon={Users} label="Video Creator" value={money(sum("gmv_video_creator"))} />
+          <Kpi Icon={ShoppingBag} label="Video Seller" value={money(sum("gmv_video_seller"))} />
+          <Kpi Icon={CreditCard} label="Product Cards" value={money(sum("gmv_product_cards"))} />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="section-title mb-2">GMV (Live + Video + Card)</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Kpi Icon={Wallet} label="Cost GMV" value={money(gmvCost)} fill="red" />
           <Kpi Icon={TrendingUp} label="Gross Revenue GMV" value={money(gmvGross)} fill="emerald" />

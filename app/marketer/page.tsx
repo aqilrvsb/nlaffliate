@@ -134,7 +134,9 @@ export default async function MarketerPage() {
           `SELECT o.id, o.report_date, o.brand_id, b.name AS brand_name,
                   o.cost, o.sku_orders, o.cost_per_order, o.gross_revenue, o.roi,
                   o.gmv, o.visitors, o.product_impressions, o.product_clicks,
-                  o.img1_path, o.img2_path
+                  o.img1_path, o.img2_path,
+                  o.gmv_live, o.gmv_live_creator, o.gmv_live_seller,
+                  o.gmv_video, o.gmv_video_creator, o.gmv_video_seller, o.gmv_product_cards
              FROM overall_reports o
              LEFT JOIN brands b ON b.id = o.brand_id
             WHERE o.marketer_id = ?

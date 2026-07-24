@@ -5,10 +5,10 @@ import MarketerShell from "./MarketerShell";
 
 export const dynamic = "force-dynamic";
 
-// A page render is a handful of small queries. If it has not finished well
-// inside this, something is wedged — fail fast rather than holding the
-// invocation open for the platform's five-minute maximum.
-export const maxDuration = 20;
+// Headroom for a cold Supabase pooler connect (compute resume can take a few
+// seconds) plus one in-layer retry, and still well under the platform max.
+// The db layer's own per-query timeout is what actually fails a wedged socket.
+export const maxDuration = 60;
 
 
 export default async function MarketerPage({ searchParams }: { searchParams: { m?: string } }) {

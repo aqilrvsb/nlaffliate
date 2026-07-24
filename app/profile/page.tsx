@@ -3,10 +3,9 @@ import { getSession } from "@/lib/session";
 import Header from "@/components/Header";
 import ProfileSettings from "./ProfileSettings";
 
-// A page render is a handful of small queries. If it has not finished well
-// inside this, something is wedged — fail fast rather than holding the
-// invocation open for the platform's five-minute maximum.
-export const maxDuration = 20;
+// Headroom for a cold Supabase pooler connect plus one in-layer retry; the db
+// layer's per-query timeout is what actually fails a wedged socket.
+export const maxDuration = 60;
 
 export default async function ProfilePage() {
   const user = await getSession();

@@ -121,13 +121,15 @@ export type RunResult = {
  *
  * postgres.js has no client-side query timeout: if the socket is dead but
  * still open — which is what a thawed serverless container hands you — the
- * query is written and awaited forever. This MUST stay well under the page's
- * `maxDuration` (20s); a limit longer than that never fires, because Vercel
- * kills the whole invocation first. On this dataset a real query is a few
- * milliseconds, so anything approaching this many seconds is a dead socket,
- * not honest work — short is safe.
+ * query is written and awaited forever. This MUST stay under the page's
+ * `maxDuration` (60s) so it can actually fire, but it also has to be generous
+ * enough that a legitimate cold connect — a Supabase compute resume can take
+ * several seconds — is NOT mistaken for a dead socket and killed mid-handshake.
+ * A warm query here is ~20ms; this window is pure headroom for a cold start,
+ * and only a genuinely wedged socket ever reaches it. Two attempts (18s each)
+ * plus overhead still sit comfortably inside the 60s function budget.
  */
-const QUERY_TIMEOUT_MS = 7_000;
+const QUERY_TIMEOUT_MS = 18_000;
 
 async function withTimeout<T>(work: Promise<T>, label: string): Promise<T> {
   let timer: NodeJS.Timeout | undefined;

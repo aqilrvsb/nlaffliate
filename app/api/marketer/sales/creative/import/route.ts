@@ -73,10 +73,12 @@ export async function POST(req: Request) {
   let card = 0;
   let skipped = 0;
   for (const r of rows) {
+    // First column is Campaign name. A null or "-" there is a total/spacer row
+    // at the bottom of the export — skip it.
+    const campaignName = str(r["Campaign name"]);
+    if (!campaignName || campaignName === "-") { skipped++; continue; }
     const ctype = str(r["Creative type"]);
     const campaignId = str(r["Campaign ID"]);
-    // A row with neither a creative type nor a campaign id is a spacer.
-    if (!ctype && !campaignId) { skipped++; continue; }
     await insert.run(
       user.id, brandId, reportDate,
       str(r["Campaign name"]),

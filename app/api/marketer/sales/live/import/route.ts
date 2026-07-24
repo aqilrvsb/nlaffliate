@@ -68,11 +68,11 @@ export async function POST(req: Request) {
   let imported = 0;
   let skipped = 0;
   for (const r of rows) {
+    // First column is Time. A null or "-" there is the total/spacer row at the
+    // bottom of the export, never a real hour — skip it.
     const time = str(r["Time"]);
-    // The export ends with a blank/total spacer row now and then — a row with
-    // no time and no cost is not a real hour.
+    if (!time || time === "-") { skipped++; continue; }
     const cost = num(r["Cost"]);
-    if (!time && cost == null) { skipped++; continue; }
     await insert.run(
       user.id, brandId, reportDate,
       time,

@@ -11,7 +11,7 @@ import {
   HelpCircle, Upload, ImagePlus, TrendingDown, Pencil, BarChart3,
   PackageSearch, FileSpreadsheet, ShoppingCart, Layers, Eye, MousePointerClick,
   Send, Boxes, ClipboardList, Tag, CalendarPlus, Trash2, AlertCircle, Settings, Plus,
-  Package, ListChecks,
+  Package, ListChecks, CreditCard,
 } from "lucide-react";
 import { AffiliateModal, AffiliateActions, ActivateAffiliate, type ManagedAffiliate } from "./AffiliateManager";
 import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
@@ -98,6 +98,12 @@ type SalesProduct = {
   sku_orders: number | null; cost_per_order: number | null;
   gross_revenue: number | null; roi: number | null; currency: string | null;
 };
+type SalesCard = {
+  id: number; report_date: string;
+  brand_id: number | null; brand_name: string | null;
+  cost: number | null; sku_orders: number | null; cost_per_order: number | null;
+  gross_revenue: number | null; roi: number | null;
+};
 type Post = {
   id: number; affiliate_id: number; post_date: string; status: string;
 };
@@ -160,10 +166,11 @@ const LIVE_CHILDREN = [
   { key: "live-reporting", label: "Reporting Live User", icon: BarChart3 },
 ] as const;
 
-// Sales: two TikTok campaign-data exports, one per view.
+// Sales: two TikTok campaign-data exports plus manual Card entry.
 const SALES_CHILDREN = [
   { key: "sales-live", label: "Live", icon: Radio },
   { key: "sales-product", label: "Product", icon: PackageSearch },
+  { key: "sales-card", label: "Card", icon: CreditCard },
 ] as const;
 
 const TAB_LABELS: Record<string, string> = {
@@ -180,6 +187,7 @@ const TAB_LABELS: Record<string, string> = {
   product: "Product",
   "sales-live": "Sales · Live",
   "sales-product": "Sales · Product",
+  "sales-card": "Sales · Card",
   overall: "Overall",
   creator: "Beg Kuning + Creator",
   "live-users": "List Live User",
@@ -191,12 +199,13 @@ const TAB_LABELS: Record<string, string> = {
 
 export default function MarketerShell({
   user, affiliates, lives, unknowns, salesLive, salesProduct, overall, posts, creatorReports,
-  liveUsers, liveSessions, dataQuality,
+  liveUsers, liveSessions, dataQuality, salesCard,
 }: {
   user: SessionUser; affiliates: Affiliate[]; lives: Live[];
   unknowns: Unknown[]; salesLive: SalesLive[]; salesProduct: SalesProduct[];
   overall: Overall[]; posts: Post[]; creatorReports: CreatorReport[];
   liveUsers: LiveUser[]; liveSessions: LiveSession[]; dataQuality: DataQuality[];
+  salesCard: SalesCard[];
 }) {
   const router = useRouter();
   const { navigate, prefetch, pending: navPending } = useNavigate();
@@ -543,6 +552,7 @@ export default function MarketerShell({
           {active === "unknown" && <UnknownTab rows={unknowns} />}
           {active === "sales-live" && <SalesLiveTab rows={salesLive} />}
           {active === "sales-product" && <SalesProductTab rows={salesProduct} />}
+          {active === "sales-card" && <SalesCardTab rows={salesCard} />}
           {active === "brand" && <BrandsTab />}
           {active === "product" && <ProductsTab />}
           {active === "overall" && <OverallTab overall={overall} />}
@@ -2315,6 +2325,200 @@ function SalesProductTab({ rows: all }: { rows: SalesProduct[] }) {
   );
 }
 
+/* ── Sales · Card (manual entry) ───────────────────────── */
+
+function SalesCardTab({ rows: all }: { rows: SalesCard[] }) {
+  const router = useRouter();
+  const params = useSearchParams();
+  const { from, to } = resolveRange(
+    { from: params.get("from"), to: params.get("to"), all: params.get("all") },
+    "month"
+  );
+  const [filterBrand, setFilterBrand] = useState("");
+  const unsorted = all.filter((r) => {
+    if (from && r.report_date < from) return false;
+    if (to && r.report_date > to) return false;
+    if (filterBrand && String(r.brand_id ?? "") !== filterBrand) return false;
+    return true;
+  });
+  const { sorted: rows, sort, toggleSort } = useTableSort(unsorted);
+
+  // Form (also used to edit a row in place).
+  const empty = { report_date: "", brand_id: "", cost: "", sku_orders: "", cost_per_order: "", gross_revenue: "" };
+  const [f, setF] = useState(empty);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
+
+  const costN = parseFloat(f.cost);
+  const grossN = parseFloat(f.gross_revenue);
+  const roi = Number.isFinite(costN) && costN > 0 && Number.isFinite(grossN)
+    ? Math.round((grossN / costN) * 100) / 100 : null;
+
+  function reset() { setF(empty); setEditId(null); setError(""); setMsg(""); }
+  function loadEdit(r: SalesCard) {
+    const s = (v: number | null) => (v == null ? "" : String(v));
+    setF({
+      report_date: r.report_date, brand_id: r.brand_id != null ? String(r.brand_id) : "",
+      cost: s(r.cost), sku_orders: s(r.sku_orders), cost_per_order: s(r.cost_per_order),
+      gross_revenue: s(r.gross_revenue),
+    });
+    setEditId(r.id); setError(""); setMsg("");
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!f.report_date) return setError("Pilih tarikh.");
+    if (!f.brand_id) return setError("Pilih brand.");
+    if (f.cost === "" || f.sku_orders === "" || f.cost_per_order === "" || f.gross_revenue === "")
+      return setError("Isi semua nombor.");
+    setBusy(true); setError(""); setMsg("");
+    const res = await fetch(
+      editId ? `/api/marketer/sales/card/${editId}` : "/api/marketer/sales/card",
+      { method: editId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(f) }
+    );
+    const data = await res.json();
+    setBusy(false);
+    if (!res.ok) return setError(data.error || "Gagal simpan.");
+    setMsg(editId ? "Dikemas kini" : "Disimpan");
+    reset();
+    router.refresh();
+  }
+
+  async function remove(r: SalesCard) {
+    if (!(await confirmDialog({ title: "Padam rekod card ini?", danger: true }))) return;
+    await fetch(`/api/marketer/sales/card/${r.id}`, { method: "DELETE" });
+    if (editId === r.id) reset();
+    router.refresh();
+  }
+
+  const cost = rows.reduce((s, r) => s + (r.cost || 0), 0);
+  const orders = rows.reduce((s, r) => s + (r.sku_orders || 0), 0);
+  const gross = rows.reduce((s, r) => s + (r.gross_revenue || 0), 0);
+  const tRoi = cost > 0 ? Math.round((gross / cost) * 100) / 100 : null;
+  const tCpo = orders > 0 ? Math.round((cost / orders) * 100) / 100 : null;
+
+  const page = getPage(params.get("page"));
+  const pageRows = paginate(rows, page, 20);
+
+  const numField = (key: keyof typeof f, label: string) => (
+    <div>
+      <label className="label">{label}</label>
+      <input className="input" value={f[key]} inputMode="decimal" required placeholder="0"
+        onChange={(e) => setF((p) => ({ ...p, [key]: e.target.value }))} />
+    </div>
+  );
+
+  return (
+    <>
+      <form onSubmit={submit} className="card space-y-3">
+        <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
+          <CreditCard className="h-4 w-4 text-primary" aria-hidden="true" />
+          {editId ? "Kemas kini Card" : "Card — key in manual"}
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="label">Tarikh</label>
+            <input type="date" className="input cursor-pointer" value={f.report_date} required
+              onChange={(e) => setF((p) => ({ ...p, report_date: e.target.value }))} />
+          </div>
+          <div>
+            <label className="label">Brand</label>
+            <BrandSelect id="card-brand" value={f.brand_id} onChange={(v) => setF((p) => ({ ...p, brand_id: v }))} />
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {numField("cost", "Cost (RM)")}
+          {numField("sku_orders", "SKU Order")}
+          {numField("cost_per_order", "Cost / Order (RM)")}
+          {numField("gross_revenue", "Gross Revenue (RM)")}
+          <div>
+            <label className="label">ROI <span className="font-normal text-muted-fg">(auto)</span></label>
+            <input className="input bg-muted/40 font-semibold" value={roi != null ? roi : "—"} readOnly />
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button className="btn !py-2.5" disabled={busy}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
+            {editId ? "Update" : "Submit"}
+          </button>
+          {editId && (
+            <button type="button" className="btn-ghost !py-2" onClick={reset}>Batal</button>
+          )}
+          <p className="text-[11px] text-muted-fg">Key in brand + tarikh yang sama untuk kemas kini rekod itu.</p>
+          {msg && <span className="text-xs font-medium text-emerald-600">{msg}</span>}
+          {error && <span className="text-xs text-danger">{error}</span>}
+        </div>
+      </form>
+
+      <DateRangeFilter count={rows.length} countNoun={["rekod", "rekod"]} defaultMode="month" />
+      <BrandFilterCard id="card-filter-brand" value={filterBrand} onChange={setFilterBrand} />
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <Kpi Icon={Wallet} label="Cost" value={money(cost)} fill="red" />
+        <Kpi Icon={ShoppingCart} label="SKU Order" value={int(orders)} />
+        <Kpi Icon={Wallet} label="Cost / Order" value={tCpo != null ? `RM${tCpo}` : "—"} />
+        <Kpi Icon={TrendingUp} label="Gross Revenue" value={money(gross)} fill="emerald" />
+        <Kpi Icon={(tRoi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI" value={tRoi ?? "—"} />
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="card text-center text-sm text-muted-fg">Tiada rekod card dalam julat ini. Key in di atas.</p>
+      ) : (
+        <>
+          <div className="glass overflow-x-auto rounded-2xl">
+            <table className="w-full min-w-[820px] text-sm">
+              <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">No</th>
+                  <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
+                  <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
+                  <SortTh k="cost" sort={sort} on={toggleSort} right>Cost</SortTh>
+                  <SortTh k="sku_orders" sort={sort} on={toggleSort} right>SKU Order</SortTh>
+                  <SortTh k="cost_per_order" sort={sort} on={toggleSort} right>Cost / Order</SortTh>
+                  <SortTh k="gross_revenue" sort={sort} on={toggleSort} right>Gross Revenue</SortTh>
+                  <SortTh k="roi" sort={sort} on={toggleSort} right>ROI</SortTh>
+                  <th className="px-4 py-3 font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map((r, i) => (
+                  <tr key={r.id} className={`border-t border-line/60 hover:bg-white/50 ${editId === r.id ? "bg-primary/5" : ""}`}>
+                    <td className="px-4 py-3 text-muted-fg">{(page - 1) * 20 + i + 1}</td>
+                    <td className="px-4 py-3">
+                      {r.brand_name
+                        ? <span className="chip bg-primary/10 text-primary">{r.brand_name}</span>
+                        : <span className="text-muted-fg/50">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-ink">{fmtDMY(r.report_date)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{money(r.cost)}</td>
+                    <td className="px-4 py-3 text-right">{int(r.sku_orders)}</td>
+                    <td className="px-4 py-3 text-right">{money(r.cost_per_order)}</td>
+                    <td className="px-4 py-3 text-right">{money(r.gross_revenue)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => loadEdit(r)}
+                          className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent"
+                          aria-label="Edit"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
+                        <button onClick={() => remove(r)}
+                          className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger"
+                          aria-label="Delete"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pagination page={page} total={rows.length} size={20} />
+        </>
+      )}
+    </>
+  );
+}
+
 /* ── Overall ───────────────────────────────────────────── */
 
 const money = (n: number | null) => (n != null ? `RM${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—");
@@ -2604,6 +2808,7 @@ function CreatorImport() {
 }
 
 function CreatorTab({ reports }: { reports: CreatorReport[] }) {
+  const router = useRouter();
   const params = useSearchParams();
   const { from, to } = resolveRange(
     { from: params.get("from"), to: params.get("to"), all: params.get("all") },
@@ -2611,6 +2816,7 @@ function CreatorTab({ reports }: { reports: CreatorReport[] }) {
   );
   // "" = All Brands, the default.
   const [brand, setBrand] = useState("");
+  const [editing, setEditing] = useState<CreatorReport | null>(null);
   const unsorted = reports.filter((r) => {
     if (from && r.report_date < from) return false;
     if (to && r.report_date > to) return false;
@@ -2620,6 +2826,12 @@ function CreatorTab({ reports }: { reports: CreatorReport[] }) {
   const { sorted: rows, sort, toggleSort } = useTableSort(unsorted);
 
   const sum = (k: keyof CreatorReport) => rows.reduce((s, r) => s + ((r[k] as number) || 0), 0);
+
+  async function remove(r: CreatorReport) {
+    if (!(await confirmDialog({ title: "Padam report ini?", danger: true }))) return;
+    await fetch(`/api/marketer/creator/${r.id}`, { method: "DELETE" });
+    router.refresh();
+  }
 
   return (
     <>
@@ -2667,11 +2879,12 @@ function CreatorTab({ reports }: { reports: CreatorReport[] }) {
                 <SortTh k="creative_total_creators" sort={sort} on={toggleSort} right>Total Creators</SortTh>
                 <SortTh k="creative_creators_mass_auth" sort={sort} on={toggleSort} right>Creator Mass Auth</SortTh>
                 <th className="px-4 py-3 font-semibold">Proof</th>
+                <th className="px-4 py-3 font-semibold">Action</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.id} className="border-t border-line/60 hover:bg-white/50">
+                <tr key={r.id} className={`border-t border-line/60 hover:bg-white/50 ${editing?.id === r.id ? "bg-primary/5" : ""}`}>
                   <td className="px-4 py-3 font-semibold text-ink">{fmtDMY(r.report_date)}</td>
                   <td className="px-4 py-3">
                     {r.brand_name
@@ -2692,13 +2905,99 @@ function CreatorTab({ reports }: { reports: CreatorReport[] }) {
                       {r.img2_path && <a href={r.img2_path} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-accent hover:underline">2</a>}
                     </span>
                   </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setEditing(r)}
+                        className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent"
+                        aria-label="Edit"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
+                      <button onClick={() => remove(r)}
+                        className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger"
+                        aria-label="Delete"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      <CreatorEditModal report={editing} onClose={() => setEditing(null)} />
     </>
+  );
+}
+
+/** Edit the Post + Creative values of a report (manual override of the AI read). */
+function CreatorEditModal({ report, onClose }: { report: CreatorReport | null; onClose: () => void }) {
+  const router = useRouter();
+  const [f, setF] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!report) return;
+    const s = (v: number | null) => (v == null ? "" : String(v));
+    setF({
+      post_gross_revenue: s(report.post_gross_revenue), post_with_links: s(report.post_with_links),
+      post_authorized: s(report.post_authorized), post_creators_mass_auth: s(report.post_creators_mass_auth),
+      creative_gross_revenue: s(report.creative_gross_revenue), creative_authorized: s(report.creative_authorized),
+      creative_total_creators: s(report.creative_total_creators), creative_creators_mass_auth: s(report.creative_creators_mass_auth),
+    });
+    setError("");
+  }, [report]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!report) return;
+    setSaving(true); setError("");
+    const res = await fetch(`/api/marketer/creator/${report.id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(f),
+    });
+    const data = await res.json();
+    setSaving(false);
+    if (!res.ok) return setError(data.error || "Save failed.");
+    onClose(); router.refresh();
+  }
+
+  const fld = (key: string, label: string) => (
+    <div>
+      <label className="label">{label}</label>
+      <input className="input" value={f[key] ?? ""} inputMode="decimal"
+        onChange={(e) => setF((p) => ({ ...p, [key]: e.target.value }))} />
+    </div>
+  );
+
+  return (
+    <Modal open={!!report} onClose={onClose} title="Edit Post + Creative">
+      <form onSubmit={submit} className="space-y-3">
+        <p className="text-sm font-semibold text-ink">Post</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {fld("post_gross_revenue", "Gross Revenue")}
+          {fld("post_with_links", "Posts with Links")}
+          {fld("post_authorized", "Total Authorized Posts")}
+          {fld("post_creators_mass_auth", "Creators w/ Mass Auth")}
+        </div>
+        <p className="text-sm font-semibold text-ink">Creator</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {fld("creative_gross_revenue", "Gross Revenue")}
+          {fld("creative_authorized", "Total Authorized Posts")}
+          {fld("creative_total_creators", "Total Creators")}
+          {fld("creative_creators_mass_auth", "Creators w/ Mass Auth")}
+        </div>
+        {error && (
+          <p className="flex items-center gap-1.5 text-sm text-danger">
+            <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />{error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn" disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
+            Save
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -3341,109 +3640,6 @@ function LiveReportingTab({ sessions, liveUsers }: { sessions: LiveSession[]; li
 
 /* ── Data Quality ──────────────────────────────────────── */
 
-function DataQualityForm() {
-  const router = useRouter();
-  const [date, setDate] = useState("");
-  const [brand, setBrand] = useState("");
-  const [product, setProduct] = useState("");
-  const [products, setProducts] = useState<{ id: number; name: string }[]>([]);
-  const [inque, setInque] = useState("");
-  const [learning, setLearning] = useState("");
-  const [delivering, setDelivering] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
-  const [error, setError] = useState("");
-
-  // Product dropdown is populated from the chosen brand's catalogue.
-  useEffect(() => {
-    setProduct("");
-    if (!brand) { setProducts([]); return; }
-    fetch(`/api/products?brand=${brand}`)
-      .then((r) => r.json())
-      .then((d) => setProducts(d.products || []))
-      .catch(() => setProducts([]));
-  }, [brand]);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!date) return setError("Pilih tarikh.");
-    if (!brand) return setError("Pilih brand.");
-    if (!product) return setError("Pilih product.");
-    if (inque === "" || learning === "" || delivering === "")
-      return setError("Isi semua nombor (Inque, Learning, Delivering).");
-    setBusy(true); setError(""); setMsg("");
-    const res = await fetch("/api/marketer/data-quality", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        report_date: date, brand_id: brand, product_id: product,
-        inque, learning, delivering,
-      }),
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) return setError(data.error || "Gagal simpan.");
-    setMsg("Disimpan");
-    setInque(""); setLearning(""); setDelivering("");
-    router.refresh();
-  }
-
-  return (
-    <form onSubmit={submit} className="card space-y-3">
-      <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
-        <ListChecks className="h-4 w-4 text-primary" aria-hidden="true" />
-        Data Quality — key in video status
-      </p>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div>
-          <label className="label" htmlFor="dq-date">Tarikh</label>
-          <input id="dq-date" type="date" className="input cursor-pointer" value={date} required
-            onChange={(e) => setDate(e.target.value)} />
-        </div>
-        <div>
-          <label className="label" htmlFor="dq-brand">Brand</label>
-          <BrandSelect id="dq-brand" value={brand} onChange={setBrand} />
-        </div>
-        <div>
-          <label className="label" htmlFor="dq-product">Product</label>
-          <select id="dq-product" className="input cursor-pointer" value={product} required
-            onChange={(e) => setProduct(e.target.value)} disabled={!brand}>
-            <option value="">{brand ? "— Pilih product —" : "Pilih brand dahulu"}</option>
-            {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        </div>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div>
-          <label className="label" htmlFor="dq-inque">Inque</label>
-          <input id="dq-inque" type="number" min={0} className="input" value={inque} required
-            onChange={(e) => setInque(e.target.value)} placeholder="0" />
-        </div>
-        <div>
-          <label className="label" htmlFor="dq-learning">Learning</label>
-          <input id="dq-learning" type="number" min={0} className="input" value={learning} required
-            onChange={(e) => setLearning(e.target.value)} placeholder="0" />
-        </div>
-        <div>
-          <label className="label" htmlFor="dq-delivering">Delivering</label>
-          <input id="dq-delivering" type="number" min={0} className="input" value={delivering} required
-            onChange={(e) => setDelivering(e.target.value)} placeholder="0" />
-        </div>
-      </div>
-      <div className="flex items-center gap-3">
-        <button className="btn !py-2.5" disabled={busy}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
-          Submit
-        </button>
-        <p className="text-[11px] text-muted-fg">
-          Key in brand + product + tarikh yang sama untuk kemas kini rekod itu.
-        </p>
-        {msg && <span className="text-xs font-medium text-emerald-600">{msg}</span>}
-        {error && <span className="text-xs text-danger">{error}</span>}
-      </div>
-    </form>
-  );
-}
-
 function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -3451,14 +3647,77 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
     { from: params.get("from"), to: params.get("to"), all: params.get("all") },
     "month"
   );
-  const [brand, setBrand] = useState("");
+  const [filterBrand, setFilterBrand] = useState("");
   const unsorted = all.filter((r) => {
     if (from && r.report_date < from) return false;
     if (to && r.report_date > to) return false;
-    if (brand && String(r.brand_id ?? "") !== brand) return false;
+    if (filterBrand && String(r.brand_id ?? "") !== filterBrand) return false;
     return true;
   });
   const { sorted: rows, sort, toggleSort } = useTableSort(unsorted);
+
+  // Entry form (also edits a row in place).
+  const empty = { date: "", brand: "", product: "", inque: "", learning: "", delivering: "" };
+  const [f, setF] = useState(empty);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [productList, setProductList] = useState<{ id: number; name: string }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
+
+  // Product dropdown follows the chosen brand. It only fetches here — clearing
+  // the product on a user brand-change is done in the select's onChange, so
+  // loading a row for edit can set brand + product together without a race.
+  useEffect(() => {
+    if (!f.brand) { setProductList([]); return; }
+    fetch(`/api/products?brand=${f.brand}`)
+      .then((r) => r.json())
+      .then((d) => setProductList(d.products || []))
+      .catch(() => setProductList([]));
+  }, [f.brand]);
+
+  function reset() { setF(empty); setEditId(null); setError(""); setMsg(""); }
+  function loadEdit(r: DataQuality) {
+    setF({
+      date: r.report_date, brand: r.brand_id != null ? String(r.brand_id) : "",
+      product: r.product_id != null ? String(r.product_id) : "",
+      inque: String(r.inque ?? ""), learning: String(r.learning ?? ""), delivering: String(r.delivering ?? ""),
+    });
+    setEditId(r.id); setError(""); setMsg("");
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!f.date) return setError("Pilih tarikh.");
+    if (!f.brand) return setError("Pilih brand.");
+    if (!f.product) return setError("Pilih product.");
+    if (f.inque === "" || f.learning === "" || f.delivering === "")
+      return setError("Isi semua nombor (Inque, Learning, Delivering).");
+    setBusy(true); setError(""); setMsg("");
+    const res = await fetch(
+      editId ? `/api/marketer/data-quality/${editId}` : "/api/marketer/data-quality",
+      {
+        method: editId ? "PUT" : "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          report_date: f.date, brand_id: f.brand, product_id: f.product,
+          inque: f.inque, learning: f.learning, delivering: f.delivering,
+        }),
+      }
+    );
+    const data = await res.json();
+    setBusy(false);
+    if (!res.ok) return setError(data.error || "Gagal simpan.");
+    setMsg(editId ? "Dikemas kini" : "Disimpan");
+    reset();
+    router.refresh();
+  }
+
+  async function remove(r: DataQuality) {
+    if (!(await confirmDialog({ title: "Padam rekod ini?", danger: true }))) return;
+    await fetch(`/api/marketer/data-quality/${r.id}`, { method: "DELETE" });
+    if (editId === r.id) reset();
+    router.refresh();
+  }
 
   const inque = rows.reduce((s, r) => s + (r.inque || 0), 0);
   const learning = rows.reduce((s, r) => s + (r.learning || 0), 0);
@@ -3468,17 +3727,64 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
   const page = getPage(params.get("page"));
   const pageRows = paginate(rows, page, 20);
 
-  async function remove(r: DataQuality) {
-    if (!(await confirmDialog({ title: "Padam rekod ini?", danger: true }))) return;
-    await fetch(`/api/marketer/data-quality/${r.id}`, { method: "DELETE" });
-    router.refresh();
-  }
-
   return (
     <>
-      <DataQualityForm />
+      <form onSubmit={submit} className="card space-y-3">
+        <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
+          <ListChecks className="h-4 w-4 text-primary" aria-hidden="true" />
+          {editId ? "Kemas kini video status" : "Data Quality — key in video status"}
+        </p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label className="label">Tarikh</label>
+            <input type="date" className="input cursor-pointer" value={f.date} required
+              onChange={(e) => setF((p) => ({ ...p, date: e.target.value }))} />
+          </div>
+          <div>
+            <label className="label">Brand</label>
+            <BrandSelect id="dq-brand" value={f.brand}
+              onChange={(v) => setF((p) => ({ ...p, brand: v, product: "" }))} />
+          </div>
+          <div>
+            <label className="label">Product</label>
+            <select className="input cursor-pointer" value={f.product} required disabled={!f.brand}
+              onChange={(e) => setF((p) => ({ ...p, product: e.target.value }))}>
+              <option value="">{f.brand ? "— Pilih product —" : "Pilih brand dahulu"}</option>
+              {productList.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label className="label">Inque</label>
+            <input type="number" min={0} className="input" value={f.inque} required placeholder="0"
+              onChange={(e) => setF((p) => ({ ...p, inque: e.target.value }))} />
+          </div>
+          <div>
+            <label className="label">Learning</label>
+            <input type="number" min={0} className="input" value={f.learning} required placeholder="0"
+              onChange={(e) => setF((p) => ({ ...p, learning: e.target.value }))} />
+          </div>
+          <div>
+            <label className="label">Delivering</label>
+            <input type="number" min={0} className="input" value={f.delivering} required placeholder="0"
+              onChange={(e) => setF((p) => ({ ...p, delivering: e.target.value }))} />
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button className="btn !py-2.5" disabled={busy}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
+            {editId ? "Update" : "Submit"}
+          </button>
+          {editId && <button type="button" className="btn-ghost !py-2" onClick={reset}>Batal</button>}
+          <p className="text-[11px] text-muted-fg">Key in brand + product + tarikh yang sama untuk kemas kini rekod itu.</p>
+          {msg && <span className="text-xs font-medium text-emerald-600">{msg}</span>}
+          {error && <span className="text-xs text-danger">{error}</span>}
+        </div>
+      </form>
+
       <DateRangeFilter count={rows.length} countNoun={["rekod", "rekod"]} defaultMode="month" />
-      <BrandFilterCard id="dq-filter-brand" value={brand} onChange={setBrand} />
+      <BrandFilterCard id="dq-filter-brand" value={filterBrand} onChange={setFilterBrand} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Kpi Icon={ListChecks} label="Total Video" value={int(total)} fill="yellow" />
@@ -3510,7 +3816,7 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
               </thead>
               <tbody>
                 {pageRows.map((r, i) => (
-                  <tr key={r.id} className="border-t border-line/60 hover:bg-white/50">
+                  <tr key={r.id} className={`border-t border-line/60 hover:bg-white/50 ${editId === r.id ? "bg-primary/5" : ""}`}>
                     <td className="px-4 py-3 text-muted-fg">{(page - 1) * 20 + i + 1}</td>
                     <td className="px-4 py-3">
                       {r.brand_name
@@ -3524,11 +3830,14 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
                     <td className="px-4 py-3 text-right">{int(r.delivering)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{int((r.inque || 0) + (r.learning || 0) + (r.delivering || 0))}</td>
                     <td className="px-4 py-3">
-                      <button onClick={() => remove(r)}
-                        className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger"
-                        aria-label="Delete">
-                        <Trash2 className="h-4 w-4" aria-hidden="true" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => loadEdit(r)}
+                          className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent"
+                          aria-label="Edit"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
+                        <button onClick={() => remove(r)}
+                          className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger"
+                          aria-label="Delete"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
+                      </div>
                     </td>
                   </tr>
                 ))}

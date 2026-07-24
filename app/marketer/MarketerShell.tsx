@@ -4395,20 +4395,21 @@ function SpendTab({ spendTtm, salesLive, salesProduct, salesCard }: {
 
 /* ── Reporting Sheet (per-time-slot daily live sheet) ──── */
 
+// Twelve 2-hour blocks covering the full 24 hours, starting 12 AM. Six slots
+// per block for the lives run in that window.
 const RS_SESSIONS: { sesi: string; slots: string[] }[] = [
-  { sesi: "10AM - 12PM", slots: ["10.1", "10.2", "10.3", "10.4", "10.5"] },
-  { sesi: "11 PAGI", slots: ["11.1", "11.2", "11.3", "11.4", "11.5"] },
-  { sesi: "12 TENGAHHARI", slots: ["12.1", "12.2", "12.3", "12.4", "12.5"] },
-  { sesi: "1 PETANG", slots: ["1.1", "1.2", "1.3", "1.4", "1.5"] },
-  { sesi: "2 PETANG", slots: ["2.1", "2.2", "2.3", "2.4", "2.5", "2.6"] },
-  { sesi: "3 PETANG", slots: ["3.1", "3.2", "3.3", "3.4", "3.5"] },
-  { sesi: "4 PETANG", slots: ["4.1", "4.2", "4.3", "4.4", "4.5", "4.6"] },
-  { sesi: "5 PETANG", slots: ["5.1", "5.2", "5.3", "5.4", "5.5", "5.6"] },
-  { sesi: "6 PETANG", slots: ["6.1", "6.2", "6.3", "6.4", "6.5", "6.6"] },
-  { sesi: "7 MALAM", slots: ["7.1", "7.2", "7.3", "7.4", "7.5", "7.6"] },
-  { sesi: "8 MALAM", slots: ["8.1", "8.2", "8.3", "8.4", "8.5", "8.6"] },
-  { sesi: "9 MALAM", slots: ["9.1", "9.2", "9.3", "9.4", "9.5", "9.6"] },
-  { sesi: "10 MALAM", slots: ["10.1", "10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "11"] },
+  { sesi: "12.00 AM - 2.00 AM", slots: ["12.1", "12.2", "12.3", "12.4", "12.5", "12.6"] },
+  { sesi: "2.00 AM - 4.00 AM", slots: ["2.1", "2.2", "2.3", "2.4", "2.5", "2.6"] },
+  { sesi: "4.00 AM - 6.00 AM", slots: ["4.1", "4.2", "4.3", "4.4", "4.5", "4.6"] },
+  { sesi: "6.00 AM - 8.00 AM", slots: ["6.1", "6.2", "6.3", "6.4", "6.5", "6.6"] },
+  { sesi: "8.00 AM - 10.00 AM", slots: ["8.1", "8.2", "8.3", "8.4", "8.5", "8.6"] },
+  { sesi: "10.00 AM - 12.00 PM", slots: ["10.1", "10.2", "10.3", "10.4", "10.5", "10.6"] },
+  { sesi: "12.00 PM - 2.00 PM", slots: ["12.1", "12.2", "12.3", "12.4", "12.5", "12.6"] },
+  { sesi: "2.00 PM - 4.00 PM", slots: ["2.1", "2.2", "2.3", "2.4", "2.5", "2.6"] },
+  { sesi: "4.00 PM - 6.00 PM", slots: ["4.1", "4.2", "4.3", "4.4", "4.5", "4.6"] },
+  { sesi: "6.00 PM - 8.00 PM", slots: ["6.1", "6.2", "6.3", "6.4", "6.5", "6.6"] },
+  { sesi: "8.00 PM - 10.00 PM", slots: ["8.1", "8.2", "8.3", "8.4", "8.5", "8.6"] },
+  { sesi: "10.00 PM - 12.00 AM", slots: ["10.1", "10.2", "10.3", "10.4", "10.5", "10.6"] },
 ];
 const RS_SLOTS: { ord: number; sesi: string; masa: string; first: boolean; span: number }[] = (() => {
   let ord = 0; const out: any[] = [];
@@ -4532,7 +4533,7 @@ function ReportingSheetTab({ rows: all, userName }: { rows: ReportingSheetRow[];
             <input type="date" className="input cursor-pointer" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="pb-1 text-xs text-muted-fg">
-            Nama Marketer: <b className="text-ink">{userName}</b> · Time 10AM–10PM
+            Nama Marketer: <b className="text-ink">{userName}</b> · 24 jam (setiap 2 jam)
           </div>
           <button className="btn !py-2.5" onClick={save} disabled={busy || !date || !brand}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}

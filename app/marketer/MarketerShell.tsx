@@ -3197,7 +3197,7 @@ function LiveScheduleTab({
                         <button onClick={() => setResult(s)}
                           className="cursor-pointer rounded-lg bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-fg hover:opacity-90"
                           title="Masukkan result & tandakan siap">
-                          Complete
+                          Success
                         </button>
                       )}
                       <button onClick={() => (kind === "success" ? setResult(s) : (setEditing(s), setOpenAdd(true)))}

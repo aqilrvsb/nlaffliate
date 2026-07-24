@@ -1790,6 +1790,24 @@ const pct = (n: number | null | undefined) =>
 const intOr = (n: number | null | undefined) =>
   n != null ? Number(n).toLocaleString() : "—";
 
+/** "2026-07-24" (the chosen report date) → "24-07-2026". */
+const fmtDMY = (v: string | null | undefined) => {
+  if (!v) return "—";
+  const m = String(v).match(/(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : String(v);
+};
+
+/** Hourly clock from the export ("… 13:00:00") → Malaysia 12-hour "1.00 PM". */
+const fmtClock = (v: string | null | undefined) => {
+  if (!v) return "—";
+  const m = String(v).match(/(\d{1,2}):(\d{2})/);
+  if (!m) return String(v);
+  let h = parseInt(m[1], 10);
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12; if (h === 0) h = 12;
+  return `${h}.${m[2]} ${ampm}`;
+};
+
 /** Row selection for the Sales tables — select-all spans every filtered row. */
 function useRowSelection() {
   const [sel, setSel] = useState<Set<number>>(new Set());
@@ -1992,7 +2010,7 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
       <SalesBulkBar count={sel.size} busy={delBusy} onDelete={bulkDelete} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <Kpi Icon={Clock} label="Rows" value={rows.length} />
+        <Kpi Icon={Clock} label="Total Live" value={rows.length} />
         <Kpi Icon={Wallet} label="Total Cost" value={`RM${cost.toFixed(2)}`} fill="red" />
         <Kpi Icon={ShoppingCart} label="SKU Orders" value={orders} />
         <Kpi Icon={Wallet} label="Cost / Order" value={cpo != null ? `RM${cpo}` : "—"} />
@@ -2015,9 +2033,10 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
                       onChange={() => setMany(rows.map((r) => r.id), !allSelected)}
                       aria="Pilih semua" />
                   </th>
-                  <SortTh k="row_time" sort={sort} on={toggleSort}>Time</SortTh>
-                  <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
+                  <th className="px-4 py-3 font-semibold">No</th>
                   <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
+                  <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
+                  <SortTh k="row_time" sort={sort} on={toggleSort}>Time</SortTh>
                   <SortTh k="cost" sort={sort} on={toggleSort} right>Cost</SortTh>
                   <SortTh k="sku_orders" sort={sort} on={toggleSort} right>SKU Orders</SortTh>
                   <SortTh k="cost_per_order" sort={sort} on={toggleSort} right>Cost / Order</SortTh>
@@ -2026,19 +2045,20 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
                 </tr>
               </thead>
               <tbody>
-                {pageRows.map((r) => (
+                {pageRows.map((r, i) => (
                   <tr key={r.id} className={`border-t border-line/60 hover:bg-white/50 ${sel.has(r.id) ? "bg-primary/5" : ""}`}>
                     <td className="px-4 py-3">
                       <RowCheck checked={sel.has(r.id)} onChange={() => toggle(r.id)}
                         aria={`Pilih baris ${r.row_time || r.id}`} />
                     </td>
-                    <td className="px-4 py-3 font-mono text-[12px] text-ink">{r.row_time || "—"}</td>
-                    <td className="px-4 py-3 text-ink">{fmtDate(r.report_date)}</td>
+                    <td className="px-4 py-3 text-muted-fg">{(page - 1) * 20 + i + 1}</td>
                     <td className="px-4 py-3">
                       {r.brand_name
                         ? <span className="chip bg-primary/10 text-primary">{r.brand_name}</span>
                         : <span className="text-muted-fg/50">—</span>}
                     </td>
+                    <td className="px-4 py-3 text-ink">{fmtDMY(r.report_date)}</td>
+                    <td className="px-4 py-3 font-mono text-[12px] text-ink">{fmtClock(r.row_time)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{money2(r.cost)}</td>
                     <td className="px-4 py-3 text-right">{r.sku_orders ?? "—"}</td>
                     <td className="px-4 py-3 text-right">{money2(r.cost_per_order)}</td>
@@ -2160,11 +2180,12 @@ function SalesCreativeTab({ rows: all, kind }: { rows: SalesCreative[]; kind: "p
                       onChange={() => setMany(rows.map((r) => r.id), !allSelected)}
                       aria="Pilih semua" />
                   </th>
+                  <th className="px-4 py-3 font-semibold">No</th>
+                  <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
+                  <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
                   <SortTh k="campaign_name" sort={sort} on={toggleSort}>Campaign</SortTh>
                   {isVideo && <SortTh k="video_title" sort={sort} on={toggleSort}>Video</SortTh>}
                   <SortTh k="tiktok_account" sort={sort} on={toggleSort}>Account</SortTh>
-                  <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
-                  <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
                   <SortTh k="status" sort={sort} on={toggleSort}>Status</SortTh>
                   <SortTh k="cost" sort={sort} on={toggleSort} right>Cost</SortTh>
                   <SortTh k="sku_orders" sort={sort} on={toggleSort} right>SKU Orders</SortTh>
@@ -2177,12 +2198,19 @@ function SalesCreativeTab({ rows: all, kind }: { rows: SalesCreative[]; kind: "p
                 </tr>
               </thead>
               <tbody>
-                {pageRows.map((r) => (
+                {pageRows.map((r, i) => (
                   <tr key={r.id} className={`border-t border-line/60 hover:bg-white/50 ${sel.has(r.id) ? "bg-primary/5" : ""}`}>
                     <td className="px-4 py-3">
                       <RowCheck checked={sel.has(r.id)} onChange={() => toggle(r.id)}
                         aria={`Pilih ${r.campaign_name || r.id}`} />
                     </td>
+                    <td className="px-4 py-3 text-muted-fg">{(page - 1) * 20 + i + 1}</td>
+                    <td className="px-4 py-3">
+                      {r.brand_name
+                        ? <span className="chip bg-primary/10 text-primary">{r.brand_name}</span>
+                        : <span className="text-muted-fg/50">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-ink">{fmtDMY(r.report_date)}</td>
                     <td className="px-4 py-3">
                       <div className="max-w-[240px] truncate font-semibold text-ink" title={r.campaign_name || ""}>
                         {r.campaign_name || "—"}
@@ -2197,12 +2225,6 @@ function SalesCreativeTab({ rows: all, kind }: { rows: SalesCreative[]; kind: "p
                       </td>
                     )}
                     <td className="px-4 py-3 text-ink">{r.tiktok_account && r.tiktok_account !== "-" ? r.tiktok_account : "—"}</td>
-                    <td className="px-4 py-3">
-                      {r.brand_name
-                        ? <span className="chip bg-primary/10 text-primary">{r.brand_name}</span>
-                        : <span className="text-muted-fg/50">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-ink">{fmtDate(r.report_date)}</td>
                     <td className="px-4 py-3 text-muted-fg">{r.status || "—"}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{money2(r.cost)}</td>
                     <td className="px-4 py-3 text-right">{r.sku_orders ?? "—"}</td>

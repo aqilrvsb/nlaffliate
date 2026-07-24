@@ -103,7 +103,8 @@ export default async function MarketerPage() {
         ).all(user.id) as Promise<any[]>,
 
       db.prepare(
-          `SELECT s.id, s.report_date, s.brand_id, b.name AS brand_name,
+          `SELECT s.id, to_char(s.report_date, 'YYYY-MM-DD') AS report_date,
+                  s.brand_id, b.name AS brand_name,
                   s.row_time, s.cost, s.sku_orders, s.cost_per_order,
                   s.gross_revenue, s.roi, s.currency
              FROM sales_live s
@@ -113,7 +114,8 @@ export default async function MarketerPage() {
         ).all(user.id) as Promise<any[]>,
 
       db.prepare(
-          `SELECT s.id, s.report_date, s.brand_id, b.name AS brand_name,
+          `SELECT s.id, to_char(s.report_date, 'YYYY-MM-DD') AS report_date,
+                  s.brand_id, b.name AS brand_name,
                   s.campaign_name, s.campaign_id, s.product_id, s.creative_type,
                   s.video_title, s.video_id, s.tiktok_account, s.time_posted,
                   s.status, s.authorization_type, s.cost, s.sku_orders,

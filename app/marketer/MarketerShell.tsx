@@ -81,9 +81,13 @@ type Unknown = {
 type SalesLive = {
   id: number; report_date: string;
   brand_id: number | null; brand_name: string | null;
-  row_time: string | null; cost: number | null; sku_orders: number | null;
-  cost_per_order: number | null; gross_revenue: number | null; roi: number | null;
-  currency: string | null;
+  campaign_id: string | null; campaign_name: string | null;
+  roi_protection: string | null; active_upgrades: string | null;
+  cost: number | null; net_cost: number | null; gross_revenue: number | null;
+  roi: number | null; sku_orders: number | null; cost_per_order: number | null;
+  live_views: number | null; target_roi_cost: number | null;
+  viewer_boost_cost: number | null; creative_boost_cost: number | null;
+  current_budget: number | null; currency: string | null;
 };
 type SalesCreative = {
   id: number; report_date: string;
@@ -1797,16 +1801,6 @@ const fmtDMY = (v: string | null | undefined) => {
   return m ? `${m[3]}-${m[2]}-${m[1]}` : String(v);
 };
 
-/** Hourly clock from the export ("… 13:00:00") → Malaysia 12-hour "1.00 PM". */
-const fmtClock = (v: string | null | undefined) => {
-  if (!v) return "—";
-  const m = String(v).match(/(\d{1,2}):(\d{2})/);
-  if (!m) return String(v);
-  let h = parseInt(m[1], 10);
-  const ampm = h >= 12 ? "PM" : "AM";
-  h = h % 12; if (h === 0) h = 12;
-  return `${h}.${m[2]} ${ampm}`;
-};
 
 /** Row selection for the Sales tables — select-all spans every filtered row. */
 function useRowSelection() {
@@ -1985,8 +1979,10 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
   }
 
   const cost = rows.reduce((s, r) => s + (r.cost || 0), 0);
+  const netCost = rows.reduce((s, r) => s + (r.net_cost || 0), 0);
   const orders = rows.reduce((s, r) => s + (r.sku_orders || 0), 0);
   const gross = rows.reduce((s, r) => s + (r.gross_revenue || 0), 0);
+  const views = rows.reduce((s, r) => s + (r.live_views || 0), 0);
   const roi = cost > 0 ? Math.round((gross / cost) * 100) / 100 : null;
   const cpo = orders > 0 ? Math.round((cost / orders) * 100) / 100 : null;
 
@@ -1996,26 +1992,29 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
   return (
     <>
       <SalesImport
-        title="Import Campaign Overview Data (.xlsx) — Live"
+        title="Import Live Campaign Data (.xlsx) — Live"
         endpoint="/api/marketer/sales/live/import"
-        columns={["Time", "Cost", "SKU orders (Current shop)", "Cost per order (Current shop)",
-          "Gross revenue (Current shop)", "ROI (Current shop)", "Currency"]}
-        note={<>TikTok Ads → Campaign overview data export. Every hour is kept. Re-importing a brand + date replaces that day.</>}
-        sampleHref="/examples/campaign-overview-sample.xlsx"
+        columns={["Campaign ID", "Campaign name", "ROI protection", "Net Cost", "Cost",
+          "Gross revenue", "ROI", "SKU orders", "Cost per order", "LIVE views",
+          "Active upgrades", "Current budget", "Currency"]}
+        note={<>TikTok Ads → Live campaign data export. One row per LIVE campaign. Re-importing a brand + date replaces that day.</>}
+        sampleHref="/examples/live-campaign-sample.xlsx"
         brandInputId="sl-brand"
-        resultLabel={(d) => `Imported ${d.imported} rows · skipped ${d.skipped}`}
+        resultLabel={(d) => `Imported ${d.imported} live · skipped ${d.skipped}`}
       />
-      <DateRangeFilter count={rows.length} countNoun={["row", "rows"]} defaultMode="month" />
+      <DateRangeFilter count={rows.length} countNoun={["live", "live"]} defaultMode="month" />
       <BrandFilterCard id="sl-filter-brand" value={brand} onChange={setBrand} />
       <SalesBulkBar count={sel.size} busy={delBusy} onDelete={bulkDelete} />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <Kpi Icon={Clock} label="Total Live" value={rows.length} />
-        <Kpi Icon={Wallet} label="Total Cost" value={`RM${cost.toFixed(2)}`} fill="red" />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+        <Kpi Icon={Radio} label="Total Live" value={rows.length} />
+        <Kpi Icon={Wallet} label="Cost" value={`RM${cost.toFixed(2)}`} fill="red" />
+        <Kpi Icon={Wallet} label="Net Cost" value={`RM${netCost.toFixed(2)}`} />
         <Kpi Icon={ShoppingCart} label="SKU Orders" value={orders} />
         <Kpi Icon={Wallet} label="Cost / Order" value={cpo != null ? `RM${cpo}` : "—"} />
         <Kpi Icon={TrendingUp} label="Gross Revenue" value={`RM${gross.toFixed(2)}`} fill="emerald" />
         <Kpi Icon={(roi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI" value={roi != null ? roi : "—"} />
+        <Kpi Icon={Eye} label="LIVE Views" value={intOr(views)} />
       </div>
 
       {rows.length === 0 ? (
@@ -2025,7 +2024,7 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
       ) : (
         <>
           <div className="glass overflow-x-auto rounded-2xl">
-            <table className="w-full min-w-[820px] text-sm">
+            <table className="w-full min-w-[1100px] text-sm">
               <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
                 <tr>
                   <th className="px-4 py-3">
@@ -2036,12 +2035,15 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
                   <th className="px-4 py-3 font-semibold">No</th>
                   <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
                   <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
-                  <SortTh k="row_time" sort={sort} on={toggleSort}>Time</SortTh>
+                  <SortTh k="campaign_name" sort={sort} on={toggleSort}>Live Campaign</SortTh>
+                  <SortTh k="net_cost" sort={sort} on={toggleSort} right>Net Cost</SortTh>
                   <SortTh k="cost" sort={sort} on={toggleSort} right>Cost</SortTh>
                   <SortTh k="sku_orders" sort={sort} on={toggleSort} right>SKU Orders</SortTh>
                   <SortTh k="cost_per_order" sort={sort} on={toggleSort} right>Cost / Order</SortTh>
                   <SortTh k="gross_revenue" sort={sort} on={toggleSort} right>Gross Revenue</SortTh>
                   <SortTh k="roi" sort={sort} on={toggleSort} right>ROI</SortTh>
+                  <SortTh k="live_views" sort={sort} on={toggleSort} right>LIVE Views</SortTh>
+                  <SortTh k="current_budget" sort={sort} on={toggleSort} right>Budget</SortTh>
                 </tr>
               </thead>
               <tbody>
@@ -2049,7 +2051,7 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
                   <tr key={r.id} className={`border-t border-line/60 hover:bg-white/50 ${sel.has(r.id) ? "bg-primary/5" : ""}`}>
                     <td className="px-4 py-3">
                       <RowCheck checked={sel.has(r.id)} onChange={() => toggle(r.id)}
-                        aria={`Pilih baris ${r.row_time || r.id}`} />
+                        aria={`Pilih ${r.campaign_name || r.id}`} />
                     </td>
                     <td className="px-4 py-3 text-muted-fg">{(page - 1) * 20 + i + 1}</td>
                     <td className="px-4 py-3">
@@ -2058,12 +2060,20 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
                         : <span className="text-muted-fg/50">—</span>}
                     </td>
                     <td className="px-4 py-3 text-ink">{fmtDMY(r.report_date)}</td>
-                    <td className="px-4 py-3 font-mono text-[12px] text-ink">{fmtClock(r.row_time)}</td>
+                    <td className="px-4 py-3">
+                      <div className="max-w-[280px] truncate font-semibold text-ink" title={r.campaign_name || ""}>
+                        {r.campaign_name || "—"}
+                      </div>
+                      <div className="font-mono text-[11px] text-muted-fg">{r.campaign_id}</div>
+                    </td>
+                    <td className="px-4 py-3 text-right">{money2(r.net_cost)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{money2(r.cost)}</td>
                     <td className="px-4 py-3 text-right">{r.sku_orders ?? "—"}</td>
                     <td className="px-4 py-3 text-right">{money2(r.cost_per_order)}</td>
                     <td className="px-4 py-3 text-right">{money2(r.gross_revenue)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
+                    <td className="px-4 py-3 text-right">{intOr(r.live_views)}</td>
+                    <td className="px-4 py-3 text-right">{money2(r.current_budget)}</td>
                   </tr>
                 ))}
               </tbody>

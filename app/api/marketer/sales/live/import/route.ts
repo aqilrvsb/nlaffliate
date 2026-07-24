@@ -14,12 +14,14 @@ const num = (v: any) => {
 const str = (v: any) => (v != null && String(v).trim() !== "" ? String(v).trim() : null);
 
 /**
- * Import a TikTok "Campaign overview data" xlsx (the Live tab).
+ * Import a TikTok "Live campaign data" xlsx (the Live tab).
  *   form: file (xlsx) + report_date (YYYY-MM-DD) + brand_id
- * Columns: Time, Cost, SKU orders (Current shop), Cost per order (Current shop),
- *          Gross revenue (Current shop), ROI (Current shop), Currency.
- * Every row is kept (it is an hourly breakdown). Re-importing the same brand +
- * date replaces that day's rows.
+ * One row per LIVE campaign. Columns: Campaign ID, Campaign name, ROI protection,
+ * Net Cost, Cost, Gross revenue, ROI, SKU orders, Cost per order, LIVE views,
+ * Target ROI cost, Viewer boost cost, Creative boost cost, Active upgrades,
+ * Current budget, Currency.
+ * Rows whose first column (Campaign name) is null or "-" are the total/spacer
+ * row and are skipped. Re-importing the same brand + date replaces that day.
  */
 export async function POST(req: Request) {
   const user = await getSession();
@@ -60,27 +62,35 @@ export async function POST(req: Request) {
 
   const insert = db.prepare(
     `INSERT INTO sales_live
-       (marketer_id, brand_id, report_date, row_time, cost, sku_orders,
-        cost_per_order, gross_revenue, roi, currency)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       (marketer_id, brand_id, report_date, campaign_id, campaign_name, roi_protection,
+        active_upgrades, cost, net_cost, gross_revenue, roi, sku_orders, cost_per_order,
+        live_views, target_roi_cost, viewer_boost_cost, creative_boost_cost, current_budget, currency)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   let imported = 0;
   let skipped = 0;
   for (const r of rows) {
-    // First column is Time. A null or "-" there is the total/spacer row at the
-    // bottom of the export, never a real hour — skip it.
-    const time = str(r["Time"]);
-    if (!time || time === "-") { skipped++; continue; }
-    const cost = num(r["Cost"]);
+    // First column is Campaign name; null or "-" is the total/spacer row.
+    const name = str(r["Campaign name"]);
+    if (!name || name === "-") { skipped++; continue; }
     await insert.run(
       user.id, brandId, reportDate,
-      time,
-      cost,
-      num(r["SKU orders (Current shop)"] ?? r["SKU orders"]),
-      num(r["Cost per order (Current shop)"] ?? r["Cost per order"]),
-      num(r["Gross revenue (Current shop)"] ?? r["Gross revenue"]),
-      num(r["ROI (Current shop)"] ?? r["ROI"]),
+      str(r["Campaign ID"]),
+      name,
+      str(r["ROI protection"]),
+      str(r["Active upgrades"]),
+      num(r["Cost"]),
+      num(r["Net Cost"]),
+      num(r["Gross revenue"]),
+      num(r["ROI"]),
+      num(r["SKU orders"]),
+      num(r["Cost per order"]),
+      num(r["LIVE views"]),
+      num(r["Target ROI cost"]),
+      num(r["Viewer boost cost"]),
+      num(r["Creative boost cost"]),
+      num(r["Current budget"]),
       str(r["Currency"])
     );
     imported++;

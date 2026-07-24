@@ -98,6 +98,11 @@ type SalesCard = {
   cost: number | null; sku_orders: number | null; cost_per_order: number | null;
   gross_revenue: number | null; roi: number | null;
 };
+type SpendTtm = {
+  id: number; report_date: string;
+  brand_id: number | null; brand_name: string | null;
+  ttm_cost: number | null; ttm_gross_revenue: number | null;
+};
 type Post = {
   id: number; affiliate_id: number; post_date: string; status: string;
 };
@@ -189,17 +194,18 @@ const TAB_LABELS: Record<string, string> = {
   "live-success": "Success Live",
   "live-reporting": "Reporting Live User",
   "data-quality": "Data Quality",
+  spend: "Spend",
 };
 
 export default function MarketerShell({
   user, affiliates, lives, unknowns, salesLive, salesProduct, overall, posts, creatorReports,
-  liveUsers, liveSessions, dataQuality, salesCard,
+  liveUsers, liveSessions, dataQuality, salesCard, spendTtm,
 }: {
   user: SessionUser; affiliates: Affiliate[]; lives: Live[];
   unknowns: Unknown[]; salesLive: SalesLive[]; salesProduct: SalesProduct[];
   overall: Overall[]; posts: Post[]; creatorReports: CreatorReport[];
   liveUsers: LiveUser[]; liveSessions: LiveSession[]; dataQuality: DataQuality[];
-  salesCard: SalesCard[];
+  salesCard: SalesCard[]; spendTtm: SpendTtm[];
 }) {
   const router = useRouter();
   const { navigate, prefetch, pending: navPending } = useNavigate();
@@ -438,6 +444,15 @@ export default function MarketerShell({
               Data Quality
             </button>
 
+            {/* Spend — TTM + GMV (Live/Product/Card) combined */}
+            <button onClick={() => go("spend")}
+              className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
+                active === "spend" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
+              }`}>
+              <NavIcon Icon={Wallet} busy={navPending && navKey === "spend"} />
+              Spend
+            </button>
+
             {/* Pillar group */}
             <button onClick={() => setPillarOpen((o) => !o)}
               className={`mt-1 flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
@@ -556,6 +571,7 @@ export default function MarketerShell({
           {active === "live-success" && <LiveScheduleTab sessions={liveSessions} liveUsers={liveUsers} kind="success" />}
           {active === "live-reporting" && <LiveReportingTab sessions={liveSessions} liveUsers={liveUsers} />}
           {active === "data-quality" && <DataQualityTab rows={dataQuality} />}
+          {active === "spend" && <SpendTab spendTtm={spendTtm} salesLive={salesLive} salesProduct={salesProduct} salesCard={salesCard} />}
           {active === "pillar-create" && <PillarCreate />}
           {active === "pillar-report" && <PillarReport />}
         </div>
@@ -3851,6 +3867,215 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
                         <button onClick={() => remove(r)}
                           className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger"
                           aria-label="Delete"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pagination page={page} total={rows.length} size={20} />
+        </>
+      )}
+    </>
+  );
+}
+
+/* ── Spend (TTM + GMV combined) ────────────────────────── */
+
+type SpendRow = {
+  key: string; brand_id: number | null; brand_name: string | null; report_date: string;
+  ttmId: number | null; ttmCost: number; ttmGross: number; gmvCost: number; gmvGross: number;
+  totalCost: number; totalGross: number;
+};
+
+function SpendTab({ spendTtm, salesLive, salesProduct, salesCard }: {
+  spendTtm: SpendTtm[]; salesLive: SalesLive[]; salesProduct: SalesProduct[]; salesCard: SalesCard[];
+}) {
+  const router = useRouter();
+  const params = useSearchParams();
+  const { from, to } = resolveRange(
+    { from: params.get("from"), to: params.get("to"), all: params.get("all") }, "month"
+  );
+  const [filterBrand, setFilterBrand] = useState("");
+
+  // TTM entry form (also edits a TTM row for a given brand + date).
+  const empty = { report_date: "", brand: "", ttm_cost: "", ttm_gross_revenue: "" };
+  const [f, setF] = useState(empty);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
+
+  function reset() { setF(empty); setEditId(null); setError(""); setMsg(""); }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!f.report_date) return setError("Pilih tarikh.");
+    if (!f.brand) return setError("Pilih brand.");
+    if (f.ttm_cost === "" || f.ttm_gross_revenue === "")
+      return setError("Isi TTM Cost dan TTM Gross Revenue.");
+    setBusy(true); setError(""); setMsg("");
+    const res = await fetch("/api/marketer/spend", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        report_date: f.report_date, brand_id: f.brand,
+        ttm_cost: f.ttm_cost, ttm_gross_revenue: f.ttm_gross_revenue,
+      }),
+    });
+    const data = await res.json();
+    setBusy(false);
+    if (!res.ok) return setError(data.error || "Gagal simpan.");
+    setMsg(editId ? "Dikemas kini" : "Disimpan");
+    reset();
+    router.refresh();
+  }
+
+  function loadEdit(r: SpendRow) {
+    setF({
+      report_date: r.report_date, brand: r.brand_id != null ? String(r.brand_id) : "",
+      ttm_cost: r.ttmId != null ? String(r.ttmCost) : "",
+      ttm_gross_revenue: r.ttmId != null ? String(r.ttmGross) : "",
+    });
+    setEditId(r.ttmId); setError(""); setMsg("");
+  }
+
+  async function removeTtm(r: SpendRow) {
+    if (r.ttmId == null) return;
+    if (!(await confirmDialog({ title: "Padam TTM untuk hari ini?", danger: true }))) return;
+    await fetch(`/api/marketer/spend/${r.ttmId}`, { method: "DELETE" });
+    if (editId === r.ttmId) reset();
+    router.refresh();
+  }
+
+  // Combine TTM + Live + Product + Card per (brand, date).
+  const map = new Map<string, SpendRow>();
+  const K = (b: number | null, d: string) => `${b ?? 0}|${d}`;
+  const ensure = (b: number | null, name: string | null, d: string) => {
+    const k = K(b, d);
+    if (!map.has(k)) map.set(k, {
+      key: k, brand_id: b, brand_name: name, report_date: d,
+      ttmId: null, ttmCost: 0, ttmGross: 0, gmvCost: 0, gmvGross: 0, totalCost: 0, totalGross: 0,
+    });
+    return map.get(k)!;
+  };
+  for (const t of spendTtm) { const o = ensure(t.brand_id, t.brand_name, t.report_date); o.ttmId = t.id; o.ttmCost += t.ttm_cost || 0; o.ttmGross += t.ttm_gross_revenue || 0; }
+  for (const s of salesLive) { const o = ensure(s.brand_id, s.brand_name, s.report_date); o.gmvCost += s.cost || 0; o.gmvGross += s.gross_revenue || 0; }
+  for (const s of salesProduct) { const o = ensure(s.brand_id, s.brand_name, s.report_date); o.gmvCost += s.cost || 0; o.gmvGross += s.gross_revenue || 0; }
+  for (const s of salesCard) { const o = ensure(s.brand_id, s.brand_name, s.report_date); o.gmvCost += s.cost || 0; o.gmvGross += s.gross_revenue || 0; }
+
+  const unsorted = [...map.values()]
+    .map((o) => ({ ...o, totalCost: o.ttmCost + o.gmvCost, totalGross: o.ttmGross + o.gmvGross }))
+    .filter((o) => {
+      if (from && o.report_date < from) return false;
+      if (to && o.report_date > to) return false;
+      if (filterBrand && String(o.brand_id ?? "") !== filterBrand) return false;
+      return true;
+    });
+  const { sorted: rows, sort, toggleSort } = useTableSort(unsorted);
+
+  const sum = (k: keyof SpendRow) => rows.reduce((s, r) => s + (r[k] as number), 0);
+  const tTotalCost = sum("totalCost"), tTotalGross = sum("totalGross");
+  const tTtmCost = sum("ttmCost"), tTtmGross = sum("ttmGross");
+  const tGmvCost = sum("gmvCost"), tGmvGross = sum("gmvGross");
+
+  const page = getPage(params.get("page"));
+  const pageRows = paginate(rows, page, 20);
+
+  return (
+    <>
+      <form onSubmit={submit} className="card space-y-3">
+        <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
+          <Wallet className="h-4 w-4 text-primary" aria-hidden="true" />
+          {editId ? "Kemas kini TTM" : "Spend — key in TTM"}
+        </p>
+        <div className="grid gap-3 sm:grid-cols-4">
+          <div>
+            <label className="label">Tarikh</label>
+            <input type="date" className="input cursor-pointer" value={f.report_date} required
+              onChange={(e) => setF((p) => ({ ...p, report_date: e.target.value }))} />
+          </div>
+          <div>
+            <label className="label">Brand</label>
+            <BrandSelect id="spend-brand" value={f.brand} onChange={(v) => setF((p) => ({ ...p, brand: v }))} />
+          </div>
+          <div>
+            <label className="label">TTM Cost (RM)</label>
+            <input className="input" inputMode="decimal" value={f.ttm_cost} required placeholder="0"
+              onChange={(e) => setF((p) => ({ ...p, ttm_cost: e.target.value }))} />
+          </div>
+          <div>
+            <label className="label">TTM Gross Revenue (RM)</label>
+            <input className="input" inputMode="decimal" value={f.ttm_gross_revenue} required placeholder="0"
+              onChange={(e) => setF((p) => ({ ...p, ttm_gross_revenue: e.target.value }))} />
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button className="btn !py-2.5" disabled={busy}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
+            {editId ? "Update TTM" : "Submit"}
+          </button>
+          {editId && <button type="button" className="btn-ghost !py-2" onClick={reset}>Batal</button>}
+          <p className="text-[11px] text-muted-fg">GMV (Live + Product + Card) ditarik automatik ikut brand + tarikh.</p>
+          {msg && <span className="text-xs font-medium text-emerald-600">{msg}</span>}
+          {error && <span className="text-xs text-danger">{error}</span>}
+        </div>
+      </form>
+
+      <DateRangeFilter count={rows.length} countNoun={["day", "days"]} defaultMode="month" />
+      <BrandFilterCard id="spend-filter-brand" value={filterBrand} onChange={setFilterBrand} />
+
+      <div className="grid grid-cols-2 gap-3">
+        <Kpi Icon={Wallet} label="Total Cost" value={money(tTotalCost)} fill="red" />
+        <Kpi Icon={TrendingUp} label="Total Gross Revenue" value={money(tTotalGross)} fill="emerald" />
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Kpi Icon={Wallet} label="Total Cost TTM" value={money(tTtmCost)} />
+        <Kpi Icon={TrendingUp} label="Total Gross Revenue TTM" value={money(tTtmGross)} />
+        <Kpi Icon={Wallet} label="Total Cost GMV" value={money(tGmvCost)} />
+        <Kpi Icon={TrendingUp} label="Total Gross Revenue GMV" value={money(tGmvGross)} />
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="card text-center text-sm text-muted-fg">
+          Tiada data dalam julat ini. Key in TTM di atas, atau import Live / Product / Card.
+        </p>
+      ) : (
+        <>
+          <div className="glass overflow-x-auto rounded-2xl">
+            <table className="w-full min-w-[1100px] text-sm">
+              <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+                <tr>
+                  <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
+                  <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
+                  <SortTh k="totalCost" sort={sort} on={toggleSort} right>Total Cost</SortTh>
+                  <SortTh k="totalGross" sort={sort} on={toggleSort} right>Total Gross Rev</SortTh>
+                  <SortTh k="ttmCost" sort={sort} on={toggleSort} right>Cost TTM</SortTh>
+                  <SortTh k="ttmGross" sort={sort} on={toggleSort} right>Gross Rev TTM</SortTh>
+                  <SortTh k="gmvCost" sort={sort} on={toggleSort} right>Cost GMV</SortTh>
+                  <SortTh k="gmvGross" sort={sort} on={toggleSort} right>Gross Rev GMV</SortTh>
+                  <th className="px-4 py-3 font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map((r) => (
+                  <tr key={r.key} className={`border-t border-line/60 hover:bg-white/50 ${editId != null && editId === r.ttmId ? "bg-primary/5" : ""}`}>
+                    <td className="px-4 py-3 text-ink">{fmtDMY(r.report_date)}</td>
+                    <td className="px-4 py-3">{r.brand_name ? <span className="chip bg-primary/10 text-primary">{r.brand_name}</span> : <span className="text-muted-fg/50">—</span>}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{money(r.totalCost)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{money(r.totalGross)}</td>
+                    <td className="px-4 py-3 text-right">{money(r.ttmCost)}</td>
+                    <td className="px-4 py-3 text-right">{money(r.ttmGross)}</td>
+                    <td className="px-4 py-3 text-right">{money(r.gmvCost)}</td>
+                    <td className="px-4 py-3 text-right">{money(r.gmvGross)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => loadEdit(r)} title="Edit TTM"
+                          className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent"
+                          aria-label="Edit TTM"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
+                        <button onClick={() => removeTtm(r)} disabled={r.ttmId == null} title={r.ttmId == null ? "Tiada TTM" : "Delete TTM"}
+                          className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger disabled:opacity-30"
+                          aria-label="Delete TTM"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
                       </div>
                     </td>
                   </tr>

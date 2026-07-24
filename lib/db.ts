@@ -12,6 +12,21 @@ import postgres from "postgres";
  * invocation opens at most one pooled connection.
  */
 
+/**
+ * Pool size, and the ceiling on queries in flight at once.
+ *
+ * These MUST stay equal. Supabase's transaction pooler assigns a server
+ * connection per transaction and does not tolerate several queries pipelined
+ * onto one client connection: postgres.js, handed more concurrent queries than
+ * it has connections, writes the surplus onto the busy sockets and the pooler
+ * simply never answers them — the page's Promise.all hangs forever (this is
+ * exactly what wedged the leader dashboard's 18 parallel queries). Gating
+ * in-flight work to the pool size means every query owns a whole connection
+ * for its lifetime, so nothing is ever pipelined. Queries here are ~20ms, so
+ * the little bit of queueing this adds is invisible.
+ */
+const POOL_MAX = 2;
+
 const globalForDb = globalThis as unknown as { _sql?: postgres.Sql };
 
 function client(): postgres.Sql {
@@ -40,7 +55,7 @@ function client(): postgres.Sql {
      * down the shared client; with that fixed, queries simply queue for the
      * few milliseconds these take.
      */
-    max: 2,
+    max: POOL_MAX,
     idle_timeout: 5,
     connect_timeout: 15,
     // A frozen serverless container wakes with a socket the pooler has long
@@ -164,23 +179,56 @@ function discard(stale: postgres.Sql) {
 }
 
 /**
+ * Concurrency gate: at most POOL_MAX queries run at once (see POOL_MAX). A
+ * plain FIFO — acquire before touching a connection, release in a finally.
+ */
+let inFlight = 0;
+const waiters: Array<() => void> = [];
+
+function acquireSlot(): Promise<void> {
+  if (inFlight < POOL_MAX) {
+    inFlight++;
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => waiters.push(resolve));
+}
+
+function releaseSlot() {
+  const next = waiters.shift();
+  if (next) {
+    // Hand the slot straight to the next waiter; inFlight stays constant.
+    next();
+  } else {
+    inFlight--;
+  }
+}
+
+/**
  * Run one query, and if it stalls on a dead pooled socket, reset the client
  * and try exactly once more on a fresh connection. A thawed serverless
  * container routinely hands you a socket the pooler dropped long ago; the
  * first write vanishes into it, the retry lands on a live connection and
  * returns in milliseconds. Without this, a poisoned warm instance timed out
  * every request until it was recycled.
+ *
+ * The whole thing runs inside one concurrency slot so we never pipeline more
+ * queries than the pool has connections (see POOL_MAX).
  */
 async function runQuery(q: string, params: any[]): Promise<any> {
-  const first = client();
+  await acquireSlot();
   try {
-    return await withTimeout(first.unsafe(q, params), "1");
-  } catch (e: any) {
-    discard(first);
-    // Retry once on a guaranteed-fresh client. If this also fails, it is a
-    // genuine fault (bad SQL, DB down) and the error propagates.
-    const second = client();
-    return await withTimeout(second.unsafe(q, params), "2");
+    const first = client();
+    try {
+      return await withTimeout(first.unsafe(q, params), "1");
+    } catch (e: any) {
+      discard(first);
+      // Retry once on a guaranteed-fresh client. If this also fails, it is a
+      // genuine fault (bad SQL, DB down) and the error propagates.
+      const second = client();
+      return await withTimeout(second.unsafe(q, params), "2");
+    }
+  } finally {
+    releaseSlot();
   }
 }
 

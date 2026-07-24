@@ -25,12 +25,13 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const name = String(body.name ?? "").trim();
   const type = String(body.user_type ?? "").trim();
   const phone = body.phone ? normalisePhone(body.phone) : null;
+  const tiktok = String(body.tiktok_link ?? "").trim() || null;
   if (!name) return NextResponse.json({ error: "Nama diperlukan." }, { status: 400 });
   if (!LIVE_USER_TYPES.includes(type as any))
     return NextResponse.json({ error: "Pilih jenis yang sah." }, { status: 400 });
 
-  await db.prepare("UPDATE live_users SET name = ?, user_type = ?, phone = ? WHERE id = ?")
-    .run(name, type, phone, id);
+  await db.prepare("UPDATE live_users SET name = ?, user_type = ?, phone = ?, tiktok_link = ? WHERE id = ?")
+    .run(name, type, phone, tiktok, id);
   return NextResponse.json({ ok: true });
 }
 

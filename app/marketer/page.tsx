@@ -154,7 +154,7 @@ export default async function MarketerPage() {
         ).all(user.id) as Promise<any[]>,
 
       db.prepare(
-          `SELECT id, name, user_type, phone
+          `SELECT id, name, user_type, phone, tiktok_link
              FROM live_users WHERE marketer_id = ? ORDER BY name`
         ).all(user.id) as Promise<any[]>,
 

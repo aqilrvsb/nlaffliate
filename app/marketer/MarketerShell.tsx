@@ -139,7 +139,7 @@ type CreatorReport = {
   creative_total_creators: number | null; creative_creators_mass_auth: number | null;
   img1_path: string | null; img2_path: string | null;
 };
-type LiveUser = { id: number; name: string; user_type: string; phone: string | null };
+type LiveUser = { id: number; name: string; user_type: string; phone: string | null; tiktok_link: string | null };
 type LiveSession = {
   id: number; live_user_id: number; brand_id: number | null;
   live_date: string; start_time: string | null; end_time: string | null;
@@ -3226,7 +3226,7 @@ function LiveUserModal({
   open, liveUser, onClose,
 }: { open: boolean; liveUser: LiveUser | null; onClose: () => void }) {
   const router = useRouter();
-  const [f, setF] = useState({ name: "", user_type: "", phone: "" });
+  const [f, setF] = useState({ name: "", user_type: "", phone: "", tiktok_link: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -3236,6 +3236,7 @@ function LiveUserModal({
       name: liveUser?.name || "",
       user_type: liveUser?.user_type || "",
       phone: liveUser?.phone || "",
+      tiktok_link: liveUser?.tiktok_link || "",
     });
     setError("");
   }, [open, liveUser]);
@@ -3285,6 +3286,14 @@ function LiveUserModal({
               onChange={(e) => setF((p) => ({ ...p, phone: e.target.value }))}
               placeholder="0123456789" />
           </div>
+        </div>
+        <div>
+          <label className="label" htmlFor="lu-tiktok">
+            Link TikTok <span className="font-normal text-muted-fg">(optional)</span>
+          </label>
+          <input id="lu-tiktok" className="input" value={f.tiktok_link}
+            onChange={(e) => setF((p) => ({ ...p, tiktok_link: e.target.value }))}
+            placeholder="https://www.tiktok.com/@…" />
         </div>
         {error && (
           <p className="flex items-center gap-1.5 text-sm text-danger">
@@ -3343,6 +3352,7 @@ function ListLiveUserTab({ liveUsers }: { liveUsers: LiveUser[] }) {
                 <th className="px-4 py-3 font-semibold">Nama</th>
                 <th className="px-4 py-3 font-semibold">Jenis</th>
                 <th className="px-4 py-3 font-semibold">No WhatsApp</th>
+                <th className="px-4 py-3 font-semibold">Link TikTok</th>
                 <th className="px-4 py-3 font-semibold">Action</th>
               </tr>
             </thead>
@@ -3354,6 +3364,11 @@ function ListLiveUserTab({ liveUsers }: { liveUsers: LiveUser[] }) {
                     <span className={`chip ${LIVE_TYPE_STYLE[u.user_type] || "bg-muted text-muted-fg"}`}>{u.user_type}</span>
                   </td>
                   <td className="px-4 py-3 text-muted-fg">{u.phone || "—"}</td>
+                  <td className="px-4 py-3">
+                    {u.tiktok_link
+                      ? <a href={u.tiktok_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline"><ExternalLink className="h-3 w-3" aria-hidden="true" />TikTok</a>
+                      : <span className="text-muted-fg/50">—</span>}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
                       <button onClick={() => { setEditing(u); setOpen(true); }}

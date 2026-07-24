@@ -17,7 +17,7 @@ export async function GET() {
   if (!user || user.role !== "marketer")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const rows = await db
-    .prepare("SELECT id, name, user_type, phone FROM live_users WHERE marketer_id = ? ORDER BY name")
+    .prepare("SELECT id, name, user_type, phone, tiktok_link FROM live_users WHERE marketer_id = ? ORDER BY name")
     .all(user.id);
   return NextResponse.json({ live_users: rows });
 }
@@ -31,13 +31,14 @@ export async function POST(req: Request) {
   const name = String(body.name ?? "").trim();
   const type = String(body.user_type ?? "").trim();
   const phone = body.phone ? normalisePhone(body.phone) : null;
+  const tiktok = String(body.tiktok_link ?? "").trim() || null;
 
   if (!name) return NextResponse.json({ error: "Nama diperlukan." }, { status: 400 });
   if (!LIVE_USER_TYPES.includes(type as any))
     return NextResponse.json({ error: "Pilih jenis yang sah." }, { status: 400 });
 
   const info = await db.prepare(
-      "INSERT INTO live_users (marketer_id, name, user_type, phone) VALUES (?, ?, ?, ?) RETURNING id"
-    ).run(user.id, name, type, phone);
+      "INSERT INTO live_users (marketer_id, name, user_type, phone, tiktok_link) VALUES (?, ?, ?, ?, ?) RETURNING id"
+    ).run(user.id, name, type, phone, tiktok);
   return NextResponse.json({ ok: true, id: Number(info.lastInsertRowid) });
 }

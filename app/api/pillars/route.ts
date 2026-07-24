@@ -12,7 +12,8 @@ const COLS = ["problem", "solution", "planning", "execution"] as const;
 async function scope() {
   const user = await getSession();
   if (!user) return null;
-  if (user.role !== "marketer" && user.role !== "admin") return null;
+  // Leaders read every marketer's pillars, same as admin.
+  if (user.role !== "marketer" && user.role !== "admin" && user.role !== "leader") return null;
   return user;
 }
 

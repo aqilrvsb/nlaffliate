@@ -11,9 +11,9 @@ export type SessionUser = {
   id: number;
   name: string;
   email: string;
-  /** The login identity: MNL-/AFL-/ADM-. */
+  /** The login identity: MNL-/AFL-/HQNL/LMNL-. */
   staff_id: string;
-  role: "marketer" | "affiliate" | "admin";
+  role: "marketer" | "affiliate" | "admin" | "leader";
 };
 
 export async function createSession(user: SessionUser) {
@@ -41,7 +41,7 @@ export async function getSession(): Promise<SessionUser | null> {
       name: payload.name as string,
       email: (payload.email as string) ?? "",
       staff_id: (payload.staff_id as string) ?? "",
-      role: payload.role as "marketer" | "affiliate",
+      role: payload.role as SessionUser["role"],
     };
   } catch {
     return null;

@@ -13,6 +13,7 @@ const PREFIX: Record<string, { seq: string; code: string }> = {
   admin:     { seq: "staff_seq_adm", code: "HQNL" },
   marketer:  { seq: "staff_seq_mnl", code: "MNL" },
   affiliate: { seq: "staff_seq_afl", code: "AFL" },
+  leader:    { seq: "staff_seq_lmnl", code: "LMNL" },
 };
 
 /** The next staff ID for a role, e.g. "AFL-007". Atomic and collision-free. */

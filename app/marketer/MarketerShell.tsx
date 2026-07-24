@@ -571,6 +571,12 @@ export default function MarketerShell({
         </div>
 
         <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
+          {user.role === "leader" && (
+            <p className="card flex items-center gap-2 border-amber-200 bg-amber-50/60 text-sm text-amber-800">
+              <Eye className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span><b>Leader view</b> — semua marketer digabungkan (reporting sahaja, read-only).</span>
+            </p>
+          )}
           {active === "dashboard" && (
             <DashboardTab affiliates={affiliates} inRange={inRange}
               pending={pending} success={success}

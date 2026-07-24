@@ -60,6 +60,13 @@ export async function GET(req: Request) {
            FROM brands b LEFT JOIN users u ON u.id = b.marketer_id
           ORDER BY b.name, u.name`
       ).all();
+  } else if (user.role === "leader") {
+    // A leader oversees every marketer, so the brand filter spans them all.
+    brands = await db.prepare(
+        `SELECT b.id, b.name, b.marketer_id, u.name AS marketer_name
+           FROM brands b JOIN users u ON u.id = b.marketer_id
+          ORDER BY b.name, u.name`
+      ).all();
   } else if (user.role === "marketer") {
     brands = await db.prepare(
         `SELECT id, name, marketer_id, catalogue_id, wa_group_url,

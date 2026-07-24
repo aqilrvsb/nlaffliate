@@ -81,22 +81,16 @@ type Unknown = {
 type SalesLive = {
   id: number; report_date: string;
   brand_id: number | null; brand_name: string | null;
-  campaign_id: string | null; campaign_name: string | null;
-  roi_protection: string | null; active_upgrades: string | null;
   cost: number | null; net_cost: number | null; gross_revenue: number | null;
   roi: number | null; sku_orders: number | null; cost_per_order: number | null;
-  live_views: number | null; target_roi_cost: number | null;
-  viewer_boost_cost: number | null; creative_boost_cost: number | null;
-  current_budget: number | null; currency: string | null;
+  live_views: number | null; current_budget: number | null;
 };
 type SalesProduct = {
   id: number; report_date: string;
   brand_id: number | null; brand_name: string | null;
-  campaign_id: string | null; campaign_name: string | null;
-  roi_protection: string | null; active_upgrades: string | null;
   cost: number | null; net_cost: number | null; current_budget: number | null;
   sku_orders: number | null; cost_per_order: number | null;
-  gross_revenue: number | null; roi: number | null; currency: string | null;
+  gross_revenue: number | null; roi: number | null;
 };
 type SalesCard = {
   id: number; report_date: string;
@@ -2046,15 +2040,95 @@ function SalesImport({
   );
 }
 
+/** Edit one daily Live/Product total. Cost/Order and ROI auto-derive. */
+function SalesDailyEditModal({ kind, row, onClose }: {
+  kind: "live" | "product"; row: SalesLive | SalesProduct | null; onClose: () => void;
+}) {
+  const router = useRouter();
+  const [f, setF] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!row) return;
+    const s = (v: any) => (v == null ? "" : String(v));
+    const r: any = row;
+    setF({
+      cost: s(r.cost), net_cost: s(r.net_cost), gross_revenue: s(r.gross_revenue),
+      sku_orders: s(r.sku_orders), live_views: s(r.live_views), current_budget: s(r.current_budget),
+    });
+    setError("");
+  }, [row]);
+
+  const costN = parseFloat(f.cost), grossN = parseFloat(f.gross_revenue), ordersN = parseFloat(f.sku_orders);
+  const roi = costN > 0 && Number.isFinite(grossN) ? Math.round((grossN / costN) * 100) / 100 : null;
+  const cpo = costN > 0 && ordersN > 0 ? Math.round((costN / ordersN) * 100) / 100 : null;
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!row) return;
+    setSaving(true); setError("");
+    const res = await fetch(`/api/marketer/sales/${kind}/${row.id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(f),
+    });
+    const data = await res.json();
+    setSaving(false);
+    if (!res.ok) return setError(data.error || "Save failed.");
+    onClose(); router.refresh();
+  }
+
+  const fld = (key: string, label: string) => (
+    <div>
+      <label className="label">{label}</label>
+      <input className="input" value={f[key] ?? ""} inputMode="decimal"
+        onChange={(e) => setF((p) => ({ ...p, [key]: e.target.value }))} />
+    </div>
+  );
+
+  return (
+    <Modal open={!!row} onClose={onClose} title="Edit daily total">
+      <form onSubmit={submit} className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          {fld("cost", "Cost (RM)")}
+          {fld("net_cost", "Net Cost (RM)")}
+          {fld("sku_orders", "SKU Orders")}
+          {fld("gross_revenue", "Gross Revenue (RM)")}
+          {kind === "live" && fld("live_views", "LIVE Views")}
+          {fld("current_budget", "Current Budget (RM)")}
+          <div>
+            <label className="label">Cost / Order <span className="font-normal text-muted-fg">(auto)</span></label>
+            <input className="input bg-muted/40" value={cpo != null ? cpo : "—"} readOnly />
+          </div>
+          <div>
+            <label className="label">ROI <span className="font-normal text-muted-fg">(auto)</span></label>
+            <input className="input bg-muted/40 font-semibold" value={roi != null ? roi : "—"} readOnly />
+          </div>
+        </div>
+        {error && (
+          <p className="flex items-center gap-1.5 text-sm text-danger">
+            <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />{error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn" disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
+            Save
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
   const router = useRouter();
   const params = useSearchParams();
   const { from, to } = resolveRange(
-    { from: params.get("from"), to: params.get("to"), all: params.get("all") },
-    "month"
+    { from: params.get("from"), to: params.get("to"), all: params.get("all") }, "month"
   );
-  // "" = All Brands, the default.
   const [brand, setBrand] = useState("");
+  const [editing, setEditing] = useState<SalesLive | null>(null);
   const unsorted = all.filter((p) => {
     if (from && p.report_date < from) return false;
     if (to && p.report_date > to) return false;
@@ -2063,21 +2137,10 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
   });
   const { sorted: rows, sort, toggleSort } = useTableSort(unsorted);
 
-  const { sel, toggle, setMany, clear } = useRowSelection();
-  const [delBusy, setDelBusy] = useState(false);
-  const allSelected = rows.length > 0 && rows.every((r) => sel.has(r.id));
-  async function bulkDelete() {
-    if (!(await confirmDialog({
-      title: `Padam ${sel.size} baris Live?`, danger: true,
-      text: "Baris yang dipilih akan dipadam terus. Tak boleh undo.",
-    }))) return;
-    setDelBusy(true);
-    const res = await fetch("/api/marketer/sales/live", {
-      method: "DELETE", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids: [...sel] }),
-    });
-    setDelBusy(false);
-    if (res.ok) { clear(); router.refresh(); }
+  async function remove(r: SalesLive) {
+    if (!(await confirmDialog({ title: "Padam rekod live ini?", danger: true }))) return;
+    await fetch(`/api/marketer/sales/live/${r.id}`, { method: "DELETE" });
+    router.refresh();
   }
 
   const cost = rows.reduce((s, r) => s + (r.cost || 0), 0);
@@ -2087,7 +2150,6 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
   const views = rows.reduce((s, r) => s + (r.live_views || 0), 0);
   const roi = cost > 0 ? Math.round((gross / cost) * 100) / 100 : null;
   const cpo = orders > 0 ? Math.round((cost / orders) * 100) / 100 : null;
-
   const page = getPage(params.get("page"));
   const pageRows = paginate(rows, page, 20);
 
@@ -2096,23 +2158,19 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
       <SalesImport
         title="Import Live Campaign Data (.xlsx) — Live"
         endpoint="/api/marketer/sales/live/import"
-        columns={["Campaign ID", "Campaign name", "ROI protection", "Net Cost", "Cost",
-          "Gross revenue", "ROI", "SKU orders", "Cost per order", "LIVE views",
-          "Active upgrades", "Current budget", "Currency"]}
-        note={<>TikTok Ads → Live campaign data export. One row per LIVE campaign. Re-importing a brand + date replaces that day.</>}
+        columns={["Campaign name", "Cost", "Net Cost", "Gross revenue", "SKU orders", "LIVE views", "Current budget"]}
+        note={<>TikTok Ads → Live campaign data export. Semua campaign dijumlahkan jadi <b>satu total harian</b> ikut brand + tarikh. Re-import brand + tarikh yang sama menggantikan hari itu.</>}
         sampleHref="/examples/live-campaign-sample.xlsx"
         brandInputId="sl-brand"
-        resultLabel={(d) => `Imported ${d.imported} live · skipped ${d.skipped}`}
+        resultLabel={(d) => `Dijumlahkan ${d.imported} live · 1 baris harian`}
       />
-      <DateRangeFilter count={rows.length} countNoun={["live", "live"]} defaultMode="month" />
+      <DateRangeFilter count={rows.length} countNoun={["day", "days"]} defaultMode="month" />
       <BrandFilterCard id="sl-filter-brand" value={brand} onChange={setBrand} />
-      <SalesBulkBar count={sel.size} busy={delBusy} onDelete={bulkDelete} />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-        <Kpi Icon={Radio} label="Total Live" value={rows.length} />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
         <Kpi Icon={Wallet} label="Cost" value={`RM${cost.toFixed(2)}`} fill="red" />
         <Kpi Icon={Wallet} label="Net Cost" value={`RM${netCost.toFixed(2)}`} />
-        <Kpi Icon={ShoppingCart} label="SKU Orders" value={orders} />
+        <Kpi Icon={ShoppingCart} label="SKU Orders" value={int(orders)} />
         <Kpi Icon={Wallet} label="Cost / Order" value={cpo != null ? `RM${cpo}` : "—"} />
         <Kpi Icon={TrendingUp} label="Gross Revenue" value={`RM${gross.toFixed(2)}`} fill="emerald" />
         <Kpi Icon={(roi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI" value={roi != null ? roi : "—"} />
@@ -2120,24 +2178,16 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
       </div>
 
       {rows.length === 0 ? (
-        <p className="card text-center text-sm text-muted-fg">
-          No Live data in this range. Import an .xlsx above.
-        </p>
+        <p className="card text-center text-sm text-muted-fg">No Live data in this range. Import an .xlsx above.</p>
       ) : (
         <>
           <div className="glass overflow-x-auto rounded-2xl">
-            <table className="w-full min-w-[1100px] text-sm">
+            <table className="w-full min-w-[980px] text-sm">
               <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
                 <tr>
-                  <th className="px-4 py-3">
-                    <RowCheck checked={allSelected}
-                      onChange={() => setMany(rows.map((r) => r.id), !allSelected)}
-                      aria="Pilih semua" />
-                  </th>
                   <th className="px-4 py-3 font-semibold">No</th>
                   <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
                   <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
-                  <SortTh k="campaign_name" sort={sort} on={toggleSort}>Live Campaign</SortTh>
                   <SortTh k="net_cost" sort={sort} on={toggleSort} right>Net Cost</SortTh>
                   <SortTh k="cost" sort={sort} on={toggleSort} right>Cost</SortTh>
                   <SortTh k="sku_orders" sort={sort} on={toggleSort} right>SKU Orders</SortTh>
@@ -2146,36 +2196,29 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
                   <SortTh k="roi" sort={sort} on={toggleSort} right>ROI</SortTh>
                   <SortTh k="live_views" sort={sort} on={toggleSort} right>LIVE Views</SortTh>
                   <SortTh k="current_budget" sort={sort} on={toggleSort} right>Budget</SortTh>
+                  <th className="px-4 py-3 font-semibold">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {pageRows.map((r, i) => (
-                  <tr key={r.id} className={`border-t border-line/60 hover:bg-white/50 ${sel.has(r.id) ? "bg-primary/5" : ""}`}>
-                    <td className="px-4 py-3">
-                      <RowCheck checked={sel.has(r.id)} onChange={() => toggle(r.id)}
-                        aria={`Pilih ${r.campaign_name || r.id}`} />
-                    </td>
+                  <tr key={r.id} className={`border-t border-line/60 hover:bg-white/50 ${editing?.id === r.id ? "bg-primary/5" : ""}`}>
                     <td className="px-4 py-3 text-muted-fg">{(page - 1) * 20 + i + 1}</td>
-                    <td className="px-4 py-3">
-                      {r.brand_name
-                        ? <span className="chip bg-primary/10 text-primary">{r.brand_name}</span>
-                        : <span className="text-muted-fg/50">—</span>}
-                    </td>
+                    <td className="px-4 py-3">{r.brand_name ? <span className="chip bg-primary/10 text-primary">{r.brand_name}</span> : <span className="text-muted-fg/50">—</span>}</td>
                     <td className="px-4 py-3 text-ink">{fmtDMY(r.report_date)}</td>
-                    <td className="px-4 py-3">
-                      <div className="max-w-[280px] truncate font-semibold text-ink" title={r.campaign_name || ""}>
-                        {r.campaign_name || "—"}
-                      </div>
-                      <div className="font-mono text-[11px] text-muted-fg">{r.campaign_id}</div>
-                    </td>
                     <td className="px-4 py-3 text-right">{money2(r.net_cost)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{money2(r.cost)}</td>
-                    <td className="px-4 py-3 text-right">{r.sku_orders ?? "—"}</td>
+                    <td className="px-4 py-3 text-right">{int(r.sku_orders)}</td>
                     <td className="px-4 py-3 text-right">{money2(r.cost_per_order)}</td>
                     <td className="px-4 py-3 text-right">{money2(r.gross_revenue)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
                     <td className="px-4 py-3 text-right">{intOr(r.live_views)}</td>
                     <td className="px-4 py-3 text-right">{money2(r.current_budget)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => setEditing(r)} className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent" aria-label="Edit"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
+                        <button onClick={() => remove(r)} className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger" aria-label="Delete"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -2184,6 +2227,7 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
           <Pagination page={page} total={rows.length} size={20} />
         </>
       )}
+      <SalesDailyEditModal kind="live" row={editing} onClose={() => setEditing(null)} />
     </>
   );
 }
@@ -2192,11 +2236,10 @@ function SalesProductTab({ rows: all }: { rows: SalesProduct[] }) {
   const router = useRouter();
   const params = useSearchParams();
   const { from, to } = resolveRange(
-    { from: params.get("from"), to: params.get("to"), all: params.get("all") },
-    "month"
+    { from: params.get("from"), to: params.get("to"), all: params.get("all") }, "month"
   );
   const [brand, setBrand] = useState("");
-
+  const [editing, setEditing] = useState<SalesProduct | null>(null);
   const unsorted = all.filter((p) => {
     if (from && p.report_date < from) return false;
     if (to && p.report_date > to) return false;
@@ -2205,21 +2248,10 @@ function SalesProductTab({ rows: all }: { rows: SalesProduct[] }) {
   });
   const { sorted: rows, sort, toggleSort } = useTableSort(unsorted);
 
-  const { sel, toggle, setMany, clear } = useRowSelection();
-  const [delBusy, setDelBusy] = useState(false);
-  const allSelected = rows.length > 0 && rows.every((r) => sel.has(r.id));
-  async function bulkDelete() {
-    if (!(await confirmDialog({
-      title: `Padam ${sel.size} baris?`, danger: true,
-      text: "Baris yang dipilih akan dipadam terus. Tak boleh undo.",
-    }))) return;
-    setDelBusy(true);
-    const res = await fetch("/api/marketer/sales/product", {
-      method: "DELETE", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids: [...sel] }),
-    });
-    setDelBusy(false);
-    if (res.ok) { clear(); router.refresh(); }
+  async function remove(r: SalesProduct) {
+    if (!(await confirmDialog({ title: "Padam rekod product ini?", danger: true }))) return;
+    await fetch(`/api/marketer/sales/product/${r.id}`, { method: "DELETE" });
+    router.refresh();
   }
 
   const cost = rows.reduce((s, r) => s + (r.cost || 0), 0);
@@ -2228,7 +2260,6 @@ function SalesProductTab({ rows: all }: { rows: SalesProduct[] }) {
   const gross = rows.reduce((s, r) => s + (r.gross_revenue || 0), 0);
   const roi = cost > 0 ? Math.round((gross / cost) * 100) / 100 : null;
   const cpo = orders > 0 ? Math.round((cost / orders) * 100) / 100 : null;
-
   const page = getPage(params.get("page"));
   const pageRows = paginate(rows, page, 20);
 
@@ -2237,46 +2268,35 @@ function SalesProductTab({ rows: all }: { rows: SalesProduct[] }) {
       <SalesImport
         title="Import Product Campaign Data (.xlsx)"
         endpoint="/api/marketer/sales/product/import"
-        columns={["Campaign ID", "Campaign name", "Cost", "ROI protection", "Active upgrades",
-          "Net Cost", "Current budget", "SKU orders", "Cost per order", "Gross revenue", "ROI", "Currency"]}
-        note={<>TikTok Ads → Product campaign data export. One row per product campaign. Re-importing a brand + date replaces that day.</>}
+        columns={["Campaign name", "Cost", "Net Cost", "Current budget", "SKU orders", "Cost per order", "Gross revenue"]}
+        note={<>TikTok Ads → Product campaign data export. Semua campaign dijumlahkan jadi <b>satu total harian</b> ikut brand + tarikh. Re-import brand + tarikh yang sama menggantikan hari itu.</>}
         sampleHref="/examples/product-campaign-data-sample.xlsx"
         brandInputId="sp-brand"
-        resultLabel={(d) => `Imported ${d.imported} campaign · skipped ${d.skipped}`}
+        resultLabel={(d) => `Dijumlahkan ${d.imported} campaign · 1 baris harian`}
       />
-      <DateRangeFilter count={rows.length} countNoun={["campaign", "campaigns"]} defaultMode="month" />
+      <DateRangeFilter count={rows.length} countNoun={["day", "days"]} defaultMode="month" />
       <BrandFilterCard id="sp-filter-brand" value={brand} onChange={setBrand} />
-      <SalesBulkBar count={sel.size} busy={delBusy} onDelete={bulkDelete} />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
-        <Kpi Icon={PackageSearch} label="Campaigns" value={rows.length} />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Kpi Icon={Wallet} label="Cost" value={`RM${cost.toFixed(2)}`} fill="red" />
         <Kpi Icon={Wallet} label="Net Cost" value={`RM${netCost.toFixed(2)}`} />
-        <Kpi Icon={ShoppingCart} label="SKU Orders" value={orders} />
+        <Kpi Icon={ShoppingCart} label="SKU Orders" value={int(orders)} />
         <Kpi Icon={Wallet} label="Cost / Order" value={cpo != null ? `RM${cpo}` : "—"} />
         <Kpi Icon={TrendingUp} label="Gross Revenue" value={`RM${gross.toFixed(2)}`} fill="emerald" />
         <Kpi Icon={(roi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI" value={roi != null ? roi : "—"} />
       </div>
 
       {rows.length === 0 ? (
-        <p className="card text-center text-sm text-muted-fg">
-          No product campaigns in this range. Import an .xlsx above.
-        </p>
+        <p className="card text-center text-sm text-muted-fg">No product data in this range. Import an .xlsx above.</p>
       ) : (
         <>
           <div className="glass overflow-x-auto rounded-2xl">
-            <table className="w-full min-w-[1000px] text-sm">
+            <table className="w-full min-w-[900px] text-sm">
               <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
                 <tr>
-                  <th className="px-4 py-3">
-                    <RowCheck checked={allSelected}
-                      onChange={() => setMany(rows.map((r) => r.id), !allSelected)}
-                      aria="Pilih semua" />
-                  </th>
                   <th className="px-4 py-3 font-semibold">No</th>
                   <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
                   <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
-                  <SortTh k="campaign_name" sort={sort} on={toggleSort}>Product Campaign</SortTh>
                   <SortTh k="net_cost" sort={sort} on={toggleSort} right>Net Cost</SortTh>
                   <SortTh k="cost" sort={sort} on={toggleSort} right>Cost</SortTh>
                   <SortTh k="sku_orders" sort={sort} on={toggleSort} right>SKU Orders</SortTh>
@@ -2284,35 +2304,28 @@ function SalesProductTab({ rows: all }: { rows: SalesProduct[] }) {
                   <SortTh k="gross_revenue" sort={sort} on={toggleSort} right>Gross Revenue</SortTh>
                   <SortTh k="roi" sort={sort} on={toggleSort} right>ROI</SortTh>
                   <SortTh k="current_budget" sort={sort} on={toggleSort} right>Budget</SortTh>
+                  <th className="px-4 py-3 font-semibold">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {pageRows.map((r, i) => (
-                  <tr key={r.id} className={`border-t border-line/60 hover:bg-white/50 ${sel.has(r.id) ? "bg-primary/5" : ""}`}>
-                    <td className="px-4 py-3">
-                      <RowCheck checked={sel.has(r.id)} onChange={() => toggle(r.id)}
-                        aria={`Pilih ${r.campaign_name || r.id}`} />
-                    </td>
+                  <tr key={r.id} className={`border-t border-line/60 hover:bg-white/50 ${editing?.id === r.id ? "bg-primary/5" : ""}`}>
                     <td className="px-4 py-3 text-muted-fg">{(page - 1) * 20 + i + 1}</td>
-                    <td className="px-4 py-3">
-                      {r.brand_name
-                        ? <span className="chip bg-primary/10 text-primary">{r.brand_name}</span>
-                        : <span className="text-muted-fg/50">—</span>}
-                    </td>
+                    <td className="px-4 py-3">{r.brand_name ? <span className="chip bg-primary/10 text-primary">{r.brand_name}</span> : <span className="text-muted-fg/50">—</span>}</td>
                     <td className="px-4 py-3 text-ink">{fmtDMY(r.report_date)}</td>
-                    <td className="px-4 py-3">
-                      <div className="max-w-[300px] truncate font-semibold text-ink" title={r.campaign_name || ""}>
-                        {r.campaign_name || "—"}
-                      </div>
-                      <div className="font-mono text-[11px] text-muted-fg">{r.campaign_id}</div>
-                    </td>
                     <td className="px-4 py-3 text-right">{money2(r.net_cost)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{money2(r.cost)}</td>
-                    <td className="px-4 py-3 text-right">{r.sku_orders ?? "—"}</td>
+                    <td className="px-4 py-3 text-right">{int(r.sku_orders)}</td>
                     <td className="px-4 py-3 text-right">{money2(r.cost_per_order)}</td>
                     <td className="px-4 py-3 text-right">{money2(r.gross_revenue)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
                     <td className="px-4 py-3 text-right">{money2(r.current_budget)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => setEditing(r)} className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent" aria-label="Edit"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
+                        <button onClick={() => remove(r)} className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger" aria-label="Delete"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -2321,6 +2334,7 @@ function SalesProductTab({ rows: all }: { rows: SalesProduct[] }) {
           <Pagination page={page} total={rows.length} size={20} />
         </>
       )}
+      <SalesDailyEditModal kind="product" row={editing} onClose={() => setEditing(null)} />
     </>
   );
 }

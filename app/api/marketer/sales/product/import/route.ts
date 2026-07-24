@@ -55,40 +55,32 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Could not read that .xlsx file." }, { status: 400 });
   }
 
+  // Sum every product campaign into a single daily total for this brand + date.
+  let cost = 0, netCost = 0, budget = 0, orders = 0, gross = 0;
+  let counted = 0, skipped = 0;
+  for (const r of rows) {
+    const name = str(r["Campaign name"]);
+    if (!name || name === "-") { skipped++; continue; }
+    cost += num(r["Cost"]) || 0;
+    netCost += num(r["Net Cost"]) || 0;
+    budget += num(r["Current budget"]) || 0;
+    orders += num(r["SKU orders"]) || 0;
+    gross += num(r["Gross revenue"]) || 0;
+    counted++;
+  }
+  const cpo = orders > 0 ? Math.round((cost / orders) * 100) / 100 : null;
+  const roi = cost > 0 ? Math.round((gross / cost) * 100) / 100 : null;
+
   await db.prepare(
       "DELETE FROM sales_product WHERE marketer_id = ? AND brand_id = ? AND report_date = ?"
     ).run(user.id, brandId, reportDate);
 
-  const insert = db.prepare(
+  await db.prepare(
     `INSERT INTO sales_product
-       (marketer_id, brand_id, report_date, campaign_id, campaign_name, roi_protection,
-        active_upgrades, cost, net_cost, current_budget, sku_orders, cost_per_order,
-        gross_revenue, roi, currency)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  );
+       (marketer_id, brand_id, report_date, cost, net_cost, current_budget,
+        sku_orders, cost_per_order, gross_revenue, roi)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(user.id, brandId, reportDate, cost, netCost, budget, orders, cpo, gross, roi);
 
-  let imported = 0;
-  let skipped = 0;
-  for (const r of rows) {
-    const name = str(r["Campaign name"]);
-    if (!name || name === "-") { skipped++; continue; }
-    await insert.run(
-      user.id, brandId, reportDate,
-      str(r["Campaign ID"]),
-      name,
-      str(r["ROI protection"]),
-      str(r["Active upgrades"]),
-      num(r["Cost"]),
-      num(r["Net Cost"]),
-      num(r["Current budget"]),
-      num(r["SKU orders"]),
-      num(r["Cost per order"]),
-      num(r["Gross revenue"]),
-      num(r["ROI"]),
-      str(r["Currency"])
-    );
-    imported++;
-  }
-
-  return NextResponse.json({ ok: true, imported, skipped, total: rows.length, report_date: reportDate });
+  return NextResponse.json({ ok: true, imported: counted, skipped, total: rows.length, report_date: reportDate });
 }

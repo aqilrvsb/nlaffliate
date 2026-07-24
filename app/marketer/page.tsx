@@ -105,10 +105,8 @@ export default async function MarketerPage() {
       db.prepare(
           `SELECT s.id, to_char(s.report_date, 'YYYY-MM-DD') AS report_date,
                   s.brand_id, b.name AS brand_name,
-                  s.campaign_id, s.campaign_name, s.roi_protection, s.active_upgrades,
                   s.cost, s.net_cost, s.gross_revenue, s.roi, s.sku_orders,
-                  s.cost_per_order, s.live_views, s.target_roi_cost, s.viewer_boost_cost,
-                  s.creative_boost_cost, s.current_budget, s.currency
+                  s.cost_per_order, s.live_views, s.current_budget
              FROM sales_live s
              LEFT JOIN brands b ON b.id = s.brand_id
             WHERE s.marketer_id = ?
@@ -118,9 +116,8 @@ export default async function MarketerPage() {
       db.prepare(
           `SELECT s.id, to_char(s.report_date, 'YYYY-MM-DD') AS report_date,
                   s.brand_id, b.name AS brand_name,
-                  s.campaign_id, s.campaign_name, s.roi_protection, s.active_upgrades,
                   s.cost, s.net_cost, s.current_budget, s.sku_orders, s.cost_per_order,
-                  s.gross_revenue, s.roi, s.currency
+                  s.gross_revenue, s.roi
              FROM sales_product s
              LEFT JOIN brands b ON b.id = s.brand_id
             WHERE s.marketer_id = ?

@@ -56,45 +56,34 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Could not read that .xlsx file." }, { status: 400 });
   }
 
-  await db.prepare(
-      "DELETE FROM sales_live WHERE marketer_id = ? AND brand_id = ? AND report_date = ?"
-    ).run(user.id, brandId, reportDate);
-
-  const insert = db.prepare(
-    `INSERT INTO sales_live
-       (marketer_id, brand_id, report_date, campaign_id, campaign_name, roi_protection,
-        active_upgrades, cost, net_cost, gross_revenue, roi, sku_orders, cost_per_order,
-        live_views, target_roi_cost, viewer_boost_cost, creative_boost_cost, current_budget, currency)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  );
-
-  let imported = 0;
-  let skipped = 0;
+  // Sum every LIVE campaign into a single daily total for this brand + date.
+  let cost = 0, netCost = 0, gross = 0, orders = 0, views = 0, budget = 0;
+  let counted = 0, skipped = 0;
   for (const r of rows) {
     // First column is Campaign name; null or "-" is the total/spacer row.
     const name = str(r["Campaign name"]);
     if (!name || name === "-") { skipped++; continue; }
-    await insert.run(
-      user.id, brandId, reportDate,
-      str(r["Campaign ID"]),
-      name,
-      str(r["ROI protection"]),
-      str(r["Active upgrades"]),
-      num(r["Cost"]),
-      num(r["Net Cost"]),
-      num(r["Gross revenue"]),
-      num(r["ROI"]),
-      num(r["SKU orders"]),
-      num(r["Cost per order"]),
-      num(r["LIVE views"]),
-      num(r["Target ROI cost"]),
-      num(r["Viewer boost cost"]),
-      num(r["Creative boost cost"]),
-      num(r["Current budget"]),
-      str(r["Currency"])
-    );
-    imported++;
+    cost += num(r["Cost"]) || 0;
+    netCost += num(r["Net Cost"]) || 0;
+    gross += num(r["Gross revenue"]) || 0;
+    orders += num(r["SKU orders"]) || 0;
+    views += num(r["LIVE views"]) || 0;
+    budget += num(r["Current budget"]) || 0;
+    counted++;
   }
+  const cpo = orders > 0 ? Math.round((cost / orders) * 100) / 100 : null;
+  const roi = cost > 0 ? Math.round((gross / cost) * 100) / 100 : null;
 
-  return NextResponse.json({ ok: true, imported, skipped, total: rows.length, report_date: reportDate });
+  await db.prepare(
+      "DELETE FROM sales_live WHERE marketer_id = ? AND brand_id = ? AND report_date = ?"
+    ).run(user.id, brandId, reportDate);
+
+  await db.prepare(
+    `INSERT INTO sales_live
+       (marketer_id, brand_id, report_date, cost, net_cost, gross_revenue, roi,
+        sku_orders, cost_per_order, live_views, current_budget)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(user.id, brandId, reportDate, cost, netCost, gross, roi, orders, cpo, views, budget);
+
+  return NextResponse.json({ ok: true, imported: counted, skipped, total: rows.length, report_date: reportDate });
 }

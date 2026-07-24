@@ -585,7 +585,7 @@ export default function MarketerShell({
           {active === "sales-card" && <SalesCardTab rows={salesCard} />}
           {active === "brand" && <BrandsTab />}
           {active === "product" && <ProductsTab />}
-          {active === "overall" && <OverallTab overall={overall} />}
+          {active === "overall" && <OverallTab overall={overall} salesLive={salesLive} salesProduct={salesProductAdj} salesCard={salesCard} />}
           {active === "creator" && <CreatorTab reports={creatorReports} />}
           {active === "live-users" && <ListLiveUserTab liveUsers={liveUsers} />}
           {active === "live-pending" && <LiveScheduleTab sessions={liveSessions} liveUsers={liveUsers} kind="pending" />}
@@ -2704,7 +2704,9 @@ function OverallImport() {
   );
 }
 
-function OverallTab({ overall }: { overall: Overall[] }) {
+function OverallTab({ overall, salesLive, salesProduct, salesCard }: {
+  overall: Overall[]; salesLive: SalesLive[]; salesProduct: SalesProduct[]; salesCard: SalesCard[];
+}) {
   const params = useSearchParams();
   const { from, to } = resolveRange(
     { from: params.get("from"), to: params.get("to"), all: params.get("all") },
@@ -2724,6 +2726,21 @@ function OverallTab({ overall }: { overall: Overall[] }) {
   const cost = sum("cost"), gross = sum("gross_revenue"), gmv = sum("gmv");
   const roi = cost > 0 ? Math.round((gross / cost) * 100) / 100 : null;
 
+  // GMV = Live + Product-only + Card (same date/brand filter). salesProduct is
+  // already card-adjusted, so Live + Product-only + Card = the true GMV.
+  const inR = (d: string) => (!from || d >= from) && (!to || d <= to);
+  const inB = (b: number | null) => !brand || String(b ?? "") === brand;
+  const gmvSum = (arr: { report_date: string; brand_id: number | null; cost: number | null; gross_revenue: number | null }[], k: "cost" | "gross_revenue") =>
+    arr.filter((s) => inR(s.report_date) && inB(s.brand_id)).reduce((a, s) => a + (s[k] || 0), 0);
+  const gmvCost = gmvSum(salesLive, "cost") + gmvSum(salesProduct, "cost") + gmvSum(salesCard, "cost");
+  const gmvGross = gmvSum(salesLive, "gross_revenue") + gmvSum(salesProduct, "gross_revenue") + gmvSum(salesCard, "gross_revenue");
+  const roiGmv = gmvCost > 0 ? Math.round((gmvGross / gmvCost) * 100) / 100 : null;
+
+  // Organic = Overall − GMV.
+  const costOrganic = cost - gmvCost;
+  const grossOrganic = gross - gmvGross;
+  const roiOrganic = costOrganic > 0 ? Math.round((grossOrganic / costOrganic) * 100) / 100 : null;
+
   return (
     <>
       <OverallImport />
@@ -2742,6 +2759,24 @@ function OverallTab({ overall }: { overall: Overall[] }) {
         <Kpi Icon={Eye} label="Product Impressions" value={int(sum("product_impressions"))} />
         <Kpi Icon={MousePointerClick} label="Product Clicks" value={int(sum("product_clicks"))} />
       </div>
+
+      <section>
+        <h2 className="section-title mb-2">GMV (Live + Product + Card)</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Kpi Icon={Wallet} label="Cost GMV" value={money(gmvCost)} fill="red" />
+          <Kpi Icon={TrendingUp} label="Gross Revenue GMV" value={money(gmvGross)} fill="emerald" />
+          <Kpi Icon={(roiGmv ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI GMV" value={roiGmv ?? "—"} />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="section-title mb-2">Organic (Overall − GMV)</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Kpi Icon={Wallet} label="Cost Organic" value={money(costOrganic)} fill="red" />
+          <Kpi Icon={TrendingUp} label="Gross Revenue Organic" value={money(grossOrganic)} fill="emerald" />
+          <Kpi Icon={(roiOrganic ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI Organic" value={roiOrganic ?? "—"} />
+        </div>
+      </section>
 
       {rows.length === 0 ? (
         <p className="card text-center text-sm text-muted-fg">

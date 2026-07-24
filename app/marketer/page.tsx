@@ -20,7 +20,7 @@ export default async function MarketerPage() {
 
   // All six reads are independent, so issue them together rather than paying
   // six sequential round trips to Postgres before the page can render.
-  const [affiliateRows, profileRows, lives, unknowns, salesLive, salesProduct, posts, overall, creatorReports, liveUsers, liveSessions, dataQuality, salesCard, spendTtm, reportingSheet] =
+  const [affiliateRows, profileRows, lives, unknowns, salesLive, salesProduct, posts, overall, creatorReports, liveUsers, liveSessions, dataQuality, salesCard, spendTtm, reportingSheet, salesLiveCampaign, salesProductCampaign] =
     await Promise.all([
       db.prepare(
           `SELECT u.id, u.name, u.email, u.staff_id, u.phone, u.address, u.activated
@@ -209,6 +209,28 @@ export default async function MarketerPage() {
             WHERE r.marketer_id = ?
             ORDER BY r.report_date DESC, r.ord`
         ).all(user.id) as Promise<any[]>,
+
+      db.prepare(
+          `SELECT c.id, to_char(c.report_date, 'YYYY-MM-DD') AS report_date,
+                  c.brand_id, b.name AS brand_name, c.campaign_id, c.campaign_name,
+                  c.cost, c.net_cost, c.gross_revenue, c.roi, c.sku_orders,
+                  c.cost_per_order, c.live_views, c.current_budget
+             FROM sales_live_campaign c
+             LEFT JOIN brands b ON b.id = c.brand_id
+            WHERE c.marketer_id = ?
+            ORDER BY c.report_date DESC, c.gross_revenue DESC NULLS LAST`
+        ).all(user.id) as Promise<any[]>,
+
+      db.prepare(
+          `SELECT c.id, to_char(c.report_date, 'YYYY-MM-DD') AS report_date,
+                  c.brand_id, b.name AS brand_name, c.campaign_id, c.campaign_name,
+                  c.cost, c.net_cost, c.current_budget, c.sku_orders,
+                  c.cost_per_order, c.gross_revenue, c.roi
+             FROM sales_product_campaign c
+             LEFT JOIN brands b ON b.id = c.brand_id
+            WHERE c.marketer_id = ?
+            ORDER BY c.report_date DESC, c.gross_revenue DESC NULLS LAST`
+        ).all(user.id) as Promise<any[]>,
     ]);
 
   const affiliates = plain(affiliateRows).map((a: any) => ({
@@ -226,6 +248,7 @@ export default async function MarketerPage() {
       creatorReports={plain(creatorReports)}
       liveUsers={plain(liveUsers)} liveSessions={plain(liveSessions)}
       dataQuality={plain(dataQuality)} salesCard={plain(salesCard)}
-      spendTtm={plain(spendTtm)} reportingSheet={plain(reportingSheet)} />
+      spendTtm={plain(spendTtm)} reportingSheet={plain(reportingSheet)}
+      salesLiveCampaign={plain(salesLiveCampaign)} salesProductCampaign={plain(salesProductCampaign)} />
   );
 }

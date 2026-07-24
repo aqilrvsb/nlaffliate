@@ -98,6 +98,14 @@ type SalesCard = {
   cost: number | null; sku_orders: number | null; cost_per_order: number | null;
   gross_revenue: number | null; roi: number | null;
 };
+type SalesCampaign = {
+  id: number; report_date: string;
+  brand_id: number | null; brand_name: string | null;
+  campaign_id: string | null; campaign_name: string | null;
+  cost: number | null; net_cost: number | null; gross_revenue: number | null; roi: number | null;
+  sku_orders: number | null; cost_per_order: number | null;
+  live_views?: number | null; current_budget?: number | null;
+};
 type SpendTtm = {
   id: number; report_date: string;
   brand_id: number | null; brand_name: string | null;
@@ -172,10 +180,13 @@ const LIVE_CHILDREN = [
   { key: "live-reporting", label: "Reporting Live User", icon: BarChart3 },
 ] as const;
 
-// Sales: two TikTok campaign-data exports plus manual Card entry.
+// Sales: two TikTok campaign-data exports plus manual Card entry, each with a
+// daily view and a per-campaign detail view.
 const SALES_CHILDREN = [
   { key: "sales-live", label: "Live", icon: Radio },
+  { key: "sales-live-campaign", label: "Live · Campaign", icon: List },
   { key: "sales-product", label: "Product", icon: PackageSearch },
+  { key: "sales-product-campaign", label: "Product · Campaign", icon: List },
   { key: "sales-card", label: "Card", icon: CreditCard },
 ] as const;
 
@@ -192,7 +203,9 @@ const TAB_LABELS: Record<string, string> = {
   unknown: "Unknown Affiliate",
   product: "Product",
   "sales-live": "Sales · Live",
+  "sales-live-campaign": "Sales · Live Campaign",
   "sales-product": "Sales · Product",
+  "sales-product-campaign": "Sales · Product Campaign",
   "sales-card": "Sales · Card",
   overall: "Overall",
   creator: "Creator",
@@ -208,12 +221,14 @@ const TAB_LABELS: Record<string, string> = {
 export default function MarketerShell({
   user, affiliates, lives, unknowns, salesLive, salesProduct, overall, posts, creatorReports,
   liveUsers, liveSessions, dataQuality, salesCard, spendTtm, reportingSheet,
+  salesLiveCampaign, salesProductCampaign,
 }: {
   user: SessionUser; affiliates: Affiliate[]; lives: Live[];
   unknowns: Unknown[]; salesLive: SalesLive[]; salesProduct: SalesProduct[];
   overall: Overall[]; posts: Post[]; creatorReports: CreatorReport[];
   liveUsers: LiveUser[]; liveSessions: LiveSession[]; dataQuality: DataQuality[];
   salesCard: SalesCard[]; spendTtm: SpendTtm[]; reportingSheet: ReportingSheetRow[];
+  salesLiveCampaign: SalesCampaign[]; salesProductCampaign: SalesCampaign[];
 }) {
   const router = useRouter();
   const { navigate, prefetch, pending: navPending } = useNavigate();
@@ -582,6 +597,8 @@ export default function MarketerShell({
           {active === "unknown" && <UnknownTab rows={unknowns} />}
           {active === "sales-live" && <SalesLiveTab rows={salesLive} />}
           {active === "sales-product" && <SalesProductTab rows={salesProduct} cards={salesCard} />}
+          {active === "sales-live-campaign" && <SalesCampaignTab rows={salesLiveCampaign} kind="live" />}
+          {active === "sales-product-campaign" && <SalesCampaignTab rows={salesProductCampaign} kind="product" />}
           {active === "sales-card" && <SalesCardTab rows={salesCard} />}
           {active === "brand" && <BrandsTab />}
           {active === "product" && <ProductsTab />}
@@ -2399,6 +2416,100 @@ function SalesProductTab({ rows: rawAll, cards }: { rows: SalesProduct[]; cards:
         </>
       )}
       <SalesDailyEditModal kind="product" row={editing} onClose={() => setEditing(null)} />
+    </>
+  );
+}
+
+/* ── Sales · Campaign detail (per-campaign rows) ───────── */
+
+function SalesCampaignTab({ rows: all, kind }: { rows: SalesCampaign[]; kind: "live" | "product" }) {
+  const params = useSearchParams();
+  const { from, to } = resolveRange(
+    { from: params.get("from"), to: params.get("to"), all: params.get("all") }, "month"
+  );
+  const [brand, setBrand] = useState("");
+  const unsorted = all.filter((p) => {
+    if (from && p.report_date < from) return false;
+    if (to && p.report_date > to) return false;
+    if (brand && String(p.brand_id ?? "") !== brand) return false;
+    return true;
+  });
+  const { sorted: rows, sort, toggleSort } = useTableSort(unsorted);
+
+  const cost = rows.reduce((s, r) => s + (r.cost || 0), 0);
+  const gross = rows.reduce((s, r) => s + (r.gross_revenue || 0), 0);
+  const orders = rows.reduce((s, r) => s + (r.sku_orders || 0), 0);
+  const roi = cost > 0 ? Math.round((gross / cost) * 100) / 100 : null;
+  const page = getPage(params.get("page"));
+  const pageRows = paginate(rows, page, 20);
+  const isLive = kind === "live";
+
+  return (
+    <>
+      <p className="card flex items-center gap-2 text-sm text-muted-fg">
+        <List className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+        Detail setiap campaign dari import {isLive ? "Live" : "Product"}. Import di halaman {isLive ? "Live" : "Product"} untuk kemas kini.
+      </p>
+      <DateRangeFilter count={rows.length} countNoun={["campaign", "campaigns"]} defaultMode="month" />
+      <BrandFilterCard id={`scmp-filter-${kind}`} value={brand} onChange={setBrand} />
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Kpi Icon={List} label="Campaigns" value={rows.length} />
+        <Kpi Icon={Wallet} label="Cost" value={money(cost)} fill="red" />
+        <Kpi Icon={TrendingUp} label="Gross Revenue" value={money(gross)} fill="emerald" />
+        <Kpi Icon={(roi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI" value={roi ?? "—"} />
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="card text-center text-sm text-muted-fg">
+          Tiada campaign dalam julat ini. Import .xlsx di halaman {isLive ? "Live" : "Product"}.
+        </p>
+      ) : (
+        <>
+          <div className="glass overflow-x-auto rounded-2xl">
+            <table className="w-full min-w-[1040px] text-sm">
+              <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">No</th>
+                  <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
+                  <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
+                  <SortTh k="campaign_name" sort={sort} on={toggleSort}>Campaign</SortTh>
+                  <SortTh k="cost" sort={sort} on={toggleSort} right>Cost</SortTh>
+                  <SortTh k="net_cost" sort={sort} on={toggleSort} right>Net Cost</SortTh>
+                  <SortTh k="sku_orders" sort={sort} on={toggleSort} right>SKU Orders</SortTh>
+                  <SortTh k="cost_per_order" sort={sort} on={toggleSort} right>Cost / Order</SortTh>
+                  <SortTh k="gross_revenue" sort={sort} on={toggleSort} right>Gross Revenue</SortTh>
+                  <SortTh k="roi" sort={sort} on={toggleSort} right>ROI</SortTh>
+                  {isLive
+                    ? <SortTh k="live_views" sort={sort} on={toggleSort} right>LIVE Views</SortTh>
+                    : <SortTh k="current_budget" sort={sort} on={toggleSort} right>Budget</SortTh>}
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map((r, i) => (
+                  <tr key={r.id} className="border-t border-line/60 hover:bg-white/50">
+                    <td className="px-4 py-3 text-muted-fg">{(page - 1) * 20 + i + 1}</td>
+                    <td className="px-4 py-3">{r.brand_name ? <span className="chip bg-primary/10 text-primary">{r.brand_name}</span> : <span className="text-muted-fg/50">—</span>}</td>
+                    <td className="px-4 py-3 text-ink">{fmtDMY(r.report_date)}</td>
+                    <td className="px-4 py-3">
+                      <div className="max-w-[280px] truncate font-semibold text-ink" title={r.campaign_name || ""}>{r.campaign_name || "—"}</div>
+                      <div className="font-mono text-[11px] text-muted-fg">{r.campaign_id}</div>
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{money2(r.cost)}</td>
+                    <td className="px-4 py-3 text-right">{money2(r.net_cost)}</td>
+                    <td className="px-4 py-3 text-right">{int(r.sku_orders)}</td>
+                    <td className="px-4 py-3 text-right">{money2(r.cost_per_order)}</td>
+                    <td className="px-4 py-3 text-right">{money2(r.gross_revenue)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
+                    <td className="px-4 py-3 text-right">{isLive ? intOr(r.live_views) : money2(r.current_budget)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pagination page={page} total={rows.length} size={20} />
+        </>
+      )}
     </>
   );
 }

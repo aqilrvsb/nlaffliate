@@ -55,25 +55,40 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Could not read that .xlsx file." }, { status: 400 });
   }
 
-  // Sum every product campaign into a single daily total for this brand + date.
+  // Replace this brand+date in both the daily aggregate and the campaign detail.
+  await db.prepare("DELETE FROM sales_product WHERE marketer_id = ? AND brand_id = ? AND report_date = ?")
+    .run(user.id, brandId, reportDate);
+  await db.prepare("DELETE FROM sales_product_campaign WHERE marketer_id = ? AND brand_id = ? AND report_date = ?")
+    .run(user.id, brandId, reportDate);
+
+  const insertCampaign = db.prepare(
+    `INSERT INTO sales_product_campaign
+       (marketer_id, brand_id, report_date, campaign_id, campaign_name, cost, net_cost,
+        current_budget, sku_orders, cost_per_order, gross_revenue, roi)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+
+  // Sum every product campaign into a daily total AND keep each campaign's row.
   let cost = 0, netCost = 0, budget = 0, orders = 0, gross = 0;
   let counted = 0, skipped = 0;
   for (const r of rows) {
     const name = str(r["Campaign name"]);
     if (!name || name === "-") { skipped++; continue; }
-    cost += num(r["Cost"]) || 0;
+    const rCost = num(r["Cost"]), rGross = num(r["Gross revenue"]), rOrders = num(r["SKU orders"]);
+    cost += rCost || 0;
     netCost += num(r["Net Cost"]) || 0;
     budget += num(r["Current budget"]) || 0;
-    orders += num(r["SKU orders"]) || 0;
-    gross += num(r["Gross revenue"]) || 0;
+    orders += rOrders || 0;
+    gross += rGross || 0;
     counted++;
+    await insertCampaign.run(
+      user.id, brandId, reportDate, str(r["Campaign ID"]), name,
+      rCost, num(r["Net Cost"]), num(r["Current budget"]), rOrders,
+      num(r["Cost per order"]), rGross, num(r["ROI"])
+    );
   }
   const cpo = orders > 0 ? Math.round((cost / orders) * 100) / 100 : null;
   const roi = cost > 0 ? Math.round((gross / cost) * 100) / 100 : null;
-
-  await db.prepare(
-      "DELETE FROM sales_product WHERE marketer_id = ? AND brand_id = ? AND report_date = ?"
-    ).run(user.id, brandId, reportDate);
 
   await db.prepare(
     `INSERT INTO sales_product

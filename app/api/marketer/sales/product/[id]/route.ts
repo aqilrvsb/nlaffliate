@@ -38,7 +38,17 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const id = Number(params.id);
-  if (!(await mine(id))) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  const user = await mine(id);
+  if (!user) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  // Cascade the per-campaign detail for the same brand + date.
+  const row = await db.prepare(
+      "SELECT brand_id, to_char(report_date, 'YYYY-MM-DD') AS report_date FROM sales_product WHERE id = ?"
+    ).get<{ brand_id: number | null; report_date: string }>(id);
   await db.prepare("DELETE FROM sales_product WHERE id = ?").run(id);
+  if (row) {
+    await db.prepare(
+        "DELETE FROM sales_product_campaign WHERE marketer_id = ? AND brand_id IS NOT DISTINCT FROM ? AND report_date = ?"
+      ).run(user.id, row.brand_id, row.report_date);
+  }
   return NextResponse.json({ ok: true });
 }

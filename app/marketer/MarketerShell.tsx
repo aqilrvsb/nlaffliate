@@ -2205,14 +2205,10 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
       <DateRangeFilter count={rows.length} countNoun={["day", "days"]} defaultMode="month" />
       <BrandFilterCard id="sl-filter-brand" value={brand} onChange={setBrand} />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Kpi Icon={Wallet} label="Cost" value={`RM${cost.toFixed(2)}`} fill="red" />
-        <Kpi Icon={Wallet} label="Net Cost" value={`RM${netCost.toFixed(2)}`} />
-        <Kpi Icon={ShoppingCart} label="SKU Orders" value={int(orders)} />
-        <Kpi Icon={Wallet} label="Cost / Order" value={cpo != null ? `RM${cpo}` : "—"} />
         <Kpi Icon={TrendingUp} label="Gross Revenue" value={`RM${gross.toFixed(2)}`} fill="emerald" />
         <Kpi Icon={(roi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI" value={roi != null ? roi : "—"} />
-        <Kpi Icon={Eye} label="LIVE Views" value={intOr(views)} />
       </div>
 
       {rows.length === 0 ? (
@@ -2348,11 +2344,8 @@ function SalesProductTab({ rows: rawAll, cards }: { rows: SalesProduct[]; cards:
         Nilai di bawah = import <b>tolak Card</b> (brand + tarikh yang sama) supaya tak double-count. Edit menunjukkan nilai import mentah.
       </p>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Kpi Icon={Wallet} label="Cost" value={`RM${cost.toFixed(2)}`} fill="red" />
-        <Kpi Icon={Wallet} label="Net Cost" value={`RM${netCost.toFixed(2)}`} />
-        <Kpi Icon={ShoppingCart} label="SKU Orders" value={int(orders)} />
-        <Kpi Icon={Wallet} label="Cost / Order" value={cpo != null ? `RM${cpo}` : "—"} />
         <Kpi Icon={TrendingUp} label="Gross Revenue" value={`RM${gross.toFixed(2)}`} fill="emerald" />
         <Kpi Icon={(roi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI" value={roi != null ? roi : "—"} />
       </div>

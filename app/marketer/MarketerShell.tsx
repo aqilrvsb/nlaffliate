@@ -219,7 +219,7 @@ const TAB_LABELS: Record<string, string> = {
   "live-success": "Success Live",
   "live-reporting": "Reporting Live User",
   "data-quality": "Data Quality",
-  spend: "Spend",
+  spend: "TTAM",
   "reporting-sheet": "Reporting Sheet",
 };
 
@@ -476,13 +476,13 @@ export default function MarketerShell({
               Data Quality
             </button>
 
-            {/* Spend — TTM + GMV (Live/Product/Card) combined */}
+            {/* Spend — TTAM + GMV (Live/Product/Card) combined */}
             <button onClick={() => go("spend")}
               className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
                 active === "spend" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
               }`}>
               <NavIcon Icon={Wallet} busy={navPending && navKey === "spend"} />
-              Spend
+              TTAM
             </button>
 
             {/* Reporting Sheet — per-time-slot daily live sheet */}
@@ -2818,7 +2818,7 @@ function OverallTab({ overall, salesLive, salesProduct, salesCard, spendTtm }: {
 
   const sum = (k: keyof Overall) => rows.reduce((s, r) => s + ((r[k] as number) || 0), 0);
   const gross = sum("gross_revenue"), gmv = sum("gmv");
-  // TTM spend from the Spend tab; Overall Spend = imported cost + TTM.
+  // TTAM spend from the Spend tab; Overall Spend = imported cost + TTAM.
   const ttmCost = spendTtm.filter((t) => inR(t.report_date) && inB(t.brand_id)).reduce((a, t) => a + (t.ttm_cost || 0), 0);
   const cost = sum("cost") + ttmCost;
   const roi = cost > 0 ? Math.round((gross / cost) * 100) / 100 : null;
@@ -2847,7 +2847,7 @@ function OverallTab({ overall, salesLive, salesProduct, salesCard, spendTtm }: {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Kpi Icon={TrendingUp} label="Overall GMV" value={money(gmv)} fill="yellow" />
         <Kpi Icon={Wallet} label="Overall Spend" value={money(cost)} fill="red" />
-        <Kpi Icon={Wallet} label="Spend TTM" value={money(ttmCost)} />
+        <Kpi Icon={Wallet} label="Spend TTAM" value={money(ttmCost)} />
         <Kpi Icon={TrendingUp} label="Overall Gross Revenue" value={money(gross)} fill="emerald" />
         <Kpi Icon={(roi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="Overall ROI" value={roi ?? "—"} />
         <Kpi Icon={ShoppingCart} label="Overall SKU Orders" value={int(sum("sku_orders"))} />
@@ -4184,7 +4184,7 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
   );
 }
 
-/* ── Spend (TTM + GMV combined) ────────────────────────── */
+/* ── Spend (TTAM + GMV combined) ────────────────────────── */
 
 type SpendRow = {
   key: string; brand_id: number | null; brand_name: string | null; report_date: string;
@@ -4202,7 +4202,7 @@ function SpendTab({ spendTtm, salesLive, salesProduct, salesCard }: {
   );
   const [filterBrand, setFilterBrand] = useState("");
 
-  // TTM entry form (also edits a TTM row for a given brand + date).
+  // TTAM entry form (also edits a TTAM row for a given brand + date).
   const empty = { report_date: "", brand: "", ttm_cost: "", ttm_gross_revenue: "" };
   const [f, setF] = useState(empty);
   const [editId, setEditId] = useState<number | null>(null);
@@ -4217,7 +4217,7 @@ function SpendTab({ spendTtm, salesLive, salesProduct, salesCard }: {
     if (!f.report_date) return setError("Pilih tarikh.");
     if (!f.brand) return setError("Pilih brand.");
     if (f.ttm_cost === "" || f.ttm_gross_revenue === "")
-      return setError("Isi TTM Cost dan TTM Gross Revenue.");
+      return setError("Isi TTAM Cost dan TTAM Gross Revenue.");
     setBusy(true); setError(""); setMsg("");
     const res = await fetch("/api/marketer/spend", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -4245,13 +4245,13 @@ function SpendTab({ spendTtm, salesLive, salesProduct, salesCard }: {
 
   async function removeTtm(r: SpendRow) {
     if (r.ttmId == null) return;
-    if (!(await confirmDialog({ title: "Padam TTM untuk hari ini?", danger: true }))) return;
+    if (!(await confirmDialog({ title: "Padam TTAM untuk hari ini?", danger: true }))) return;
     await fetch(`/api/marketer/spend/${r.ttmId}`, { method: "DELETE" });
     if (editId === r.ttmId) reset();
     router.refresh();
   }
 
-  // Combine TTM + Live + Product + Card per (brand, date).
+  // Combine TTAM + Live + Product + Card per (brand, date).
   const map = new Map<string, SpendRow>();
   const K = (b: number | null, d: string) => `${b ?? 0}|${d}`;
   const ensure = (b: number | null, name: string | null, d: string) => {
@@ -4290,7 +4290,7 @@ function SpendTab({ spendTtm, salesLive, salesProduct, salesCard }: {
       <form onSubmit={submit} className="card space-y-3">
         <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
           <Wallet className="h-4 w-4 text-primary" aria-hidden="true" />
-          {editId ? "Kemas kini TTM" : "Spend — key in TTM"}
+          {editId ? "Kemas kini TTAM" : "Spend — key in TTAM"}
         </p>
         <div className="grid gap-3 sm:grid-cols-4">
           <div>
@@ -4303,12 +4303,12 @@ function SpendTab({ spendTtm, salesLive, salesProduct, salesCard }: {
             <BrandSelect id="spend-brand" value={f.brand} onChange={(v) => setF((p) => ({ ...p, brand: v }))} />
           </div>
           <div>
-            <label className="label">TTM Cost (RM)</label>
+            <label className="label">TTAM Cost (RM)</label>
             <input className="input" inputMode="decimal" value={f.ttm_cost} required placeholder="0"
               onChange={(e) => setF((p) => ({ ...p, ttm_cost: e.target.value }))} />
           </div>
           <div>
-            <label className="label">TTM Gross Revenue (RM)</label>
+            <label className="label">TTAM Gross Revenue (RM)</label>
             <input className="input" inputMode="decimal" value={f.ttm_gross_revenue} required placeholder="0"
               onChange={(e) => setF((p) => ({ ...p, ttm_gross_revenue: e.target.value }))} />
           </div>
@@ -4316,7 +4316,7 @@ function SpendTab({ spendTtm, salesLive, salesProduct, salesCard }: {
         <div className="flex items-center gap-3">
           <button className="btn !py-2.5" disabled={busy}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
-            {editId ? "Update TTM" : "Submit"}
+            {editId ? "Update TTAM" : "Submit"}
           </button>
           {editId && <button type="button" className="btn-ghost !py-2" onClick={reset}>Batal</button>}
           <p className="text-[11px] text-muted-fg">GMV (Live + Product + Card) ditarik automatik ikut brand + tarikh.</p>
@@ -4333,15 +4333,15 @@ function SpendTab({ spendTtm, salesLive, salesProduct, salesCard }: {
         <Kpi Icon={TrendingUp} label="Total Gross Revenue" value={money(tTotalGross)} fill="emerald" />
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Kpi Icon={Wallet} label="Total Cost TTM" value={money(tTtmCost)} />
-        <Kpi Icon={TrendingUp} label="Total Gross Revenue TTM" value={money(tTtmGross)} />
+        <Kpi Icon={Wallet} label="Total Cost TTAM" value={money(tTtmCost)} />
+        <Kpi Icon={TrendingUp} label="Total Gross Revenue TTAM" value={money(tTtmGross)} />
         <Kpi Icon={Wallet} label="Total Cost GMV" value={money(tGmvCost)} />
         <Kpi Icon={TrendingUp} label="Total Gross Revenue GMV" value={money(tGmvGross)} />
       </div>
 
       {rows.length === 0 ? (
         <p className="card text-center text-sm text-muted-fg">
-          Tiada data dalam julat ini. Key in TTM di atas, atau import Live / Product / Card.
+          Tiada data dalam julat ini. Key in TTAM di atas, atau import Live / Product / Card.
         </p>
       ) : (
         <>
@@ -4353,8 +4353,8 @@ function SpendTab({ spendTtm, salesLive, salesProduct, salesCard }: {
                   <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
                   <SortTh k="totalCost" sort={sort} on={toggleSort} right>Total Cost</SortTh>
                   <SortTh k="totalGross" sort={sort} on={toggleSort} right>Total Gross Rev</SortTh>
-                  <SortTh k="ttmCost" sort={sort} on={toggleSort} right>Cost TTM</SortTh>
-                  <SortTh k="ttmGross" sort={sort} on={toggleSort} right>Gross Rev TTM</SortTh>
+                  <SortTh k="ttmCost" sort={sort} on={toggleSort} right>Cost TTAM</SortTh>
+                  <SortTh k="ttmGross" sort={sort} on={toggleSort} right>Gross Rev TTAM</SortTh>
                   <SortTh k="gmvCost" sort={sort} on={toggleSort} right>Cost GMV</SortTh>
                   <SortTh k="gmvGross" sort={sort} on={toggleSort} right>Gross Rev GMV</SortTh>
                   <th className="px-4 py-3 font-semibold">Action</th>
@@ -4373,12 +4373,12 @@ function SpendTab({ spendTtm, salesLive, salesProduct, salesCard }: {
                     <td className="px-4 py-3 text-right">{money(r.gmvGross)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
-                        <button onClick={() => loadEdit(r)} title="Edit TTM"
+                        <button onClick={() => loadEdit(r)} title="Edit TTAM"
                           className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent"
-                          aria-label="Edit TTM"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
-                        <button onClick={() => removeTtm(r)} disabled={r.ttmId == null} title={r.ttmId == null ? "Tiada TTM" : "Delete TTM"}
+                          aria-label="Edit TTAM"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
+                        <button onClick={() => removeTtm(r)} disabled={r.ttmId == null} title={r.ttmId == null ? "Tiada TTAM" : "Delete TTAM"}
                           className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger disabled:opacity-30"
-                          aria-label="Delete TTM"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
+                          aria-label="Delete TTAM"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
                       </div>
                     </td>
                   </tr>

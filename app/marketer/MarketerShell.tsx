@@ -110,6 +110,15 @@ type Overall = {
   product_impressions: number | null; product_clicks: number | null;
   img1_path: string | null; img2_path: string | null;
 };
+type CreatorReport = {
+  id: number; report_date: string;
+  brand_id: number | null; brand_name: string | null;
+  post_gross_revenue: number | null; post_with_links: number | null;
+  post_authorized: number | null; post_creators_mass_auth: number | null;
+  creative_gross_revenue: number | null; creative_authorized: number | null;
+  creative_total_creators: number | null; creative_creators_mass_auth: number | null;
+  img1_path: string | null; img2_path: string | null;
+};
 
 // Sidebar structure: a couple of top-level items + one expandable group.
 const AFFILIATE_CHILDREN = [
@@ -148,14 +157,15 @@ const TAB_LABELS: Record<string, string> = {
   "sales-live": "Sales · Live",
   "sales-product": "Sales · Product",
   overall: "Overall",
+  creator: "Beg Kuning + Creator",
 };
 
 export default function MarketerShell({
-  user, affiliates, lives, unknowns, salesLive, salesProduct, overall, posts,
+  user, affiliates, lives, unknowns, salesLive, salesProduct, overall, posts, creatorReports,
 }: {
   user: SessionUser; affiliates: Affiliate[]; lives: Live[];
   unknowns: Unknown[]; salesLive: SalesLive[]; salesProduct: SalesProduct[];
-  overall: Overall[]; posts: Post[];
+  overall: Overall[]; posts: Post[]; creatorReports: CreatorReport[];
 }) {
   const router = useRouter();
   const { navigate, prefetch, pending: navPending } = useNavigate();
@@ -340,6 +350,15 @@ export default function MarketerShell({
               Overall
             </button>
 
+            {/* Beg Kuning + Creator — its own main category */}
+            <button onClick={() => go("creator")}
+              className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
+                active === "creator" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
+              }`}>
+              <NavIcon Icon={ShoppingBag} busy={navPending && navKey === "creator"} />
+              Beg Kuning + Creator
+            </button>
+
             {/* Pillar group */}
             <button onClick={() => setPillarOpen((o) => !o)}
               className={`mt-1 flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
@@ -451,6 +470,7 @@ export default function MarketerShell({
           {active === "brand" && <BrandsTab />}
           {active === "product" && <ProductsTab />}
           {active === "overall" && <OverallTab overall={overall} />}
+          {active === "creator" && <CreatorTab reports={creatorReports} />}
           {active === "pillar-create" && <PillarCreate />}
           {active === "pillar-report" && <PillarReport />}
         </div>
@@ -2396,6 +2416,199 @@ function OverallTab({ overall }: { overall: Overall[] }) {
                     <span className="flex gap-1">
                       {o.img1_path && <a href={o.img1_path} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-accent hover:underline">1</a>}
                       {o.img2_path && <a href={o.img2_path} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-accent hover:underline">2</a>}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ── Beg Kuning + Creator ──────────────────────────────── */
+
+function CreatorImport() {
+  const router = useRouter();
+  const [img1, setImg1] = useState<File | null>(null);
+  const [img2, setImg2] = useState<File | null>(null);
+  const [date, setDate] = useState("");
+  const [brand, setBrand] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
+
+  async function submit() {
+    if (!img1 || !img2) return setError("Attach both Image 1 (Post) and Image 2 (Creative).");
+    if (!brand) return setError("Pick a brand.");
+    if (!date) return setError("Pick the report date.");
+    setBusy(true); setError(""); setMsg("");
+    const fd = new FormData();
+    fd.append("image1", img1);
+    fd.append("image2", img2);
+    fd.append("report_date", date);
+    fd.append("brand_id", brand);
+    const res = await fetch("/api/marketer/creator/import", { method: "POST", body: fd });
+    const data = await res.json();
+    setBusy(false);
+    if (!res.ok) return setError(data.error || "Import failed");
+    setMsg("Saved");
+    setImg1(null); setImg2(null);
+    router.refresh();
+  }
+
+  async function pick(f: File | null, set: (f: File | null) => void) {
+    setError(""); setMsg("");
+    set(f ? (await compressScreenshot(f)).file : null);
+  }
+
+  const slot = (
+    n: 1 | 2, label: string, file: File | null,
+    set: (f: File | null) => void, example: string
+  ) => (
+    <div className="flex flex-1 flex-col gap-1">
+      <label className={`flex flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed p-3 text-center text-xs font-semibold transition-colors ${
+        file ? "border-emerald-400 bg-emerald-50 text-emerald-600" : "border-line text-muted-fg hover:border-primary hover:text-primary"
+      }`}>
+        {file ? <Check className="h-5 w-5" aria-hidden="true" /> : <ImagePlus className="h-5 w-5" aria-hidden="true" />}
+        <span>Image {n} <span className="text-danger">*</span></span>
+        <span className="font-normal opacity-70">{label}</span>
+        <input type="file" accept="image/*" className="sr-only"
+          onChange={(e) => pick(e.target.files?.[0] || null, set)} />
+      </label>
+      <div className="text-center">
+        <ExampleHint src={example} alt={`Contoh — ${label}`}
+          caption="Screenshot dari TikTok Shop → Analytics." />
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="card space-y-3">
+      <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
+        <ImagePlus className="h-4 w-4 text-primary" aria-hidden="true" />
+        Import Beg Kuning + Creator — screenshots
+      </p>
+      <div className="flex flex-wrap items-stretch gap-3">
+        {slot(1, "Post panel", img1, setImg1, "/examples/beg-kuning-post.jpeg")}
+        {slot(2, "Creative panel", img2, setImg2, "/examples/beg-kuning-creative.jpeg")}
+        <div className="flex flex-col justify-end gap-2">
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
+              htmlFor="cr-brand">Brand</label>
+            <BrandSelect id="cr-brand" value={brand} onChange={setBrand}
+              className="!py-2 text-sm" />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg">Report date</label>
+            <input type="date" className="input cursor-pointer !py-2 text-sm"
+              value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <button className="btn !py-2.5" onClick={submit} disabled={busy}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Upload className="h-4 w-4" aria-hidden="true" />}
+            Submit
+          </button>
+        </div>
+      </div>
+      <p className="text-[11px] text-muted-fg">
+        Image 1 = <b>Post</b> tab (Gross revenue, Posts with links, Total authorized posts, Creators with mass authorization).
+        Image 2 = <b>Creative</b> / Creators tab (Gross revenue, Total authorized posts, Total creators, Creators with mass authorization). Read by Gemini 2.5 Flash.
+      </p>
+      {msg && <span className="text-xs font-medium text-emerald-600">{msg}</span>}
+      {error && <span className="text-xs text-danger">{error}</span>}
+    </div>
+  );
+}
+
+function CreatorTab({ reports }: { reports: CreatorReport[] }) {
+  const params = useSearchParams();
+  const { from, to } = resolveRange(
+    { from: params.get("from"), to: params.get("to"), all: params.get("all") },
+    "month"
+  );
+  // "" = All Brands, the default.
+  const [brand, setBrand] = useState("");
+  const unsorted = reports.filter((r) => {
+    if (from && r.report_date < from) return false;
+    if (to && r.report_date > to) return false;
+    if (brand && String(r.brand_id ?? "") !== brand) return false;
+    return true;
+  });
+  const { sorted: rows, sort, toggleSort } = useTableSort(unsorted);
+
+  const sum = (k: keyof CreatorReport) => rows.reduce((s, r) => s + ((r[k] as number) || 0), 0);
+
+  return (
+    <>
+      <CreatorImport />
+      <DateRangeFilter count={rows.length} countNoun={["report", "reports"]} defaultMode="month" />
+      <BrandFilterCard id="cr-filter-brand" value={brand} onChange={setBrand} />
+
+      <section>
+        <h2 className="section-title mb-2">Summary — Post</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Kpi Icon={TrendingUp} label="Gross Revenue" value={money(sum("post_gross_revenue"))} fill="emerald" />
+          <Kpi Icon={Send} label="Posts with Links" value={int(sum("post_with_links"))} />
+          <Kpi Icon={ClipboardList} label="Total Authorized Posts" value={int(sum("post_authorized"))} />
+          <Kpi Icon={Users} label="Creators w/ Mass Auth" value={int(sum("post_creators_mass_auth"))} />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="section-title mb-2">Summary — Creator</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Kpi Icon={TrendingUp} label="Gross Revenue" value={money(sum("creative_gross_revenue"))} fill="emerald" />
+          <Kpi Icon={ClipboardList} label="Total Authorized Posts" value={int(sum("creative_authorized"))} />
+          <Kpi Icon={Users} label="Total Creators" value={int(sum("creative_total_creators"))} fill="yellow" />
+          <Kpi Icon={Users} label="Creators w/ Mass Auth" value={int(sum("creative_creators_mass_auth"))} />
+        </div>
+      </section>
+
+      {rows.length === 0 ? (
+        <p className="card text-center text-sm text-muted-fg">
+          No Beg Kuning + Creator reports in this range. Import the two screenshots above.
+        </p>
+      ) : (
+        <div className="glass overflow-x-auto rounded-2xl">
+          <table className="w-full min-w-[1100px] text-sm">
+            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+              <tr>
+                <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
+                <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
+                <SortTh k="post_gross_revenue" sort={sort} on={toggleSort} right>Post Gross Rev</SortTh>
+                <SortTh k="post_with_links" sort={sort} on={toggleSort} right>Posts w/ Links</SortTh>
+                <SortTh k="post_authorized" sort={sort} on={toggleSort} right>Post Authorized</SortTh>
+                <SortTh k="post_creators_mass_auth" sort={sort} on={toggleSort} right>Post Mass Auth</SortTh>
+                <SortTh k="creative_gross_revenue" sort={sort} on={toggleSort} right>Creator Gross Rev</SortTh>
+                <SortTh k="creative_authorized" sort={sort} on={toggleSort} right>Creator Authorized</SortTh>
+                <SortTh k="creative_total_creators" sort={sort} on={toggleSort} right>Total Creators</SortTh>
+                <SortTh k="creative_creators_mass_auth" sort={sort} on={toggleSort} right>Creator Mass Auth</SortTh>
+                <th className="px-4 py-3 font-semibold">Proof</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className="border-t border-line/60 hover:bg-white/50">
+                  <td className="px-4 py-3 font-semibold text-ink">{fmtDMY(r.report_date)}</td>
+                  <td className="px-4 py-3">
+                    {r.brand_name
+                      ? <span className="chip bg-primary/10 text-primary">{r.brand_name}</span>
+                      : <span className="text-muted-fg/50">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold text-ink">{money(r.post_gross_revenue)}</td>
+                  <td className="px-4 py-3 text-right">{int(r.post_with_links)}</td>
+                  <td className="px-4 py-3 text-right">{int(r.post_authorized)}</td>
+                  <td className="px-4 py-3 text-right">{int(r.post_creators_mass_auth)}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-ink">{money(r.creative_gross_revenue)}</td>
+                  <td className="px-4 py-3 text-right">{int(r.creative_authorized)}</td>
+                  <td className="px-4 py-3 text-right">{int(r.creative_total_creators)}</td>
+                  <td className="px-4 py-3 text-right">{int(r.creative_creators_mass_auth)}</td>
+                  <td className="px-4 py-3">
+                    <span className="flex gap-1">
+                      {r.img1_path && <a href={r.img1_path} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-accent hover:underline">1</a>}
+                      {r.img2_path && <a href={r.img2_path} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-accent hover:underline">2</a>}
                     </span>
                   </td>
                 </tr>

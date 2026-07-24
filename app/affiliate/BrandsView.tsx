@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Tag, Loader2, MessageCircle, Link2 } from "lucide-react";
+import { Tag, Loader2, MessageCircle, Link2, ExternalLink } from "lucide-react";
 import { handleFromUrl } from "@/lib/tiktok";
 
 type ProfileBrand = { id: number; name: string; wa_group_url: string | null };
 type Profile = { id: number; url: string; brands?: ProfileBrand[] };
+type BrandLink = { id: number; name: string; url: string; link_type: string };
 
 /**
  * The brands this affiliate actually works, read-only.
@@ -17,11 +18,18 @@ type Profile = { id: number; url: string; brands?: ProfileBrand[] };
  */
 export default function BrandsView() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [linksByBrand, setLinksByBrand] = useState<Record<number, BrandLink[]>>({});
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const d = await fetch("/api/profiles").then((r) => r.json());
-    setProfiles(d.profiles || []);
+    const [p, br] = await Promise.all([
+      fetch("/api/profiles").then((r) => r.json()),
+      fetch("/api/brands").then((r) => r.json()),
+    ]);
+    setProfiles(p.profiles || []);
+    const map: Record<number, BrandLink[]> = {};
+    for (const b of br.brands || []) map[b.id] = b.links || [];
+    setLinksByBrand(map);
     setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -87,6 +95,19 @@ export default function BrandsView() {
                   </li>
                 ))}
               </ul>
+
+              {(linksByBrand[brand.id] || []).length > 0 && (
+                <div className="space-y-1 border-t border-line pt-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-muted-fg">Links</p>
+                  {(linksByBrand[brand.id] || []).map((l) => (
+                    <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 truncate text-xs font-semibold text-accent hover:underline" title={l.url}>
+                      <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+                      <span className="truncate">{l.name}</span>
+                    </a>
+                  ))}
+                </div>
+              )}
 
               {brand.wa_group_url ? (
                 <a href={brand.wa_group_url} target="_blank" rel="noopener noreferrer"

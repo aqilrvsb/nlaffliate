@@ -3,15 +3,18 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Tag, Plus, Pencil, Trash2, Loader2, AlertCircle, Check, MessageCircle,
+  Link2, ExternalLink, X,
 } from "lucide-react";
 // Tag doubles as the brand-filter icon below.
 import Modal from "@/components/Modal";
 import { confirmDialog } from "@/lib/swal";
 
+export type BrandLink = { id: number; name: string; url: string; link_type: "self" | "affiliate" };
 export type Brand = {
   id: number; name: string;
   catalogue_id?: number | null;
   wa_group_url?: string | null;
+  links?: BrandLink[];
 };
 type CatalogueBrand = { id: number; name: string };
 
@@ -110,6 +113,7 @@ export default function BrandsTab({ onChange }: { onChange?: () => void }) {
               </div>
 
               <GroupLinkEditor brand={b} onSaved={load} />
+              <BrandLinksEditor brand={b} onSaved={load} />
             </div>
           ))}
         </div>
@@ -170,6 +174,106 @@ function GroupLinkEditor({ brand, onSaved }: { brand: Brand; onSaved: () => void
         </button>
       </div>
       {error && <p className="mt-1 text-xs text-danger">{error}</p>}
+    </div>
+  );
+}
+
+/**
+ * Multiple named links per brand, each tagged self or affiliate. Affiliates
+ * only ever see the affiliate ones (filtered server-side); self links stay
+ * with the marketer.
+ */
+function BrandLinksEditor({ brand, onSaved }: { brand: Brand; onSaved: () => void }) {
+  const links = brand.links || [];
+  const blank = { name: "", url: "", link_type: "affiliate" as "self" | "affiliate" };
+  const [f, setF] = useState(blank);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  function reset() { setF(blank); setEditId(null); setError(""); }
+
+  async function save() {
+    if (!f.name.trim()) return setError("Nama link diperlukan.");
+    if (!f.url.trim()) return setError("Link diperlukan.");
+    setBusy(true); setError("");
+    const res = await fetch(
+      editId ? `/api/brand-links/${editId}` : "/api/brand-links",
+      {
+        method: editId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editId ? f : { ...f, brand_id: brand.id }),
+      }
+    );
+    const data = await res.json();
+    setBusy(false);
+    if (!res.ok) return setError(data.error || "Save failed.");
+    reset(); onSaved();
+  }
+
+  async function remove(l: BrandLink) {
+    if (!(await confirmDialog({ title: `Padam link "${l.name}"?`, danger: true }))) return;
+    await fetch(`/api/brand-links/${l.id}`, { method: "DELETE" });
+    if (editId === l.id) reset();
+    onSaved();
+  }
+
+  return (
+    <div className="border-t border-line pt-2.5">
+      <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-fg">
+        <Link2 className="h-3 w-3" aria-hidden="true" />Links
+      </p>
+
+      {links.length > 0 && (
+        <div className="mb-2 space-y-1">
+          {links.map((l) => (
+            <div key={l.id} className="flex items-center gap-1.5 rounded-lg bg-muted/40 px-2 py-1">
+              <span className={`chip !px-1.5 !py-0.5 text-[9px] ${l.link_type === "self" ? "bg-sky-100 text-sky-700" : "bg-emerald-100 text-emerald-700"}`}>
+                {l.link_type === "self" ? "Self" : "Affiliate"}
+              </span>
+              <a href={l.url} target="_blank" rel="noopener noreferrer"
+                className="min-w-0 flex-1 truncate text-xs font-semibold text-accent hover:underline" title={l.url}>
+                {l.name}
+              </a>
+              <button onClick={() => { setF({ name: l.name, url: l.url, link_type: l.link_type }); setEditId(l.id); setError(""); }}
+                className="cursor-pointer rounded p-1 text-muted-fg hover:text-accent" aria-label="Edit link">
+                <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+              <button onClick={() => remove(l)}
+                className="cursor-pointer rounded p-1 text-muted-fg hover:text-danger" aria-label="Delete link">
+                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        <div className="flex gap-1.5">
+          <input className="input !py-1.5 text-xs" placeholder="Nama link"
+            value={f.name} onChange={(e) => setF((p) => ({ ...p, name: e.target.value }))} />
+          <select className="input !w-24 shrink-0 cursor-pointer !py-1.5 text-xs"
+            value={f.link_type} onChange={(e) => setF((p) => ({ ...p, link_type: e.target.value as "self" | "affiliate" }))}>
+            <option value="affiliate">Affiliate</option>
+            <option value="self">Self</option>
+          </select>
+        </div>
+        <div className="flex gap-1.5">
+          <input className="input !py-1.5 text-xs" placeholder="https://…"
+            value={f.url} onChange={(e) => setF((p) => ({ ...p, url: e.target.value }))} />
+          <button onClick={save} disabled={busy} className="btn shrink-0 !px-3 !py-1.5 text-xs">
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              : editId ? <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                : <Plus className="h-3.5 w-3.5" aria-hidden="true" />}
+          </button>
+          {editId && (
+            <button onClick={reset} className="btn-ghost shrink-0 !px-2 !py-1.5 text-xs" aria-label="Cancel edit">
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          )}
+        </div>
+        {error && <p className="text-[11px] text-danger">{error}</p>}
+      </div>
     </div>
   );
 }

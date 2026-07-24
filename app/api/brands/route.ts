@@ -62,17 +62,32 @@ export async function GET(req: Request) {
       ).all();
   } else if (user.role === "marketer") {
     brands = await db.prepare(
-        `SELECT id, name, marketer_id, catalogue_id, wa_group_url
+        `SELECT id, name, marketer_id, catalogue_id, wa_group_url,
+                COALESCE(
+                  (SELECT json_agg(json_build_object(
+                            'id', l.id, 'name', l.name, 'url', l.url, 'link_type', l.link_type
+                          ) ORDER BY l.id)
+                     FROM brand_links l WHERE l.brand_id = brands.id),
+                  '[]'::json
+                ) AS links
            FROM brands WHERE marketer_id = ? ORDER BY name`
       ).all(user.id);
   } else {
     /**
      * An affiliate works the brands registered on their own TikTok links —
      * not everything their marketer happens to hold. Grouped, because one
-     * brand can sit on several of their links.
+     * brand can sit on several of their links. Only affiliate-type links are
+     * exposed to them; self links stay with the marketer.
      */
     brands = await db.prepare(
-        `SELECT DISTINCT b.id, b.name, b.marketer_id, b.wa_group_url
+        `SELECT DISTINCT b.id, b.name, b.marketer_id, b.wa_group_url,
+                COALESCE(
+                  (SELECT json_agg(json_build_object(
+                            'id', l.id, 'name', l.name, 'url', l.url, 'link_type', l.link_type
+                          ) ORDER BY l.id)
+                     FROM brand_links l WHERE l.brand_id = b.id AND l.link_type = 'affiliate'),
+                  '[]'::json
+                ) AS links
            FROM tiktok_profile_brands pb
            JOIN tiktok_profiles p ON p.id = pb.profile_id
            JOIN brands b ON b.id = pb.brand_id

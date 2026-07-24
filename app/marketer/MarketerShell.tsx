@@ -2014,16 +2014,26 @@ function SalesCreativeTab({ rows: all, kind }: { rows: SalesCreative[]; kind: "p
 
   return (
     <>
-      <SalesImport
-        title="Import Creative Data for Product Campaigns (.xlsx)"
-        endpoint="/api/marketer/sales/creative/import"
-        columns={["Campaign name", "Campaign ID", "Product ID", "Creative type", "Video title",
-          "Cost", "SKU orders", "Gross revenue", "ROI", "Product ad impressions", "Product ad clicks"]}
-        note={<>TikTok Ads → creative data for product campaigns. One upload feeds both <b>Product</b> (Creative type = Video) and <b>Card</b> (Creative type = Product card).</>}
-        sampleHref="/examples/creative-product-campaigns-sample.xlsx"
-        brandInputId={`sc-brand-${kind}`}
-        resultLabel={(d) => `Imported ${d.imported} · ${d.video} video · ${d.card} card`}
-      />
+      {/* The upload lives only on the Product page — one creative file feeds
+          both Product (Video) and Card (Product card). Card is a view of that
+          same data, so it shows a pointer rather than its own upload. */}
+      {kind === "product" ? (
+        <SalesImport
+          title="Import Creative Data for Product Campaigns (.xlsx)"
+          endpoint="/api/marketer/sales/creative/import"
+          columns={["Campaign name", "Campaign ID", "Product ID", "Creative type", "Video title",
+            "Cost", "SKU orders", "Gross revenue", "ROI", "Product ad impressions", "Product ad clicks"]}
+          note={<>TikTok Ads → creative data for product campaigns. This ONE upload feeds both <b>Product</b> (Creative type = Video) and <b>Card</b> (Creative type = Product card).</>}
+          sampleHref="/examples/creative-product-campaigns-sample.xlsx"
+          brandInputId="sc-brand-product"
+          resultLabel={(d) => `Imported ${d.imported} · ${d.video} video · ${d.card} card`}
+        />
+      ) : (
+        <p className="card flex items-center gap-2 text-sm text-muted-fg">
+          <FileSpreadsheet className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          Card data datang dari muat naik di halaman <b className="text-ink">Product</b> (baris Creative type = Product card). Tiada muat naik berasingan di sini.
+        </p>
+      )}
       <DateRangeFilter count={rows.length} countNoun={[noun.toLowerCase(), `${noun.toLowerCase()}s`]} defaultMode="month" />
       <BrandFilterCard id={`sc-filter-brand-${kind}`} value={brand} onChange={setBrand} />
 

@@ -20,6 +20,9 @@ function client(): postgres.Sql {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set.");
 
+  // No await between this check and the assignment below, so concurrent
+  // callers after a reset all observe the same freshly-built client rather
+  // than each spinning up their own.
   globalForDb._sql = postgres(url, {
     // Supabase's transaction pooler doesn't support prepared statements.
     prepare: false,
@@ -45,9 +48,11 @@ function client(): postgres.Sql {
     // queries into a black hole.
     keep_alive: 10,
     connection: {
-      // Server-side backstop: if the query does arrive, it cannot run forever.
-      statement_timeout: 20_000,
-      idle_in_transaction_session_timeout: 20_000,
+      // Server-side backstop, kept under the 20s function limit so a runaway
+      // query aborts here (releasing the pooled connection) instead of being
+      // guillotined mid-flight by the platform.
+      statement_timeout: 12_000,
+      idle_in_transaction_session_timeout: 12_000,
     } as Record<string, number>,
     types: {
       // int8/bigint would otherwise arrive as strings, which silently breaks
@@ -112,37 +117,26 @@ export type RunResult = {
 };
 
 /**
- * How long any single query may take before we give up on it.
+ * How long any single query may take before we treat the socket as dead.
  *
  * postgres.js has no client-side query timeout: if the socket is dead but
  * still open — which is what a thawed serverless container hands you — the
- * query is written and awaited forever. Vercel then kills the whole render at
- * its own limit, which is how a healthy database produced 300-second page
- * timeouts. Failing here instead turns a five-minute hang into a fast error.
+ * query is written and awaited forever. This MUST stay well under the page's
+ * `maxDuration` (20s); a limit longer than that never fires, because Vercel
+ * kills the whole invocation first. On this dataset a real query is a few
+ * milliseconds, so anything approaching this many seconds is a dead socket,
+ * not honest work — short is safe.
  */
-/*
- * Deliberately generous. With one or two connections per instance, queries
- * queue behind each other under burst — that queueing is healthy back-pressure,
- * not a fault, and a tight limit turned it into manufactured 500s. The
- * server-side statement_timeout still caps anything genuinely runaway; this
- * only exists so a caller cannot wait forever on a dead socket.
- */
-const QUERY_TIMEOUT_MS = 25_000;
+const QUERY_TIMEOUT_MS = 7_000;
 
-async function withTimeout<T>(work: Promise<T>): Promise<T> {
+async function withTimeout<T>(work: Promise<T>, label: string): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   try {
     return await Promise.race([
       work,
       new Promise<never>((_, reject) => {
         timer = setTimeout(
-          () =>
-            // Only this query fails. An earlier version tore down the shared
-            // client here, which killed every sibling query on the same pool
-            // with CONNECTION_DESTROYED — one slow query took its neighbours
-            // with it. postgres.js already retires genuinely broken sockets;
-            // this guard exists purely so a caller cannot wait forever.
-            reject(new Error(`Database query timed out after ${QUERY_TIMEOUT_MS}ms`)),
+          () => reject(new Error(`db-timeout:${label}`)),
           QUERY_TIMEOUT_MS
         );
       }),
@@ -152,19 +146,55 @@ async function withTimeout<T>(work: Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * Discard a client we believe is wedged so the next query reconnects fresh.
+ *
+ * Guarded on identity: when a whole page's worth of queries all time out on
+ * the same dead socket at once, only the first discards it — the rest are
+ * no-ops, and the very next `client()` builds a single replacement they all
+ * share. The dead one is drained in the background; we never await it.
+ */
+function discard(stale: postgres.Sql) {
+  if (globalForDb._sql === stale) {
+    globalForDb._sql = undefined;
+    stale.end({ timeout: 3 }).catch(() => {});
+  }
+}
+
+/**
+ * Run one query, and if it stalls on a dead pooled socket, reset the client
+ * and try exactly once more on a fresh connection. A thawed serverless
+ * container routinely hands you a socket the pooler dropped long ago; the
+ * first write vanishes into it, the retry lands on a live connection and
+ * returns in milliseconds. Without this, a poisoned warm instance timed out
+ * every request until it was recycled.
+ */
+async function runQuery(q: string, params: any[]): Promise<any> {
+  const first = client();
+  try {
+    return await withTimeout(first.unsafe(q, params), "1");
+  } catch (e: any) {
+    discard(first);
+    // Retry once on a guaranteed-fresh client. If this also fails, it is a
+    // genuine fault (bad SQL, DB down) and the error propagates.
+    const second = client();
+    return await withTimeout(second.unsafe(q, params), "2");
+  }
+}
+
 function prepare(query: string) {
   const q = toPg(query);
   return {
     async get<T = any>(...params: any[]): Promise<T | undefined> {
-      const rows = await withTimeout(client().unsafe(q, params));
+      const rows = await runQuery(q, params);
       return rows[0] as T | undefined;
     },
     async all<T = any>(...params: any[]): Promise<T[]> {
-      const rows = await withTimeout(client().unsafe(q, params));
+      const rows = await runQuery(q, params);
       return rows as unknown as T[];
     },
     async run(...params: any[]): Promise<RunResult> {
-      const rows: any = await withTimeout(client().unsafe(q, params));
+      const rows: any = await runQuery(q, params);
       return {
         changes: typeof rows.count === "number" ? rows.count : rows.length ?? 0,
         lastInsertRowid: rows?.[0]?.id != null ? Number(rows[0].id) : null,

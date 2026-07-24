@@ -163,7 +163,7 @@ export default async function MarketerPage() {
 
       db.prepare(
           `SELECT s.id, s.live_user_id, s.brand_id, s.live_date, s.start_time, s.end_time,
-                  s.status, s.note, s.ad_spend, s.gross_revenue, s.roi, s.gmv, s.viewers,
+                  s.status, s.note, s.ads_budget, s.ad_spend, s.gross_revenue, s.roi, s.gmv, s.viewers,
                   s.items_sold, s.duration_live,
                   lu.name AS live_user_name, lu.user_type,
                   b.name AS brand_name

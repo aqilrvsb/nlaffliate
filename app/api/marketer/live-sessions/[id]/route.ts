@@ -61,8 +61,8 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
   // Result fields — present when entering/editing results.
   for (const [key, col, cast] of [
-    ["ad_spend", "ad_spend", num], ["gross_revenue", "gross_revenue", num],
-    ["roi", "roi", num], ["gmv", "gmv", num],
+    ["ads_budget", "ads_budget", num], ["ad_spend", "ad_spend", num],
+    ["gross_revenue", "gross_revenue", num], ["roi", "roi", num], ["gmv", "gmv", num],
     ["viewers", "viewers", intOrNull], ["items_sold", "items_sold", intOrNull],
     ["duration_live", "duration_live", (v: any) => String(v ?? "").trim() || null],
   ] as const) {

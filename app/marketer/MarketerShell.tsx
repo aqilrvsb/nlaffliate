@@ -124,7 +124,7 @@ type LiveSession = {
   id: number; live_user_id: number; brand_id: number | null;
   live_date: string; start_time: string | null; end_time: string | null;
   status: string; note: string | null;
-  ad_spend: number | null; gross_revenue: number | null; roi: number | null;
+  ads_budget: number | null; ad_spend: number | null; gross_revenue: number | null; roi: number | null;
   gmv: number | null; viewers: number | null; items_sold: number | null; duration_live: string | null;
   live_user_name: string; user_type: string; brand_name: string | null;
 };
@@ -2966,12 +2966,16 @@ function LiveSessionModal({
   );
 }
 
-/** Enter / edit a live session's results (and mark complete). */
+/** Enter / edit a live session's results (and mark complete). Same eight fields
+ *  as an affiliate success live; ROI is auto-calculated (Gross Revenue / Spend). */
 function LiveResultModal({
   open, session, onClose,
 }: { open: boolean; session: LiveSession | null; onClose: () => void }) {
   const router = useRouter();
-  const [f, setF] = useState({ gmv: "", viewers: "", items_sold: "", duration_live: "", ad_spend: "", gross_revenue: "", roi: "" });
+  const [f, setF] = useState({
+    gmv: "", viewers: "", items_sold: "", duration_live: "",
+    ads_budget: "", ad_spend: "", gross_revenue: "",
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -2980,19 +2984,35 @@ function LiveResultModal({
     const s = (v: number | null) => (v == null ? "" : String(v));
     setF({
       gmv: s(session.gmv), viewers: s(session.viewers), items_sold: s(session.items_sold),
-      duration_live: session.duration_live || "", ad_spend: s(session.ad_spend),
-      gross_revenue: s(session.gross_revenue), roi: s(session.roi),
+      duration_live: session.duration_live || "", ads_budget: s(session.ads_budget),
+      ad_spend: s(session.ad_spend), gross_revenue: s(session.gross_revenue),
     });
     setError("");
   }, [open, session]);
 
+  // ROI = Gross Revenue / Spend, auto-calculated and shown read-only.
+  const spendN = parseFloat(f.ad_spend);
+  const grossN = parseFloat(f.gross_revenue);
+  const roi = Number.isFinite(spendN) && spendN > 0 && Number.isFinite(grossN)
+    ? Math.round((grossN / spendN) * 100) / 100
+    : null;
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!session) return;
+    // Every field is required before a live can move to Success.
+    const need: [string, string][] = [
+      ["gmv", "Total Sales"], ["viewers", "Viewers"], ["items_sold", "Items Sold"],
+      ["duration_live", "Duration"], ["ads_budget", "Budget"], ["ad_spend", "Spend"],
+      ["gross_revenue", "Gross Revenue"],
+    ];
+    for (const [k, label] of need)
+      if (String((f as any)[k]).trim() === "") return setError(`Isi ${label}.`);
+
     setSaving(true); setError("");
     const res = await fetch(`/api/marketer/live-sessions/${session.id}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...f, complete: true }),
+      body: JSON.stringify({ ...f, roi, complete: true }),
     });
     const data = await res.json();
     setSaving(false);
@@ -3002,8 +3022,8 @@ function LiveResultModal({
 
   const field = (key: keyof typeof f, label: string, ph = "") => (
     <div>
-      <label className="label">{label}</label>
-      <input className="input" value={f[key]} inputMode="decimal" placeholder={ph}
+      <label className="label">{label} <span className="text-danger">*</span></label>
+      <input className="input" value={f[key]} inputMode="decimal" placeholder={ph} required
         onChange={(e) => setF((p) => ({ ...p, [key]: e.target.value }))} />
     </div>
   );
@@ -3015,13 +3035,17 @@ function LiveResultModal({
           {session ? `${session.live_user_name} · ${fmtDate(session.live_date)}` : ""}
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
-          {field("gmv", "GMV (RM)")}
-          {field("gross_revenue", "Gross Revenue (RM)")}
-          {field("ad_spend", "Ad Spend (RM)")}
-          {field("roi", "ROI")}
+          {field("gmv", "Total Sales (RM)")}
           {field("viewers", "Viewers")}
           {field("items_sold", "Items Sold")}
-          {field("duration_live", "Duration", "e.g. 2:15:00")}
+          {field("duration_live", "Duration", "e.g. 2h 0m 25s")}
+          {field("ads_budget", "Budget (RM)")}
+          {field("ad_spend", "Spend (RM)")}
+          {field("gross_revenue", "Gross Revenue (RM)")}
+          <div>
+            <label className="label">ROI <span className="font-normal text-muted-fg">(auto)</span></label>
+            <input className="input bg-muted/40 font-semibold" value={roi != null ? roi : "—"} readOnly />
+          </div>
         </div>
         {error && (
           <p className="flex items-center gap-1.5 text-sm text-danger">
@@ -3070,8 +3094,13 @@ function LiveScheduleTab({
   }
 
   const gmv = rows.reduce((a, r) => a + (r.gmv || 0), 0);
+  const viewers = rows.reduce((a, r) => a + (r.viewers || 0), 0);
+  const items = rows.reduce((a, r) => a + (r.items_sold || 0), 0);
+  const budget = rows.reduce((a, r) => a + (r.ads_budget || 0), 0);
   const spend = rows.reduce((a, r) => a + (r.ad_spend || 0), 0);
   const gross = rows.reduce((a, r) => a + (r.gross_revenue || 0), 0);
+  const duration = sumDurations(rows.map((r) => r.duration_live));
+  const roi = spend > 0 ? Math.round((gross / spend) * 100) / 100 : null;
 
   return (
     <>
@@ -3091,11 +3120,16 @@ function LiveScheduleTab({
       <BrandFilterCard id={`live-${kind}-brand`} value={brand} onChange={setBrand} />
 
       {kind === "success" && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <Kpi Icon={CheckCircle2} label="Total Live" value={rows.length} />
-          <Kpi Icon={TrendingUp} label="GMV" value={money(gmv)} fill="yellow" />
+          <Kpi Icon={TrendingUp} label="Total Sales" value={money(gmv)} fill="yellow" />
+          <Kpi Icon={Users} label="Viewers" value={int(viewers)} />
+          <Kpi Icon={ShoppingBag} label="Items Sold" value={int(items)} />
+          <Kpi Icon={Timer} label="Duration" value={duration} />
+          <Kpi Icon={Wallet} label="Budget" value={money(budget)} />
           <Kpi Icon={Wallet} label="Spend" value={money(spend)} fill="red" />
           <Kpi Icon={TrendingUp} label="Gross Revenue" value={money(gross)} fill="emerald" />
+          <Kpi Icon={(roi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI" value={roi ?? "—"} />
         </div>
       )}
 
@@ -3114,13 +3148,14 @@ function LiveScheduleTab({
                 <th className="px-4 py-3 font-semibold">Time</th>
                 {kind === "success" ? (
                   <>
-                    <th className="px-4 py-3 text-right font-semibold">GMV</th>
-                    <th className="px-4 py-3 text-right font-semibold">Spend</th>
-                    <th className="px-4 py-3 text-right font-semibold">Gross</th>
-                    <th className="px-4 py-3 text-right font-semibold">ROI</th>
+                    <th className="px-4 py-3 text-right font-semibold">Total Sales</th>
                     <th className="px-4 py-3 text-right font-semibold">Viewers</th>
                     <th className="px-4 py-3 text-right font-semibold">Items</th>
                     <th className="px-4 py-3 font-semibold">Duration</th>
+                    <th className="px-4 py-3 text-right font-semibold">Budget</th>
+                    <th className="px-4 py-3 text-right font-semibold">Spend</th>
+                    <th className="px-4 py-3 text-right font-semibold">Gross</th>
+                    <th className="px-4 py-3 text-right font-semibold">ROI</th>
                   </>
                 ) : (
                   <th className="px-4 py-3 font-semibold">Nota</th>
@@ -3145,12 +3180,13 @@ function LiveScheduleTab({
                   {kind === "success" ? (
                     <>
                       <td className="px-4 py-3 text-right font-semibold text-ink">{money(s.gmv)}</td>
-                      <td className="px-4 py-3 text-right">{money(s.ad_spend)}</td>
-                      <td className="px-4 py-3 text-right">{money(s.gross_revenue)}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-ink">{s.roi ?? "—"}</td>
                       <td className="px-4 py-3 text-right">{int(s.viewers)}</td>
                       <td className="px-4 py-3 text-right">{int(s.items_sold)}</td>
                       <td className="px-4 py-3 text-muted-fg">{s.duration_live || "—"}</td>
+                      <td className="px-4 py-3 text-right">{money(s.ads_budget)}</td>
+                      <td className="px-4 py-3 text-right">{money(s.ad_spend)}</td>
+                      <td className="px-4 py-3 text-right">{money(s.gross_revenue)}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-ink">{s.roi ?? "—"}</td>
                     </>
                   ) : (
                     <td className="px-4 py-3 text-muted-fg">{s.note || "—"}</td>
@@ -3206,24 +3242,31 @@ function LiveReportingTab({ sessions, liveUsers }: { sessions: LiveSession[]; li
   });
 
   // Aggregate per live user.
-  const byUser = new Map<number, { u: LiveUser; lives: number; gmv: number; spend: number; gross: number; viewers: number; items: number }>();
-  for (const u of liveUsers) byUser.set(u.id, { u, lives: 0, gmv: 0, spend: 0, gross: 0, viewers: 0, items: 0 });
+  type Agg = { u: LiveUser; lives: number; gmv: number; budget: number; spend: number; gross: number; viewers: number; items: number; durs: (string | null)[] };
+  const byUser = new Map<number, Agg>();
+  for (const u of liveUsers) byUser.set(u.id, { u, lives: 0, gmv: 0, budget: 0, spend: 0, gross: 0, viewers: 0, items: 0, durs: [] });
   for (const s of done) {
     const row = byUser.get(s.live_user_id);
     if (!row) continue;
     row.lives += 1;
     row.gmv += s.gmv || 0;
+    row.budget += s.ads_budget || 0;
     row.spend += s.ad_spend || 0;
     row.gross += s.gross_revenue || 0;
     row.viewers += s.viewers || 0;
     row.items += s.items_sold || 0;
+    row.durs.push(s.duration_live);
   }
   const rows = [...byUser.values()].filter((r) => r.lives > 0).sort((a, b) => b.gmv - a.gmv);
 
   const tGmv = rows.reduce((a, r) => a + r.gmv, 0);
+  const tBudget = rows.reduce((a, r) => a + r.budget, 0);
   const tSpend = rows.reduce((a, r) => a + r.spend, 0);
   const tGross = rows.reduce((a, r) => a + r.gross, 0);
+  const tViewers = rows.reduce((a, r) => a + r.viewers, 0);
+  const tItems = rows.reduce((a, r) => a + r.items, 0);
   const tLives = rows.reduce((a, r) => a + r.lives, 0);
+  const tDuration = sumDurations(rows.flatMap((r) => r.durs));
   const tRoi = tSpend > 0 ? Math.round((tGross / tSpend) * 100) / 100 : null;
 
   return (
@@ -3235,8 +3278,13 @@ function LiveReportingTab({ sessions, liveUsers }: { sessions: LiveSession[]; li
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Kpi Icon={Users} label="Live Users" value={rows.length} />
         <Kpi Icon={CheckCircle2} label="Total Live" value={tLives} />
-        <Kpi Icon={TrendingUp} label="GMV" value={money(tGmv)} fill="yellow" />
+        <Kpi Icon={TrendingUp} label="Total Sales" value={money(tGmv)} fill="yellow" />
+        <Kpi Icon={Users} label="Viewers" value={int(tViewers)} />
+        <Kpi Icon={ShoppingBag} label="Items Sold" value={int(tItems)} />
+        <Kpi Icon={Timer} label="Duration" value={tDuration} />
+        <Kpi Icon={Wallet} label="Budget" value={money(tBudget)} />
         <Kpi Icon={Wallet} label="Spend" value={money(tSpend)} fill="red" />
+        <Kpi Icon={TrendingUp} label="Gross Revenue" value={money(tGross)} fill="emerald" />
         <Kpi Icon={(tRoi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI" value={tRoi ?? "—"} />
       </div>
 
@@ -3246,18 +3294,20 @@ function LiveReportingTab({ sessions, liveUsers }: { sessions: LiveSession[]; li
         </p>
       ) : (
         <div className="glass overflow-x-auto rounded-2xl">
-          <table className="w-full min-w-[820px] text-sm">
+          <table className="w-full min-w-[1040px] text-sm">
             <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
               <tr>
                 <th className="px-4 py-3 font-semibold">Live User</th>
                 <th className="px-4 py-3 font-semibold">Jenis</th>
                 <th className="px-4 py-3 text-right font-semibold">Total Live</th>
-                <th className="px-4 py-3 text-right font-semibold">GMV</th>
+                <th className="px-4 py-3 text-right font-semibold">Total Sales</th>
+                <th className="px-4 py-3 text-right font-semibold">Viewers</th>
+                <th className="px-4 py-3 text-right font-semibold">Items</th>
+                <th className="px-4 py-3 font-semibold">Duration</th>
+                <th className="px-4 py-3 text-right font-semibold">Budget</th>
                 <th className="px-4 py-3 text-right font-semibold">Spend</th>
                 <th className="px-4 py-3 text-right font-semibold">Gross Revenue</th>
                 <th className="px-4 py-3 text-right font-semibold">ROI</th>
-                <th className="px-4 py-3 text-right font-semibold">Viewers</th>
-                <th className="px-4 py-3 text-right font-semibold">Items</th>
               </tr>
             </thead>
             <tbody>
@@ -3271,11 +3321,13 @@ function LiveReportingTab({ sessions, liveUsers }: { sessions: LiveSession[]; li
                     </td>
                     <td className="px-4 py-3 text-right">{r.lives}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{money(r.gmv)}</td>
+                    <td className="px-4 py-3 text-right">{int(r.viewers)}</td>
+                    <td className="px-4 py-3 text-right">{int(r.items)}</td>
+                    <td className="px-4 py-3 text-muted-fg">{sumDurations(r.durs)}</td>
+                    <td className="px-4 py-3 text-right">{money(r.budget)}</td>
                     <td className="px-4 py-3 text-right">{money(r.spend)}</td>
                     <td className="px-4 py-3 text-right">{money(r.gross)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{roi ?? "—"}</td>
-                    <td className="px-4 py-3 text-right">{int(r.viewers)}</td>
-                    <td className="px-4 py-3 text-right">{int(r.items)}</td>
                   </tr>
                 );
               })}

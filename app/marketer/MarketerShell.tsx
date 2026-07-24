@@ -1790,6 +1790,56 @@ const pct = (n: number | null | undefined) =>
 const intOr = (n: number | null | undefined) =>
   n != null ? Number(n).toLocaleString() : "—";
 
+/** Row selection for the Sales tables — select-all spans every filtered row. */
+function useRowSelection() {
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  const toggle = (id: number) =>
+    setSel((s) => {
+      const n = new Set(s);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  const setMany = (ids: number[], on: boolean) =>
+    setSel((s) => {
+      const n = new Set(s);
+      ids.forEach((i) => (on ? n.add(i) : n.delete(i)));
+      return n;
+    });
+  const clear = () => setSel(new Set());
+  return { sel, toggle, setMany, clear };
+}
+
+/** Bulk-delete bar shown once rows are selected. */
+function SalesBulkBar({
+  count, busy, onDelete,
+}: { count: number; busy: boolean; onDelete: () => void }) {
+  if (count === 0) return null;
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-danger/30 bg-danger/5 px-3 py-2">
+      <span className="text-sm font-semibold text-ink">{count} baris dipilih</span>
+      <button
+        onClick={onDelete}
+        disabled={busy}
+        className="ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-danger px-3 py-1.5 text-sm font-semibold text-white transition-opacity duration-200 hover:opacity-90 disabled:opacity-50">
+        {busy
+          ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          : <Trash2 className="h-4 w-4" aria-hidden="true" />}
+        Padam terpilih
+      </button>
+    </div>
+  );
+}
+
+/** Header/row checkbox — consistent styling across the Sales tables. */
+function RowCheck({ checked, onChange, aria }: {
+  checked: boolean; onChange: () => void; aria: string;
+}) {
+  return (
+    <input type="checkbox" checked={checked} onChange={onChange} aria-label={aria}
+      className="h-4 w-4 cursor-pointer rounded border-line accent-primary" />
+  );
+}
+
 /** Shared upload box for the two Sales imports. */
 function SalesImport({
   title, endpoint, columns, note, sampleHref, brandInputId, resultLabel,
@@ -1883,6 +1933,7 @@ function SalesImport({
 }
 
 function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
+  const router = useRouter();
   const params = useSearchParams();
   const { from, to } = resolveRange(
     { from: params.get("from"), to: params.get("to"), all: params.get("all") },
@@ -1897,6 +1948,23 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
     return true;
   });
   const { sorted: rows, sort, toggleSort } = useTableSort(unsorted);
+
+  const { sel, toggle, setMany, clear } = useRowSelection();
+  const [delBusy, setDelBusy] = useState(false);
+  const allSelected = rows.length > 0 && rows.every((r) => sel.has(r.id));
+  async function bulkDelete() {
+    if (!(await confirmDialog({
+      title: `Padam ${sel.size} baris Live?`, danger: true,
+      text: "Baris yang dipilih akan dipadam terus. Tak boleh undo.",
+    }))) return;
+    setDelBusy(true);
+    const res = await fetch("/api/marketer/sales/live", {
+      method: "DELETE", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [...sel] }),
+    });
+    setDelBusy(false);
+    if (res.ok) { clear(); router.refresh(); }
+  }
 
   const cost = rows.reduce((s, r) => s + (r.cost || 0), 0);
   const orders = rows.reduce((s, r) => s + (r.sku_orders || 0), 0);
@@ -1921,6 +1989,7 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
       />
       <DateRangeFilter count={rows.length} countNoun={["row", "rows"]} defaultMode="month" />
       <BrandFilterCard id="sl-filter-brand" value={brand} onChange={setBrand} />
+      <SalesBulkBar count={sel.size} busy={delBusy} onDelete={bulkDelete} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Kpi Icon={Clock} label="Rows" value={rows.length} />
@@ -1941,6 +2010,11 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
             <table className="w-full min-w-[820px] text-sm">
               <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
                 <tr>
+                  <th className="px-4 py-3">
+                    <RowCheck checked={allSelected}
+                      onChange={() => setMany(rows.map((r) => r.id), !allSelected)}
+                      aria="Pilih semua" />
+                  </th>
                   <SortTh k="row_time" sort={sort} on={toggleSort}>Time</SortTh>
                   <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
                   <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
@@ -1953,7 +2027,11 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
               </thead>
               <tbody>
                 {pageRows.map((r) => (
-                  <tr key={r.id} className="border-t border-line/60 hover:bg-white/50">
+                  <tr key={r.id} className={`border-t border-line/60 hover:bg-white/50 ${sel.has(r.id) ? "bg-primary/5" : ""}`}>
+                    <td className="px-4 py-3">
+                      <RowCheck checked={sel.has(r.id)} onChange={() => toggle(r.id)}
+                        aria={`Pilih baris ${r.row_time || r.id}`} />
+                    </td>
                     <td className="px-4 py-3 font-mono text-[12px] text-ink">{r.row_time || "—"}</td>
                     <td className="px-4 py-3 text-ink">{fmtDate(r.report_date)}</td>
                     <td className="px-4 py-3">
@@ -1979,6 +2057,7 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
 }
 
 function SalesCreativeTab({ rows: all, kind }: { rows: SalesCreative[]; kind: "product" | "card" }) {
+  const router = useRouter();
   const params = useSearchParams();
   const { from, to } = resolveRange(
     { from: params.get("from"), to: params.get("to"), all: params.get("all") },
@@ -1996,6 +2075,23 @@ function SalesCreativeTab({ rows: all, kind }: { rows: SalesCreative[]; kind: "p
     return true;
   });
   const { sorted: rows, sort, toggleSort } = useTableSort(unsorted);
+
+  const { sel, toggle, setMany, clear } = useRowSelection();
+  const [delBusy, setDelBusy] = useState(false);
+  const allSelected = rows.length > 0 && rows.every((r) => sel.has(r.id));
+  async function bulkDelete() {
+    if (!(await confirmDialog({
+      title: `Padam ${sel.size} baris?`, danger: true,
+      text: "Baris yang dipilih akan dipadam terus. Tak boleh undo.",
+    }))) return;
+    setDelBusy(true);
+    const res = await fetch("/api/marketer/sales/creative", {
+      method: "DELETE", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [...sel] }),
+    });
+    setDelBusy(false);
+    if (res.ok) { clear(); router.refresh(); }
+  }
 
   const cost = rows.reduce((s, r) => s + (r.cost || 0), 0);
   const orders = rows.reduce((s, r) => s + (r.sku_orders || 0), 0);
@@ -2036,6 +2132,7 @@ function SalesCreativeTab({ rows: all, kind }: { rows: SalesCreative[]; kind: "p
       )}
       <DateRangeFilter count={rows.length} countNoun={[noun.toLowerCase(), `${noun.toLowerCase()}s`]} defaultMode="month" />
       <BrandFilterCard id={`sc-filter-brand-${kind}`} value={brand} onChange={setBrand} />
+      <SalesBulkBar count={sel.size} busy={delBusy} onDelete={bulkDelete} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
         <Kpi Icon={kind === "card" ? CreditCard : PackageSearch} label={`${noun}s`} value={rows.length} />
@@ -2058,6 +2155,11 @@ function SalesCreativeTab({ rows: all, kind }: { rows: SalesCreative[]; kind: "p
             <table className="w-full min-w-[1200px] text-sm">
               <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
                 <tr>
+                  <th className="px-4 py-3">
+                    <RowCheck checked={allSelected}
+                      onChange={() => setMany(rows.map((r) => r.id), !allSelected)}
+                      aria="Pilih semua" />
+                  </th>
                   <SortTh k="campaign_name" sort={sort} on={toggleSort}>Campaign</SortTh>
                   {isVideo && <SortTh k="video_title" sort={sort} on={toggleSort}>Video</SortTh>}
                   <SortTh k="tiktok_account" sort={sort} on={toggleSort}>Account</SortTh>
@@ -2076,7 +2178,11 @@ function SalesCreativeTab({ rows: all, kind }: { rows: SalesCreative[]; kind: "p
               </thead>
               <tbody>
                 {pageRows.map((r) => (
-                  <tr key={r.id} className="border-t border-line/60 hover:bg-white/50">
+                  <tr key={r.id} className={`border-t border-line/60 hover:bg-white/50 ${sel.has(r.id) ? "bg-primary/5" : ""}`}>
+                    <td className="px-4 py-3">
+                      <RowCheck checked={sel.has(r.id)} onChange={() => toggle(r.id)}
+                        aria={`Pilih ${r.campaign_name || r.id}`} />
+                    </td>
                     <td className="px-4 py-3">
                       <div className="max-w-[240px] truncate font-semibold text-ink" title={r.campaign_name || ""}>
                         {r.campaign_name || "—"}

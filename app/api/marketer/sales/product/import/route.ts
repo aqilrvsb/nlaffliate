@@ -75,6 +75,8 @@ export async function POST(req: Request) {
     const name = str(r["Campaign name"]);
     if (!name || name === "-") { skipped++; continue; }
     const rCost = num(r["Cost"]), rGross = num(r["Gross revenue"]), rOrders = num(r["SKU orders"]);
+    // Skip dead campaigns: no cost and no revenue.
+    if ((rCost || 0) === 0 && (rGross || 0) === 0) { skipped++; continue; }
     cost += rCost || 0;
     netCost += num(r["Net Cost"]) || 0;
     budget += num(r["Current budget"]) || 0;

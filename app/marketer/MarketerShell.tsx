@@ -103,6 +103,13 @@ type SpendTtm = {
   brand_id: number | null; brand_name: string | null;
   ttm_cost: number | null; ttm_gross_revenue: number | null;
 };
+type ReportingSheetRow = {
+  id: number; report_date: string;
+  brand_id: number | null; brand_name: string | null;
+  ord: number; sesi: string | null; masa: string | null;
+  c_viewers: number | null; r_target: number | null; g_revenue: number | null;
+  cost: number | null; v_boost: number | null; cv_boost: number | null; d_time: string | null;
+};
 type Post = {
   id: number; affiliate_id: number; post_date: string; status: string;
 };
@@ -188,24 +195,25 @@ const TAB_LABELS: Record<string, string> = {
   "sales-product": "Sales · Product",
   "sales-card": "Sales · Card",
   overall: "Overall",
-  creator: "Beg Kuning + Creator",
+  creator: "Creator",
   "live-users": "List Live User",
   "live-pending": "Pending Live",
   "live-success": "Success Live",
   "live-reporting": "Reporting Live User",
   "data-quality": "Data Quality",
   spend: "Spend",
+  "reporting-sheet": "Reporting Sheet",
 };
 
 export default function MarketerShell({
   user, affiliates, lives, unknowns, salesLive, salesProduct, overall, posts, creatorReports,
-  liveUsers, liveSessions, dataQuality, salesCard, spendTtm,
+  liveUsers, liveSessions, dataQuality, salesCard, spendTtm, reportingSheet,
 }: {
   user: SessionUser; affiliates: Affiliate[]; lives: Live[];
   unknowns: Unknown[]; salesLive: SalesLive[]; salesProduct: SalesProduct[];
   overall: Overall[]; posts: Post[]; creatorReports: CreatorReport[];
   liveUsers: LiveUser[]; liveSessions: LiveSession[]; dataQuality: DataQuality[];
-  salesCard: SalesCard[]; spendTtm: SpendTtm[];
+  salesCard: SalesCard[]; spendTtm: SpendTtm[]; reportingSheet: ReportingSheetRow[];
 }) {
   const router = useRouter();
   const { navigate, prefetch, pending: navPending } = useNavigate();
@@ -432,7 +440,7 @@ export default function MarketerShell({
                 active === "creator" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
               }`}>
               <NavIcon Icon={ShoppingBag} busy={navPending && navKey === "creator"} />
-              Beg Kuning + Creator
+              Creator
             </button>
 
             {/* Data Quality — its own main category */}
@@ -451,6 +459,15 @@ export default function MarketerShell({
               }`}>
               <NavIcon Icon={Wallet} busy={navPending && navKey === "spend"} />
               Spend
+            </button>
+
+            {/* Reporting Sheet — per-time-slot daily live sheet */}
+            <button onClick={() => go("reporting-sheet")}
+              className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
+                active === "reporting-sheet" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
+              }`}>
+              <NavIcon Icon={FileSpreadsheet} busy={navPending && navKey === "reporting-sheet"} />
+              Reporting Sheet
             </button>
 
             {/* Pillar group */}
@@ -572,6 +589,7 @@ export default function MarketerShell({
           {active === "live-reporting" && <LiveReportingTab sessions={liveSessions} liveUsers={liveUsers} />}
           {active === "data-quality" && <DataQualityTab rows={dataQuality} />}
           {active === "spend" && <SpendTab spendTtm={spendTtm} salesLive={salesLive} salesProduct={salesProduct} salesCard={salesCard} />}
+          {active === "reporting-sheet" && <ReportingSheetTab rows={reportingSheet} userName={user.name} />}
           {active === "pillar-create" && <PillarCreate />}
           {active === "pillar-report" && <PillarReport />}
         </div>
@@ -4085,6 +4103,268 @@ function SpendTab({ spendTtm, salesLive, salesProduct, salesCard }: {
           </div>
           <Pagination page={page} total={rows.length} size={20} />
         </>
+      )}
+    </>
+  );
+}
+
+/* ── Reporting Sheet (per-time-slot daily live sheet) ──── */
+
+const RS_SESSIONS: { sesi: string; slots: string[] }[] = [
+  { sesi: "10AM - 12PM", slots: ["10.1", "10.2", "10.3", "10.4", "10.5"] },
+  { sesi: "11 PAGI", slots: ["11.1", "11.2", "11.3", "11.4", "11.5"] },
+  { sesi: "12 TENGAHHARI", slots: ["12.1", "12.2", "12.3", "12.4", "12.5"] },
+  { sesi: "1 PETANG", slots: ["1.1", "1.2", "1.3", "1.4", "1.5"] },
+  { sesi: "2 PETANG", slots: ["2.1", "2.2", "2.3", "2.4", "2.5", "2.6"] },
+  { sesi: "3 PETANG", slots: ["3.1", "3.2", "3.3", "3.4", "3.5"] },
+  { sesi: "4 PETANG", slots: ["4.1", "4.2", "4.3", "4.4", "4.5", "4.6"] },
+  { sesi: "5 PETANG", slots: ["5.1", "5.2", "5.3", "5.4", "5.5", "5.6"] },
+  { sesi: "6 PETANG", slots: ["6.1", "6.2", "6.3", "6.4", "6.5", "6.6"] },
+  { sesi: "7 MALAM", slots: ["7.1", "7.2", "7.3", "7.4", "7.5", "7.6"] },
+  { sesi: "8 MALAM", slots: ["8.1", "8.2", "8.3", "8.4", "8.5", "8.6"] },
+  { sesi: "9 MALAM", slots: ["9.1", "9.2", "9.3", "9.4", "9.5", "9.6"] },
+  { sesi: "10 MALAM", slots: ["10.1", "10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "11"] },
+];
+const RS_SLOTS: { ord: number; sesi: string; masa: string; first: boolean; span: number }[] = (() => {
+  let ord = 0; const out: any[] = [];
+  for (const s of RS_SESSIONS) s.slots.forEach((m, i) =>
+    out.push({ ord: ord++, sesi: s.sesi, masa: m, first: i === 0, span: s.slots.length }));
+  return out;
+})();
+const RS_FIELDS = ["c_viewers", "r_target", "g_revenue", "cost", "v_boost", "cv_boost", "d_time"] as const;
+type RsCell = Record<(typeof RS_FIELDS)[number], string>;
+
+function ReportingSheetTab({ rows: all, userName }: { rows: ReportingSheetRow[]; userName: string }) {
+  const router = useRouter();
+  const params = useSearchParams();
+  const { from, to } = resolveRange(
+    { from: params.get("from"), to: params.get("to"), all: params.get("all") }, "month"
+  );
+  const [filterBrand, setFilterBrand] = useState("");
+
+  // Sheet editor: a chosen brand + date, and the grid of slot values.
+  const [date, setDate] = useState("");
+  const [brand, setBrand] = useState("");
+  const [grid, setGrid] = useState<Record<number, RsCell>>({});
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
+
+  // Load the chosen day's rows into the grid.
+  useEffect(() => {
+    const g: Record<number, RsCell> = {};
+    if (date && brand) {
+      const s = (v: any) => (v == null ? "" : String(v));
+      for (const r of all) {
+        if (r.report_date === date && String(r.brand_id ?? "") === brand) {
+          g[r.ord] = {
+            c_viewers: s(r.c_viewers), r_target: s(r.r_target), g_revenue: s(r.g_revenue),
+            cost: s(r.cost), v_boost: s(r.v_boost), cv_boost: s(r.cv_boost), d_time: r.d_time || "",
+          };
+        }
+      }
+    }
+    setGrid(g); setMsg(""); setError("");
+  }, [date, brand, all]);
+
+  const cell = (ord: number): RsCell =>
+    grid[ord] || { c_viewers: "", r_target: "", g_revenue: "", cost: "", v_boost: "", cv_boost: "", d_time: "" };
+  const setCell = (ord: number, field: string, val: string) =>
+    setGrid((p) => ({ ...p, [ord]: { ...cell(ord), [field]: val } }));
+
+  async function save() {
+    if (!date) return setError("Pilih tarikh.");
+    if (!brand) return setError("Pilih brand.");
+    setBusy(true); setError(""); setMsg("");
+    const payloadRows = RS_SLOTS.map((s) => ({ ord: s.ord, sesi: s.sesi, masa: s.masa, ...cell(s.ord) }));
+    const res = await fetch("/api/marketer/reporting-sheet", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ report_date: date, brand_id: brand, rows: payloadRows }),
+    });
+    const data = await res.json();
+    setBusy(false);
+    if (!res.ok) return setError(data.error || "Gagal simpan.");
+    setMsg(`Disimpan (${data.saved} slot)`);
+    router.refresh();
+  }
+
+  // ── Daily aggregates (summary box + reporting table) ──
+  const map = new Map<string, any>();
+  const K = (b: number | null, d: string) => `${b ?? 0}|${d}`;
+  for (const r of all) {
+    const k = K(r.brand_id, r.report_date);
+    if (!map.has(k)) map.set(k, {
+      key: k, brand_id: r.brand_id, brand_name: r.brand_name, report_date: r.report_date,
+      c_viewers: 0, r_target: 0, g_revenue: 0, cost: 0, v_boost: 0, cv_boost: 0, durs: [] as (string | null)[],
+    });
+    const o = map.get(k);
+    o.c_viewers += r.c_viewers || 0; o.r_target += r.r_target || 0; o.g_revenue += r.g_revenue || 0;
+    o.cost += r.cost || 0; o.v_boost += r.v_boost || 0; o.cv_boost += r.cv_boost || 0; o.durs.push(r.d_time);
+  }
+  const daily = [...map.values()].filter((o) => {
+    if (from && o.report_date < from) return false;
+    if (to && o.report_date > to) return false;
+    if (filterBrand && String(o.brand_id ?? "") !== filterBrand) return false;
+    return true;
+  }).sort((a, b) => (a.report_date < b.report_date ? 1 : a.report_date > b.report_date ? -1 : 0));
+
+  const sum = (k: string) => daily.reduce((s, r) => s + (r[k] || 0), 0);
+  const tViewers = sum("c_viewers"), tTarget = sum("r_target"), tGross = sum("g_revenue");
+  const tCost = sum("cost"), tVBoost = sum("v_boost"), tCVBoost = sum("cv_boost");
+  const tRoi = tCost > 0 ? Math.round((tGross / tCost) * 100) / 100 : null;
+
+  async function editDay(o: any) {
+    setBrand(o.brand_id != null ? String(o.brand_id) : "");
+    setDate(o.report_date);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  async function removeDay(o: any) {
+    if (!(await confirmDialog({ title: "Padam sheet hari ini?", danger: true, text: "Semua slot untuk brand + tarikh ini akan dipadam." }))) return;
+    await fetch("/api/marketer/reporting-sheet", {
+      method: "DELETE", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ report_date: o.report_date, brand_id: o.brand_id }),
+    });
+    if (o.report_date === date && String(o.brand_id ?? "") === brand) { setDate(""); setBrand(""); }
+    router.refresh();
+  }
+
+  const roiOf = (g: string, c: string) => {
+    const gg = parseFloat(g), cc = parseFloat(c);
+    return cc > 0 && Number.isFinite(gg) ? Math.round((gg / cc) * 100) / 100 : "";
+  };
+
+  return (
+    <>
+      {/* Sheet header + grid editor */}
+      <div className="card space-y-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="label">Brand</label>
+            <BrandSelect id="rs-brand" value={brand} onChange={setBrand} />
+          </div>
+          <div>
+            <label className="label">Tarikh</label>
+            <input type="date" className="input cursor-pointer" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <div className="pb-1 text-xs text-muted-fg">
+            Nama Marketer: <b className="text-ink">{userName}</b> · Time 10AM–10PM
+          </div>
+          <button className="btn !py-2.5" onClick={save} disabled={busy || !date || !brand}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
+            Save Sheet
+          </button>
+          {msg && <span className="text-xs font-medium text-emerald-600">{msg}</span>}
+          {error && <span className="text-xs text-danger">{error}</span>}
+        </div>
+
+        {!date || !brand ? (
+          <p className="text-sm text-muted-fg">Pilih brand + tarikh untuk key in sheet.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-line">
+            <table className="w-full min-w-[900px] text-xs">
+              <thead className="bg-amber-100 text-left uppercase tracking-wide text-ink">
+                <tr>
+                  <th className="px-2 py-2 font-bold">Sesi</th>
+                  <th className="px-2 py-2 font-bold">Masa</th>
+                  <th className="px-2 py-2 font-bold">C.Viewers</th>
+                  <th className="px-2 py-2 font-bold">R.Target</th>
+                  <th className="px-2 py-2 font-bold">G.Revenue</th>
+                  <th className="px-2 py-2 font-bold">Cost</th>
+                  <th className="px-2 py-2 font-bold">ROI</th>
+                  <th className="px-2 py-2 font-bold">V.Boost</th>
+                  <th className="px-2 py-2 font-bold">C.V.Boost</th>
+                  <th className="px-2 py-2 font-bold">D.Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {RS_SLOTS.map((s) => {
+                  const c = cell(s.ord);
+                  const inp = (field: string, w = "w-20") => (
+                    <input className={`${w} rounded border border-line px-1.5 py-1`} value={(c as any)[field]}
+                      inputMode={field === "d_time" ? "text" : "decimal"}
+                      onChange={(e) => setCell(s.ord, field, e.target.value)} />
+                  );
+                  return (
+                    <tr key={s.ord} className="border-t border-line/60">
+                      <td className="px-2 py-1 font-semibold text-ink">{s.first ? s.sesi : ""}</td>
+                      <td className="px-2 py-1 font-mono text-muted-fg">{s.masa}</td>
+                      <td className="px-2 py-1">{inp("c_viewers")}</td>
+                      <td className="px-2 py-1">{inp("r_target")}</td>
+                      <td className="px-2 py-1">{inp("g_revenue")}</td>
+                      <td className="px-2 py-1">{inp("cost")}</td>
+                      <td className="px-2 py-1 text-right font-semibold text-ink">{roiOf(c.g_revenue, c.cost) || "—"}</td>
+                      <td className="px-2 py-1">{inp("v_boost")}</td>
+                      <td className="px-2 py-1">{inp("cv_boost")}</td>
+                      <td className="px-2 py-1">{inp("d_time", "w-24")}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <DateRangeFilter count={daily.length} countNoun={["day", "days"]} defaultMode="month" />
+      <BrandFilterCard id="rs-filter-brand" value={filterBrand} onChange={setFilterBrand} />
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+        <Kpi Icon={Users} label="C.Viewers" value={int(tViewers)} />
+        <Kpi Icon={TrendingUp} label="R.Target" value={money(tTarget)} />
+        <Kpi Icon={TrendingUp} label="G.Revenue" value={money(tGross)} fill="emerald" />
+        <Kpi Icon={Wallet} label="Cost" value={money(tCost)} fill="red" />
+        <Kpi Icon={(tRoi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI" value={tRoi ?? "—"} />
+        <Kpi Icon={Eye} label="V.Boost" value={money(tVBoost)} />
+        <Kpi Icon={Eye} label="C.V.Boost" value={money(tCVBoost)} />
+      </div>
+
+      {daily.length === 0 ? (
+        <p className="card text-center text-sm text-muted-fg">Tiada sheet dalam julat ini. Key in di atas.</p>
+      ) : (
+        <div className="glass overflow-x-auto rounded-2xl">
+          <table className="w-full min-w-[900px] text-sm">
+            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+              <tr>
+                <th className="px-4 py-3 font-semibold">Date</th>
+                <th className="px-4 py-3 font-semibold">Brand</th>
+                <th className="px-4 py-3 text-right font-semibold">C.Viewers</th>
+                <th className="px-4 py-3 text-right font-semibold">R.Target</th>
+                <th className="px-4 py-3 text-right font-semibold">G.Revenue</th>
+                <th className="px-4 py-3 text-right font-semibold">Cost</th>
+                <th className="px-4 py-3 text-right font-semibold">ROI</th>
+                <th className="px-4 py-3 text-right font-semibold">V.Boost</th>
+                <th className="px-4 py-3 text-right font-semibold">C.V.Boost</th>
+                <th className="px-4 py-3 font-semibold">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {daily.map((o) => {
+                const roi = o.cost > 0 ? Math.round((o.g_revenue / o.cost) * 100) / 100 : null;
+                return (
+                  <tr key={o.key} className={`border-t border-line/60 hover:bg-white/50 ${o.report_date === date && String(o.brand_id ?? "") === brand ? "bg-primary/5" : ""}`}>
+                    <td className="px-4 py-3 font-semibold text-ink">{fmtDMY(o.report_date)}</td>
+                    <td className="px-4 py-3">{o.brand_name ? <span className="chip bg-primary/10 text-primary">{o.brand_name}</span> : <span className="text-muted-fg/50">—</span>}</td>
+                    <td className="px-4 py-3 text-right">{int(o.c_viewers)}</td>
+                    <td className="px-4 py-3 text-right">{money(o.r_target)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{money(o.g_revenue)}</td>
+                    <td className="px-4 py-3 text-right">{money(o.cost)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{roi ?? "—"}</td>
+                    <td className="px-4 py-3 text-right">{money(o.v_boost)}</td>
+                    <td className="px-4 py-3 text-right">{money(o.cv_boost)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => editDay(o)} title="Edit sheet"
+                          className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent" aria-label="Edit"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
+                        <button onClick={() => removeDay(o)} title="Delete sheet"
+                          className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger" aria-label="Delete"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   );

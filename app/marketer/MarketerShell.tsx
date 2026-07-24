@@ -588,11 +588,11 @@ export default function MarketerShell({
                 <Eye className="h-4 w-4 shrink-0" aria-hidden="true" />
                 <b>Leader view</b> — read-only.
               </span>
-              <div className="flex items-center gap-2">
-                <label className="text-[11px] font-bold uppercase tracking-wide text-amber-800" htmlFor="ldr-mkt">Marketer</label>
-                <div className="relative">
+              <div className="flex w-full items-center gap-2 sm:w-auto">
+                <label className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-amber-800" htmlFor="ldr-mkt">Marketer</label>
+                <div className="relative min-w-0 flex-1 sm:flex-none">
                   <select id="ldr-mkt" disabled={navPending}
-                    className="input cursor-pointer !w-auto !py-1.5 pr-8 text-sm transition disabled:cursor-wait disabled:opacity-60"
+                    className="input w-full max-w-full cursor-pointer !py-1.5 pr-8 text-sm transition disabled:cursor-wait disabled:opacity-60 sm:!w-64"
                     value={viewMid != null ? String(viewMid) : ""}
                     onChange={(e) => goMarketer(e.target.value)}>
                     <option value="">Semua Marketer (jumlah)</option>

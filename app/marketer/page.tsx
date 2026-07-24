@@ -20,7 +20,7 @@ export default async function MarketerPage() {
 
   // All six reads are independent, so issue them together rather than paying
   // six sequential round trips to Postgres before the page can render.
-  const [affiliateRows, profileRows, lives, unknowns, salesLive, salesCreative, posts, overall] =
+  const [affiliateRows, profileRows, lives, unknowns, salesLive, salesProduct, posts, overall] =
     await Promise.all([
       db.prepare(
           `SELECT u.id, u.name, u.email, u.staff_id, u.phone, u.address, u.activated
@@ -118,13 +118,10 @@ export default async function MarketerPage() {
       db.prepare(
           `SELECT s.id, to_char(s.report_date, 'YYYY-MM-DD') AS report_date,
                   s.brand_id, b.name AS brand_name,
-                  s.campaign_name, s.campaign_id, s.product_id, s.creative_type,
-                  s.video_title, s.video_id, s.tiktok_account, s.time_posted,
-                  s.status, s.authorization_type, s.cost, s.sku_orders,
-                  s.cost_per_order, s.gross_revenue, s.roi, s.impressions,
-                  s.clicks, s.click_rate, s.conversion_rate,
-                  s.view_2s, s.view_6s, s.view_25, s.view_50, s.view_75, s.view_100
-             FROM sales_creative s
+                  s.campaign_id, s.campaign_name, s.roi_protection, s.active_upgrades,
+                  s.cost, s.net_cost, s.current_budget, s.sku_orders, s.cost_per_order,
+                  s.gross_revenue, s.roi, s.currency
+             FROM sales_product s
              LEFT JOIN brands b ON b.id = s.brand_id
             WHERE s.marketer_id = ?
             ORDER BY s.report_date DESC, s.gross_revenue DESC NULLS LAST`
@@ -158,7 +155,7 @@ export default async function MarketerPage() {
   return (
     <MarketerShell user={user} affiliates={affiliates} lives={plain(lives)}
       unknowns={plain(unknowns)} salesLive={plain(salesLive)}
-      salesCreative={plain(salesCreative)}
+      salesProduct={plain(salesProduct)}
       overall={plain(overall)} posts={plain(posts)} />
   );
 }

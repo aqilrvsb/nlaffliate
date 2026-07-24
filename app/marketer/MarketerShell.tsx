@@ -11,7 +11,7 @@ import {
   HelpCircle, Upload, ImagePlus, TrendingDown, Pencil, BarChart3,
   PackageSearch, FileSpreadsheet, ShoppingCart, Layers, Eye, MousePointerClick,
   Send, Boxes, ClipboardList, Tag, CalendarPlus, Trash2, AlertCircle, Settings, Plus,
-  Package, CreditCard,
+  Package,
 } from "lucide-react";
 import { AffiliateModal, AffiliateActions, ActivateAffiliate, type ManagedAffiliate } from "./AffiliateManager";
 import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
@@ -89,17 +89,14 @@ type SalesLive = {
   viewer_boost_cost: number | null; creative_boost_cost: number | null;
   current_budget: number | null; currency: string | null;
 };
-type SalesCreative = {
+type SalesProduct = {
   id: number; report_date: string;
   brand_id: number | null; brand_name: string | null;
-  campaign_name: string | null; campaign_id: string | null; product_id: string | null;
-  creative_type: string | null; video_title: string | null; video_id: string | null;
-  tiktok_account: string | null; time_posted: string | null; status: string | null;
-  authorization_type: string | null; cost: number | null; sku_orders: number | null;
-  cost_per_order: number | null; gross_revenue: number | null; roi: number | null;
-  impressions: number | null; clicks: number | null; click_rate: number | null;
-  conversion_rate: number | null; view_2s: number | null; view_6s: number | null;
-  view_25: number | null; view_50: number | null; view_75: number | null; view_100: number | null;
+  campaign_id: string | null; campaign_name: string | null;
+  roi_protection: string | null; active_upgrades: string | null;
+  cost: number | null; net_cost: number | null; current_budget: number | null;
+  sku_orders: number | null; cost_per_order: number | null;
+  gross_revenue: number | null; roi: number | null; currency: string | null;
 };
 type Post = {
   id: number; affiliate_id: number; post_date: string; status: string;
@@ -130,12 +127,10 @@ const PILLAR_CHILDREN = [
   { key: "pillar-report", label: "Reporting Pillar", icon: BarChart3 },
 ] as const;
 
-// Sales: one upload feeds Live (campaign overview) and the creative sheet, which
-// splits into Product (Creative type = Video) and Card (Creative type = Product card).
+// Sales: two TikTok campaign-data exports, one per view.
 const SALES_CHILDREN = [
   { key: "sales-live", label: "Live", icon: Radio },
   { key: "sales-product", label: "Product", icon: PackageSearch },
-  { key: "sales-card", label: "Card", icon: CreditCard },
 ] as const;
 
 const TAB_LABELS: Record<string, string> = {
@@ -152,15 +147,14 @@ const TAB_LABELS: Record<string, string> = {
   product: "Product",
   "sales-live": "Sales · Live",
   "sales-product": "Sales · Product",
-  "sales-card": "Sales · Card",
   overall: "Overall",
 };
 
 export default function MarketerShell({
-  user, affiliates, lives, unknowns, salesLive, salesCreative, overall, posts,
+  user, affiliates, lives, unknowns, salesLive, salesProduct, overall, posts,
 }: {
   user: SessionUser; affiliates: Affiliate[]; lives: Live[];
-  unknowns: Unknown[]; salesLive: SalesLive[]; salesCreative: SalesCreative[];
+  unknowns: Unknown[]; salesLive: SalesLive[]; salesProduct: SalesProduct[];
   overall: Overall[]; posts: Post[];
 }) {
   const router = useRouter();
@@ -453,8 +447,7 @@ export default function MarketerShell({
           )}
           {active === "unknown" && <UnknownTab rows={unknowns} />}
           {active === "sales-live" && <SalesLiveTab rows={salesLive} />}
-          {active === "sales-product" && <SalesCreativeTab rows={salesCreative} kind="product" />}
-          {active === "sales-card" && <SalesCreativeTab rows={salesCreative} kind="card" />}
+          {active === "sales-product" && <SalesProductTab rows={salesProduct} />}
           {active === "brand" && <BrandsTab />}
           {active === "product" && <ProductsTab />}
           {active === "overall" && <OverallTab overall={overall} />}
@@ -1789,8 +1782,6 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
 
 const money2 = (n: number | null | undefined) =>
   n != null ? `RM${Number(n).toFixed(2)}` : "—";
-const pct = (n: number | null | undefined) =>
-  n != null ? `${(Number(n) * 100).toFixed(1)}%` : "—";
 const intOr = (n: number | null | undefined) =>
   n != null ? Number(n).toLocaleString() : "—";
 
@@ -2086,7 +2077,7 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
   );
 }
 
-function SalesCreativeTab({ rows: all, kind }: { rows: SalesCreative[]; kind: "product" | "card" }) {
+function SalesProductTab({ rows: all }: { rows: SalesProduct[] }) {
   const router = useRouter();
   const params = useSearchParams();
   const { from, to } = resolveRange(
@@ -2094,11 +2085,8 @@ function SalesCreativeTab({ rows: all, kind }: { rows: SalesCreative[]; kind: "p
     "month"
   );
   const [brand, setBrand] = useState("");
-  const isCard = (t: string | null) => !!t && /product\s*card/i.test(t);
 
   const unsorted = all.filter((p) => {
-    // Card page shows Product-card rows; Product page shows the rest (Video).
-    if (kind === "card" ? !isCard(p.creative_type) : isCard(p.creative_type)) return false;
     if (from && p.report_date < from) return false;
     if (to && p.report_date > to) return false;
     if (brand && String(p.brand_id ?? "") !== brand) return false;
@@ -2115,7 +2103,7 @@ function SalesCreativeTab({ rows: all, kind }: { rows: SalesCreative[]; kind: "p
       text: "Baris yang dipilih akan dipadam terus. Tak boleh undo.",
     }))) return;
     setDelBusy(true);
-    const res = await fetch("/api/marketer/sales/creative", {
+    const res = await fetch("/api/marketer/sales/product", {
       method: "DELETE", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids: [...sel] }),
     });
@@ -2124,65 +2112,49 @@ function SalesCreativeTab({ rows: all, kind }: { rows: SalesCreative[]; kind: "p
   }
 
   const cost = rows.reduce((s, r) => s + (r.cost || 0), 0);
+  const netCost = rows.reduce((s, r) => s + (r.net_cost || 0), 0);
   const orders = rows.reduce((s, r) => s + (r.sku_orders || 0), 0);
   const gross = rows.reduce((s, r) => s + (r.gross_revenue || 0), 0);
-  const impressions = rows.reduce((s, r) => s + (r.impressions || 0), 0);
-  const clicks = rows.reduce((s, r) => s + (r.clicks || 0), 0);
   const roi = cost > 0 ? Math.round((gross / cost) * 100) / 100 : null;
   const cpo = orders > 0 ? Math.round((cost / orders) * 100) / 100 : null;
-  const ctr = impressions > 0 ? clicks / impressions : null;
 
   const page = getPage(params.get("page"));
   const pageRows = paginate(rows, page, 20);
 
-  const noun = kind === "card" ? "Card" : "Video";
-  const isVideo = kind === "product";
-
   return (
     <>
-      {/* The upload lives only on the Product page — one creative file feeds
-          both Product (Video) and Card (Product card). Card is a view of that
-          same data, so it shows a pointer rather than its own upload. */}
-      {kind === "product" ? (
-        <SalesImport
-          title="Import Creative Data for Product Campaigns (.xlsx)"
-          endpoint="/api/marketer/sales/creative/import"
-          columns={["Campaign name", "Campaign ID", "Product ID", "Creative type", "Video title",
-            "Cost", "SKU orders", "Gross revenue", "ROI", "Product ad impressions", "Product ad clicks"]}
-          note={<>TikTok Ads → creative data for product campaigns. This ONE upload feeds both <b>Product</b> (Creative type = Video) and <b>Card</b> (Creative type = Product card).</>}
-          sampleHref="/examples/creative-product-campaigns-sample.xlsx"
-          brandInputId="sc-brand-product"
-          resultLabel={(d) => `Imported ${d.imported} · ${d.video} video · ${d.card} card`}
-        />
-      ) : (
-        <p className="card flex items-center gap-2 text-sm text-muted-fg">
-          <FileSpreadsheet className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-          Card data datang dari muat naik di halaman <b className="text-ink">Product</b> (baris Creative type = Product card). Tiada muat naik berasingan di sini.
-        </p>
-      )}
-      <DateRangeFilter count={rows.length} countNoun={[noun.toLowerCase(), `${noun.toLowerCase()}s`]} defaultMode="month" />
-      <BrandFilterCard id={`sc-filter-brand-${kind}`} value={brand} onChange={setBrand} />
+      <SalesImport
+        title="Import Product Campaign Data (.xlsx)"
+        endpoint="/api/marketer/sales/product/import"
+        columns={["Campaign ID", "Campaign name", "Cost", "ROI protection", "Active upgrades",
+          "Net Cost", "Current budget", "SKU orders", "Cost per order", "Gross revenue", "ROI", "Currency"]}
+        note={<>TikTok Ads → Product campaign data export. One row per product campaign. Re-importing a brand + date replaces that day.</>}
+        sampleHref="/examples/product-campaign-data-sample.xlsx"
+        brandInputId="sp-brand"
+        resultLabel={(d) => `Imported ${d.imported} campaign · skipped ${d.skipped}`}
+      />
+      <DateRangeFilter count={rows.length} countNoun={["campaign", "campaigns"]} defaultMode="month" />
+      <BrandFilterCard id="sp-filter-brand" value={brand} onChange={setBrand} />
       <SalesBulkBar count={sel.size} busy={delBusy} onDelete={bulkDelete} />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-        <Kpi Icon={kind === "card" ? CreditCard : PackageSearch} label={`${noun}s`} value={rows.length} />
-        <Kpi Icon={Wallet} label="Spend" value={`RM${cost.toFixed(2)}`} fill="red" />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+        <Kpi Icon={PackageSearch} label="Campaigns" value={rows.length} />
+        <Kpi Icon={Wallet} label="Cost" value={`RM${cost.toFixed(2)}`} fill="red" />
+        <Kpi Icon={Wallet} label="Net Cost" value={`RM${netCost.toFixed(2)}`} />
         <Kpi Icon={ShoppingCart} label="SKU Orders" value={orders} />
         <Kpi Icon={Wallet} label="Cost / Order" value={cpo != null ? `RM${cpo}` : "—"} />
         <Kpi Icon={TrendingUp} label="Gross Revenue" value={`RM${gross.toFixed(2)}`} fill="emerald" />
         <Kpi Icon={(roi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI" value={roi != null ? roi : "—"} />
-        <Kpi Icon={Eye} label="Impressions" value={intOr(impressions)} />
-        <Kpi Icon={MousePointerClick} label="CTR" value={pct(ctr)} />
       </div>
 
       {rows.length === 0 ? (
         <p className="card text-center text-sm text-muted-fg">
-          No {noun.toLowerCase()} data in this range. Import an .xlsx above.
+          No product campaigns in this range. Import an .xlsx above.
         </p>
       ) : (
         <>
           <div className="glass overflow-x-auto rounded-2xl">
-            <table className="w-full min-w-[1200px] text-sm">
+            <table className="w-full min-w-[1000px] text-sm">
               <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
                 <tr>
                   <th className="px-4 py-3">
@@ -2193,18 +2165,14 @@ function SalesCreativeTab({ rows: all, kind }: { rows: SalesCreative[]; kind: "p
                   <th className="px-4 py-3 font-semibold">No</th>
                   <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
                   <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
-                  <SortTh k="campaign_name" sort={sort} on={toggleSort}>Campaign</SortTh>
-                  {isVideo && <SortTh k="video_title" sort={sort} on={toggleSort}>Video</SortTh>}
-                  <SortTh k="tiktok_account" sort={sort} on={toggleSort}>Account</SortTh>
-                  <SortTh k="status" sort={sort} on={toggleSort}>Status</SortTh>
+                  <SortTh k="campaign_name" sort={sort} on={toggleSort}>Product Campaign</SortTh>
+                  <SortTh k="net_cost" sort={sort} on={toggleSort} right>Net Cost</SortTh>
                   <SortTh k="cost" sort={sort} on={toggleSort} right>Cost</SortTh>
                   <SortTh k="sku_orders" sort={sort} on={toggleSort} right>SKU Orders</SortTh>
                   <SortTh k="cost_per_order" sort={sort} on={toggleSort} right>Cost / Order</SortTh>
                   <SortTh k="gross_revenue" sort={sort} on={toggleSort} right>Gross Revenue</SortTh>
                   <SortTh k="roi" sort={sort} on={toggleSort} right>ROI</SortTh>
-                  <SortTh k="impressions" sort={sort} on={toggleSort} right>Impr.</SortTh>
-                  <SortTh k="clicks" sort={sort} on={toggleSort} right>Clicks</SortTh>
-                  <SortTh k="click_rate" sort={sort} on={toggleSort} right>CTR</SortTh>
+                  <SortTh k="current_budget" sort={sort} on={toggleSort} right>Budget</SortTh>
                 </tr>
               </thead>
               <tbody>
@@ -2222,28 +2190,18 @@ function SalesCreativeTab({ rows: all, kind }: { rows: SalesCreative[]; kind: "p
                     </td>
                     <td className="px-4 py-3 text-ink">{fmtDMY(r.report_date)}</td>
                     <td className="px-4 py-3">
-                      <div className="max-w-[240px] truncate font-semibold text-ink" title={r.campaign_name || ""}>
+                      <div className="max-w-[300px] truncate font-semibold text-ink" title={r.campaign_name || ""}>
                         {r.campaign_name || "—"}
                       </div>
-                      <div className="font-mono text-[11px] text-muted-fg">{r.product_id || r.campaign_id}</div>
+                      <div className="font-mono text-[11px] text-muted-fg">{r.campaign_id}</div>
                     </td>
-                    {isVideo && (
-                      <td className="px-4 py-3">
-                        <div className="max-w-[260px] truncate text-ink" title={r.video_title || ""}>
-                          {r.video_title && r.video_title !== "-" ? r.video_title : "—"}
-                        </div>
-                      </td>
-                    )}
-                    <td className="px-4 py-3 text-ink">{r.tiktok_account && r.tiktok_account !== "-" ? r.tiktok_account : "—"}</td>
-                    <td className="px-4 py-3 text-muted-fg">{r.status || "—"}</td>
+                    <td className="px-4 py-3 text-right">{money2(r.net_cost)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{money2(r.cost)}</td>
                     <td className="px-4 py-3 text-right">{r.sku_orders ?? "—"}</td>
                     <td className="px-4 py-3 text-right">{money2(r.cost_per_order)}</td>
                     <td className="px-4 py-3 text-right">{money2(r.gross_revenue)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
-                    <td className="px-4 py-3 text-right">{intOr(r.impressions)}</td>
-                    <td className="px-4 py-3 text-right">{intOr(r.clicks)}</td>
-                    <td className="px-4 py-3 text-right">{pct(r.click_rate)}</td>
+                    <td className="px-4 py-3 text-right">{money2(r.current_budget)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -6,10 +6,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Bulk-delete creative rows (feeds both the Product and Card pages).
+ * Bulk-delete product campaign rows.
  *   DELETE  body: { ids: number[] }
- * Scoped to this marketer. The ids come from whichever page the marketer is
- * on, so Product deletes Video rows and Card deletes Product-card rows.
+ * Scoped to this marketer, so one marketer can never delete another's rows.
  */
 export async function DELETE(req: Request) {
   const user = await getSession();
@@ -25,7 +24,7 @@ export async function DELETE(req: Request) {
 
   const ph = ids.map(() => "?").join(", ");
   const res = await db
-    .prepare(`DELETE FROM sales_creative WHERE marketer_id = ? AND id IN (${ph})`)
+    .prepare(`DELETE FROM sales_product WHERE marketer_id = ? AND id IN (${ph})`)
     .run(user.id, ...ids);
 
   return NextResponse.json({ ok: true, deleted: res.changes });

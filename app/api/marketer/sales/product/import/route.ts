@@ -14,12 +14,13 @@ const num = (v: any) => {
 const str = (v: any) => (v != null && String(v).trim() !== "" ? String(v).trim() : null);
 
 /**
- * Import a TikTok "creative data for product campaigns" xlsx.
+ * Import a TikTok "Product campaign data" xlsx.
  *   form: file (xlsx) + report_date (YYYY-MM-DD) + brand_id
- * One upload feeds BOTH the Product page (Creative type = Video) and the Card
- * page (Creative type = Product card) — the split is done at display time by
- * creative_type, so the whole sheet lands in one table.
- * Re-importing the same brand + date replaces that day's rows.
+ * One row per product campaign. Columns: Campaign ID, Campaign name, Cost,
+ * ROI protection, Active upgrades, Net Cost, Current budget, SKU orders,
+ * Cost per order, Gross revenue, ROI, Currency.
+ * Rows whose Campaign name is null or "-" are the total/spacer row and skipped.
+ * Re-importing the same brand + date replaces that day.
  */
 export async function POST(req: Request) {
   const user = await getSession();
@@ -55,65 +56,39 @@ export async function POST(req: Request) {
   }
 
   await db.prepare(
-      "DELETE FROM sales_creative WHERE marketer_id = ? AND brand_id = ? AND report_date = ?"
+      "DELETE FROM sales_product WHERE marketer_id = ? AND brand_id = ? AND report_date = ?"
     ).run(user.id, brandId, reportDate);
 
   const insert = db.prepare(
-    `INSERT INTO sales_creative
-       (marketer_id, brand_id, report_date, campaign_name, campaign_id, product_id,
-        creative_type, video_title, video_id, tiktok_account, time_posted, status,
-        authorization_type, cost, sku_orders, cost_per_order, gross_revenue, roi,
-        impressions, clicks, click_rate, conversion_rate,
-        view_2s, view_6s, view_25, view_50, view_75, view_100, currency)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO sales_product
+       (marketer_id, brand_id, report_date, campaign_id, campaign_name, roi_protection,
+        active_upgrades, cost, net_cost, current_budget, sku_orders, cost_per_order,
+        gross_revenue, roi, currency)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   let imported = 0;
-  let video = 0;
-  let card = 0;
   let skipped = 0;
   for (const r of rows) {
-    // First column is Campaign name. A null or "-" there is a total/spacer row
-    // at the bottom of the export — skip it.
-    const campaignName = str(r["Campaign name"]);
-    if (!campaignName || campaignName === "-") { skipped++; continue; }
-    const ctype = str(r["Creative type"]);
-    const campaignId = str(r["Campaign ID"]);
+    const name = str(r["Campaign name"]);
+    if (!name || name === "-") { skipped++; continue; }
     await insert.run(
       user.id, brandId, reportDate,
-      str(r["Campaign name"]),
-      campaignId,
-      str(r["Product ID"]),
-      ctype,
-      str(r["Video title"]),
-      str(r["Video ID"]),
-      str(r["TikTok account"]),
-      str(r["Time posted"]),
-      str(r["Status"]),
-      str(r["Authorization type"]),
+      str(r["Campaign ID"]),
+      name,
+      str(r["ROI protection"]),
+      str(r["Active upgrades"]),
       num(r["Cost"]),
+      num(r["Net Cost"]),
+      num(r["Current budget"]),
       num(r["SKU orders"]),
       num(r["Cost per order"]),
       num(r["Gross revenue"]),
       num(r["ROI"]),
-      num(r["Product ad impressions"]),
-      num(r["Product ad clicks"]),
-      num(r["Product ad click rate"]),
-      num(r["Ad conversion rate"]),
-      num(r["2-second ad video view rate"]),
-      num(r["6-second ad video view rate"]),
-      num(r["25% ad video view rate"]),
-      num(r["50% ad video view rate"]),
-      num(r["75% ad video view rate"]),
-      num(r["100% ad video view rate"]),
       str(r["Currency"])
     );
     imported++;
-    if (ctype && /product\s*card/i.test(ctype)) card++;
-    else video++;
   }
 
-  return NextResponse.json({
-    ok: true, imported, video, card, skipped, total: rows.length, report_date: reportDate,
-  });
+  return NextResponse.json({ ok: true, imported, skipped, total: rows.length, report_date: reportDate });
 }

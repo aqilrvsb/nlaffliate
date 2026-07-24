@@ -11,7 +11,7 @@ import {
   HelpCircle, Upload, ImagePlus, TrendingDown, Pencil, BarChart3,
   PackageSearch, FileSpreadsheet, ShoppingCart, Layers, Eye, MousePointerClick,
   Send, Boxes, ClipboardList, Tag, CalendarPlus, Trash2, AlertCircle, Settings, Plus,
-  Package,
+  Package, CreditCard,
 } from "lucide-react";
 import { AffiliateModal, AffiliateActions, ActivateAffiliate, type ManagedAffiliate } from "./AffiliateManager";
 import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
@@ -78,12 +78,24 @@ type Unknown = {
   live_time: string | null; duration: string | null;
   ad_spend: number | null; gross_revenue: number | null; roi: number | null;
 };
-type Product = {
+type SalesLive = {
   id: number; report_date: string;
   brand_id: number | null; brand_name: string | null;
-  campaign_id: string | null;
-  campaign_name: string | null; spend: number | null; sku_orders: number | null;
+  row_time: string | null; cost: number | null; sku_orders: number | null;
   cost_per_order: number | null; gross_revenue: number | null; roi: number | null;
+  currency: string | null;
+};
+type SalesCreative = {
+  id: number; report_date: string;
+  brand_id: number | null; brand_name: string | null;
+  campaign_name: string | null; campaign_id: string | null; product_id: string | null;
+  creative_type: string | null; video_title: string | null; video_id: string | null;
+  tiktok_account: string | null; time_posted: string | null; status: string | null;
+  authorization_type: string | null; cost: number | null; sku_orders: number | null;
+  cost_per_order: number | null; gross_revenue: number | null; roi: number | null;
+  impressions: number | null; clicks: number | null; click_rate: number | null;
+  conversion_rate: number | null; view_2s: number | null; view_6s: number | null;
+  view_25: number | null; view_50: number | null; view_75: number | null; view_100: number | null;
 };
 type Post = {
   id: number; affiliate_id: number; post_date: string; status: string;
@@ -114,6 +126,14 @@ const PILLAR_CHILDREN = [
   { key: "pillar-report", label: "Reporting Pillar", icon: BarChart3 },
 ] as const;
 
+// Sales: one upload feeds Live (campaign overview) and the creative sheet, which
+// splits into Product (Creative type = Video) and Card (Creative type = Product card).
+const SALES_CHILDREN = [
+  { key: "sales-live", label: "Live", icon: Radio },
+  { key: "sales-product", label: "Product", icon: PackageSearch },
+  { key: "sales-card", label: "Card", icon: CreditCard },
+] as const;
+
 const TAB_LABELS: Record<string, string> = {
   brand: "Brand",
   "pillar-create": "Create Pillar",
@@ -126,15 +146,18 @@ const TAB_LABELS: Record<string, string> = {
   reporting: "Reporting Affiliate",
   unknown: "Unknown Affiliate",
   product: "Product",
-  "product-gmv": "Product GMV",
+  "sales-live": "Sales · Live",
+  "sales-product": "Sales · Product",
+  "sales-card": "Sales · Card",
   overall: "Overall",
 };
 
 export default function MarketerShell({
-  user, affiliates, lives, unknowns, products, overall, posts,
+  user, affiliates, lives, unknowns, salesLive, salesCreative, overall, posts,
 }: {
   user: SessionUser; affiliates: Affiliate[]; lives: Live[];
-  unknowns: Unknown[]; products: Product[]; overall: Overall[]; posts: Post[];
+  unknowns: Unknown[]; salesLive: SalesLive[]; salesCreative: SalesCreative[];
+  overall: Overall[]; posts: Post[];
 }) {
   const router = useRouter();
   const { navigate, prefetch, pending: navPending } = useNavigate();
@@ -151,6 +174,8 @@ export default function MarketerShell({
   const [groupOpen, setGroupOpen] = useState(true);
   const inPillarGroup = PILLAR_CHILDREN.some((c) => c.key === active);
   const [pillarOpen, setPillarOpen] = useState(true);
+  const inSalesGroup = SALES_CHILDREN.some((c) => c.key === active);
+  const [salesOpen, setSalesOpen] = useState(true);
 
   function go(key: string) {
     const next = new URLSearchParams(params.toString());
@@ -273,14 +298,40 @@ export default function MarketerShell({
               </div>
             )}
 
-            {/* Product GMV — its own main category */}
-            <button onClick={() => go("product-gmv")}
-              className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
-                active === "product-gmv" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
-              }`}>
-              <NavIcon Icon={PackageSearch} busy={navPending && navKey === "product-gmv"} />
-              Product GMV
+            {/* Sales group — one campaign-data upload, three views:
+                Live (campaign overview) · Product (Video) · Card (Product card) */}
+            <button onClick={() => setSalesOpen((o) => !o)}
+              className={`mt-1 flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
+                inSalesGroup ? "text-primary" : "text-ink hover:bg-primary/10"
+              }`}
+              aria-expanded={salesOpen}>
+              <BarChart3 className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="flex-1 text-left">Sales</span>
+              <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${salesOpen ? "" : "-rotate-90"}`}
+                aria-hidden="true" />
             </button>
+
+            {salesOpen && (
+              <div className="ml-4 flex flex-col gap-1 border-l border-line pl-3">
+                {SALES_CHILDREN.map((c) => {
+                  const Icon = c.icon;
+                  const on = c.key === active;
+                  return (
+                    <button key={c.key} onClick={() => go(c.key)}
+                      onMouseEnter={() => prefetch(`/marketer?tab=${c.key}`)}
+                      aria-busy={(navPending && navKey === c.key) || undefined}
+                      className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200 ${
+                        on ? "bg-primary text-primary-fg shadow-lift" : "text-muted-fg hover:bg-primary/10 hover:text-ink"
+                      }`}>
+                      {navPending && navKey === c.key
+                        ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+                        : <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Overall — its own main category */}
             <button onClick={() => go("overall")}
@@ -371,7 +422,7 @@ export default function MarketerShell({
           {active === "dashboard" && (
             <DashboardTab affiliates={affiliates} inRange={inRange}
               pending={pending} success={success}
-              products={products} overall={overall} from={from} to={to} />
+              overall={overall} from={from} to={to} />
           )}
           {active === "affiliates" && (
             <AffiliatesTab affiliates={affiliates} lives={lives} />
@@ -397,7 +448,9 @@ export default function MarketerShell({
             <ReportingTab affiliates={affiliates} lives={inRange} />
           )}
           {active === "unknown" && <UnknownTab rows={unknowns} />}
-          {active === "product-gmv" && <ProductGmvTab products={products} />}
+          {active === "sales-live" && <SalesLiveTab rows={salesLive} />}
+          {active === "sales-product" && <SalesCreativeTab rows={salesCreative} kind="product" />}
+          {active === "sales-card" && <SalesCreativeTab rows={salesCreative} kind="card" />}
           {active === "brand" && <BrandsTab />}
           {active === "product" && <ProductsTab />}
           {active === "overall" && <OverallTab overall={overall} />}
@@ -411,9 +464,9 @@ export default function MarketerShell({
 
 /* ── Dashboard ─────────────────────────────────────────── */
 
-function DashboardTab({ affiliates, inRange, pending, success, products, overall, from, to }: {
+function DashboardTab({ affiliates, inRange, pending, success, overall, from, to }: {
   affiliates: Affiliate[]; inRange: Live[]; pending: Live[]; success: Live[];
-  products: Product[]; overall: Overall[]; from: string; to: string;
+  overall: Overall[]; from: string; to: string;
 }) {
   const rm = (n: number, has: boolean) => (has ? `RM${n.toFixed(2)}` : "—");
 
@@ -423,18 +476,12 @@ function DashboardTab({ affiliates, inRange, pending, success, products, overall
   const inBrand = (id: number | null) => !brand || String(id ?? "") === brand;
 
   const within = (d: string) => (!from || d >= from) && (!to || d <= to);
-  const prod = products.filter((p) => within(p.report_date) && inBrand(p.brand_id));
   const ovr = overall.filter((o) => within(o.report_date) && inBrand(o.brand_id));
 
   const livesB = inRange.filter((l) => inBrand(l.brand_id));
   const pendingB = pending.filter((l) => inBrand(l.brand_id));
   const successB = success.filter((l) => inBrand(l.brand_id));
   const t = aggregate(successB);
-
-  const pSpend = prod.reduce((s, r) => s + (r.spend || 0), 0);
-  const pGross = prod.reduce((s, r) => s + (r.gross_revenue || 0), 0);
-  const pOrders = prod.reduce((s, r) => s + (r.sku_orders || 0), 0);
-  const pRoi = pSpend > 0 ? Math.round((pGross / pSpend) * 100) / 100 : null;
 
   const oSum = (k: keyof Overall) => ovr.reduce((s, r) => s + ((r[k] as number) || 0), 0);
   const oCost = oSum("cost"), oGross = oSum("gross_revenue"), oGmv = oSum("gmv");
@@ -472,18 +519,6 @@ function DashboardTab({ affiliates, inRange, pending, success, products, overall
           <Kpi Icon={Wallet} label="Affiliate Spend" value={rm(t.spend, t.hasSpend)} fill="red" />
           <Kpi Icon={TrendingUp} label="Affiliate Gross Revenue" value={rm(t.gross, t.hasGross)} fill="emerald" />
           <Kpi Icon={(t.roi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="Affiliate ROI" value={t.roi != null ? t.roi : "—"} />
-        </div>
-      </section>
-
-      {/* 3) Product GMV Max */}
-      <section>
-        <h2 className="section-title mb-2">Summary — Product GMV Max</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          <Kpi Icon={PackageSearch} label="Product Campaigns" value={prod.length} />
-          <Kpi Icon={Wallet} label="Product Spend" value={money(pSpend)} fill="red" />
-          <Kpi Icon={ShoppingCart} label="Product SKU Orders" value={int(pOrders)} />
-          <Kpi Icon={TrendingUp} label="Product Gross Revenue" value={money(pGross)} fill="emerald" />
-          <Kpi Icon={(pRoi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="Product ROI" value={pRoi ?? "—"} />
         </div>
       </section>
     </>
@@ -1746,14 +1781,23 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
   );
 }
 
-/* ── Product GMV ───────────────────────────────────────── */
+/* ── Sales (Live · Product · Card) ─────────────────────── */
 
-const PRODUCT_COLUMNS = [
-  "Campaign ID", "Campaign name", "Cost", "SKU orders",
-  "Cost per order", "Gross revenue", "ROI",
-];
+const money2 = (n: number | null | undefined) =>
+  n != null ? `RM${Number(n).toFixed(2)}` : "—";
+const pct = (n: number | null | undefined) =>
+  n != null ? `${(Number(n) * 100).toFixed(1)}%` : "—";
+const intOr = (n: number | null | undefined) =>
+  n != null ? Number(n).toLocaleString() : "—";
 
-function ProductImport() {
+/** Shared upload box for the two Sales imports. */
+function SalesImport({
+  title, endpoint, columns, note, sampleHref, brandInputId, resultLabel,
+}: {
+  title: string; endpoint: string; columns: string[]; note: React.ReactNode;
+  sampleHref: string; brandInputId: string;
+  resultLabel: (d: any) => string;
+}) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [date, setDate] = useState("");
@@ -1771,11 +1815,11 @@ function ProductImport() {
     fd.append("file", file);
     fd.append("report_date", date);
     fd.append("brand_id", brand);
-    const res = await fetch("/api/marketer/product-gmv/import", { method: "POST", body: fd });
+    const res = await fetch(endpoint, { method: "POST", body: fd });
     const data = await res.json();
     setBusy(false);
     if (!res.ok) return setError(data.error || "Import failed");
-    setMsg(`Imported ${data.imported} · skipped ${data.skipped} zero-cost`);
+    setMsg(resultLabel(data));
     setFile(null);
     router.refresh();
   }
@@ -1784,25 +1828,22 @@ function ProductImport() {
     <div className="card space-y-3">
       <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
         <FileSpreadsheet className="h-4 w-4 text-primary" aria-hidden="true" />
-        Import Product Campaign Data (.xlsx)
+        {title}
       </p>
 
-      {/* Column reference so the marketer exports the right sheet */}
       <div>
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-fg">
-          Required columns (in this order)
+          Required columns
         </p>
         <div className="flex flex-wrap gap-1.5">
-          {PRODUCT_COLUMNS.map((c) => (
+          {columns.map((c) => (
             <span key={c} className="rounded-md border border-line bg-white/70 px-2 py-1 font-mono text-[11px] text-ink">
               {c}
             </span>
           ))}
         </div>
-        <p className="mt-1 text-[11px] text-muted-fg">
-          TikTok Ads → Product campaign data export. <b>Cost</b> is shown as <b>Product Spend</b>. Zero-cost rows are skipped.
-        </p>
-        <a href="/examples/product-campaign-data-sample.xlsx" download
+        <p className="mt-1 text-[11px] text-muted-fg">{note}</p>
+        <a href={sampleHref} download
           className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-accent hover:underline">
           <FileSpreadsheet className="h-3 w-3" aria-hidden="true" />
           Muat turun contoh .xlsx
@@ -1812,8 +1853,8 @@ function ProductImport() {
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-[180px]">
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
-            htmlFor="pg-brand">Brand</label>
-          <BrandSelect id="pg-brand" value={brand} onChange={setBrand}
+            htmlFor={brandInputId}>Brand</label>
+          <BrandSelect id={brandInputId} value={brand} onChange={setBrand}
             className="!py-2 text-sm" />
         </div>
         <div>
@@ -1841,7 +1882,7 @@ function ProductImport() {
   );
 }
 
-function ProductGmvTab({ products }: { products: Product[] }) {
+function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
   const params = useSearchParams();
   const { from, to } = resolveRange(
     { from: params.get("from"), to: params.get("to"), all: params.get("all") },
@@ -1849,82 +1890,212 @@ function ProductGmvTab({ products }: { products: Product[] }) {
   );
   // "" = All Brands, the default.
   const [brand, setBrand] = useState("");
-  const unsorted = products.filter((p) => {
+  const unsorted = all.filter((p) => {
     if (from && p.report_date < from) return false;
     if (to && p.report_date > to) return false;
     if (brand && String(p.brand_id ?? "") !== brand) return false;
     return true;
   });
-
   const { sorted: rows, sort, toggleSort } = useTableSort(unsorted);
 
-  const spend = rows.reduce((s, r) => s + (r.spend || 0), 0);
+  const cost = rows.reduce((s, r) => s + (r.cost || 0), 0);
   const orders = rows.reduce((s, r) => s + (r.sku_orders || 0), 0);
   const gross = rows.reduce((s, r) => s + (r.gross_revenue || 0), 0);
-  const roi = spend > 0 ? Math.round((gross / spend) * 100) / 100 : null;
-  const cpo = orders > 0 ? Math.round((spend / orders) * 100) / 100 : null;
+  const roi = cost > 0 ? Math.round((gross / cost) * 100) / 100 : null;
+  const cpo = orders > 0 ? Math.round((cost / orders) * 100) / 100 : null;
 
   const page = getPage(params.get("page"));
   const pageRows = paginate(rows, page, 20);
 
   return (
     <>
-      <ProductImport />
-      <DateRangeFilter count={rows.length} countNoun={["campaign", "campaigns"]}
-        defaultMode="month" />
-
-      <BrandFilterCard id="pg-filter-brand" value={brand} onChange={setBrand} />
+      <SalesImport
+        title="Import Campaign Overview Data (.xlsx) — Live"
+        endpoint="/api/marketer/sales/live/import"
+        columns={["Time", "Cost", "SKU orders (Current shop)", "Cost per order (Current shop)",
+          "Gross revenue (Current shop)", "ROI (Current shop)", "Currency"]}
+        note={<>TikTok Ads → Campaign overview data export. Every hour is kept. Re-importing a brand + date replaces that day.</>}
+        sampleHref="/examples/campaign-overview-sample.xlsx"
+        brandInputId="sl-brand"
+        resultLabel={(d) => `Imported ${d.imported} rows · skipped ${d.skipped}`}
+      />
+      <DateRangeFilter count={rows.length} countNoun={["row", "rows"]} defaultMode="month" />
+      <BrandFilterCard id="sl-filter-brand" value={brand} onChange={setBrand} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <Kpi Icon={PackageSearch} label="Product Campaigns" value={rows.length} />
-        <Kpi Icon={Wallet} label="Product Spend" value={`RM${spend.toFixed(2)}`} fill="red" />
-        <Kpi Icon={ShoppingCart} label="Product SKU Orders" value={orders} />
-        <Kpi Icon={Wallet} label="Product Cost / Order" value={cpo != null ? `RM${cpo}` : "—"} />
-        <Kpi Icon={TrendingUp} label="Product Gross Revenue" value={`RM${gross.toFixed(2)}`} fill="emerald" />
-        <Kpi Icon={(roi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="Product ROI"
-          value={roi != null ? roi : "—"} />
+        <Kpi Icon={Clock} label="Rows" value={rows.length} />
+        <Kpi Icon={Wallet} label="Total Cost" value={`RM${cost.toFixed(2)}`} fill="red" />
+        <Kpi Icon={ShoppingCart} label="SKU Orders" value={orders} />
+        <Kpi Icon={Wallet} label="Cost / Order" value={cpo != null ? `RM${cpo}` : "—"} />
+        <Kpi Icon={TrendingUp} label="Gross Revenue" value={`RM${gross.toFixed(2)}`} fill="emerald" />
+        <Kpi Icon={(roi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI" value={roi != null ? roi : "—"} />
       </div>
 
       {rows.length === 0 ? (
         <p className="card text-center text-sm text-muted-fg">
-          No product campaigns in this range. Import an .xlsx above.
+          No Live data in this range. Import an .xlsx above.
         </p>
       ) : (
         <>
           <div className="glass overflow-x-auto rounded-2xl">
-            <table className="w-full min-w-[960px] text-sm">
+            <table className="w-full min-w-[820px] text-sm">
               <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
                 <tr>
-                  <SortTh k="campaign_name" sort={sort} on={toggleSort}>Product Campaign</SortTh>
+                  <SortTh k="row_time" sort={sort} on={toggleSort}>Time</SortTh>
+                  <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
+                  <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
+                  <SortTh k="cost" sort={sort} on={toggleSort} right>Cost</SortTh>
+                  <SortTh k="sku_orders" sort={sort} on={toggleSort} right>SKU Orders</SortTh>
+                  <SortTh k="cost_per_order" sort={sort} on={toggleSort} right>Cost / Order</SortTh>
+                  <SortTh k="gross_revenue" sort={sort} on={toggleSort} right>Gross Revenue</SortTh>
+                  <SortTh k="roi" sort={sort} on={toggleSort} right>ROI</SortTh>
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map((r) => (
+                  <tr key={r.id} className="border-t border-line/60 hover:bg-white/50">
+                    <td className="px-4 py-3 font-mono text-[12px] text-ink">{r.row_time || "—"}</td>
+                    <td className="px-4 py-3 text-ink">{fmtDate(r.report_date)}</td>
+                    <td className="px-4 py-3">
+                      {r.brand_name
+                        ? <span className="chip bg-primary/10 text-primary">{r.brand_name}</span>
+                        : <span className="text-muted-fg/50">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{money2(r.cost)}</td>
+                    <td className="px-4 py-3 text-right">{r.sku_orders ?? "—"}</td>
+                    <td className="px-4 py-3 text-right">{money2(r.cost_per_order)}</td>
+                    <td className="px-4 py-3 text-right">{money2(r.gross_revenue)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pagination page={page} total={rows.length} size={20} />
+        </>
+      )}
+    </>
+  );
+}
+
+function SalesCreativeTab({ rows: all, kind }: { rows: SalesCreative[]; kind: "product" | "card" }) {
+  const params = useSearchParams();
+  const { from, to } = resolveRange(
+    { from: params.get("from"), to: params.get("to"), all: params.get("all") },
+    "month"
+  );
+  const [brand, setBrand] = useState("");
+  const isCard = (t: string | null) => !!t && /product\s*card/i.test(t);
+
+  const unsorted = all.filter((p) => {
+    // Card page shows Product-card rows; Product page shows the rest (Video).
+    if (kind === "card" ? !isCard(p.creative_type) : isCard(p.creative_type)) return false;
+    if (from && p.report_date < from) return false;
+    if (to && p.report_date > to) return false;
+    if (brand && String(p.brand_id ?? "") !== brand) return false;
+    return true;
+  });
+  const { sorted: rows, sort, toggleSort } = useTableSort(unsorted);
+
+  const cost = rows.reduce((s, r) => s + (r.cost || 0), 0);
+  const orders = rows.reduce((s, r) => s + (r.sku_orders || 0), 0);
+  const gross = rows.reduce((s, r) => s + (r.gross_revenue || 0), 0);
+  const impressions = rows.reduce((s, r) => s + (r.impressions || 0), 0);
+  const clicks = rows.reduce((s, r) => s + (r.clicks || 0), 0);
+  const roi = cost > 0 ? Math.round((gross / cost) * 100) / 100 : null;
+  const cpo = orders > 0 ? Math.round((cost / orders) * 100) / 100 : null;
+  const ctr = impressions > 0 ? clicks / impressions : null;
+
+  const page = getPage(params.get("page"));
+  const pageRows = paginate(rows, page, 20);
+
+  const noun = kind === "card" ? "Card" : "Video";
+  const isVideo = kind === "product";
+
+  return (
+    <>
+      <SalesImport
+        title="Import Creative Data for Product Campaigns (.xlsx)"
+        endpoint="/api/marketer/sales/creative/import"
+        columns={["Campaign name", "Campaign ID", "Product ID", "Creative type", "Video title",
+          "Cost", "SKU orders", "Gross revenue", "ROI", "Product ad impressions", "Product ad clicks"]}
+        note={<>TikTok Ads → creative data for product campaigns. One upload feeds both <b>Product</b> (Creative type = Video) and <b>Card</b> (Creative type = Product card).</>}
+        sampleHref="/examples/creative-product-campaigns-sample.xlsx"
+        brandInputId={`sc-brand-${kind}`}
+        resultLabel={(d) => `Imported ${d.imported} · ${d.video} video · ${d.card} card`}
+      />
+      <DateRangeFilter count={rows.length} countNoun={[noun.toLowerCase(), `${noun.toLowerCase()}s`]} defaultMode="month" />
+      <BrandFilterCard id={`sc-filter-brand-${kind}`} value={brand} onChange={setBrand} />
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+        <Kpi Icon={kind === "card" ? CreditCard : PackageSearch} label={`${noun}s`} value={rows.length} />
+        <Kpi Icon={Wallet} label="Spend" value={`RM${cost.toFixed(2)}`} fill="red" />
+        <Kpi Icon={ShoppingCart} label="SKU Orders" value={orders} />
+        <Kpi Icon={Wallet} label="Cost / Order" value={cpo != null ? `RM${cpo}` : "—"} />
+        <Kpi Icon={TrendingUp} label="Gross Revenue" value={`RM${gross.toFixed(2)}`} fill="emerald" />
+        <Kpi Icon={(roi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI" value={roi != null ? roi : "—"} />
+        <Kpi Icon={Eye} label="Impressions" value={intOr(impressions)} />
+        <Kpi Icon={MousePointerClick} label="CTR" value={pct(ctr)} />
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="card text-center text-sm text-muted-fg">
+          No {noun.toLowerCase()} data in this range. Import an .xlsx above.
+        </p>
+      ) : (
+        <>
+          <div className="glass overflow-x-auto rounded-2xl">
+            <table className="w-full min-w-[1200px] text-sm">
+              <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+                <tr>
+                  <SortTh k="campaign_name" sort={sort} on={toggleSort}>Campaign</SortTh>
+                  {isVideo && <SortTh k="video_title" sort={sort} on={toggleSort}>Video</SortTh>}
+                  <SortTh k="tiktok_account" sort={sort} on={toggleSort}>Account</SortTh>
                   <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
                   <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
-                  <SortTh k="spend" sort={sort} on={toggleSort} right>Product Spend</SortTh>
-                  <SortTh k="sku_orders" sort={sort} on={toggleSort} right>Product SKU Orders</SortTh>
-                  <SortTh k="cost_per_order" sort={sort} on={toggleSort} right>Product Cost / Order</SortTh>
-                  <SortTh k="gross_revenue" sort={sort} on={toggleSort} right>Product Gross Revenue</SortTh>
-                  <SortTh k="roi" sort={sort} on={toggleSort} right>Product ROI</SortTh>
+                  <SortTh k="status" sort={sort} on={toggleSort}>Status</SortTh>
+                  <SortTh k="cost" sort={sort} on={toggleSort} right>Cost</SortTh>
+                  <SortTh k="sku_orders" sort={sort} on={toggleSort} right>SKU Orders</SortTh>
+                  <SortTh k="cost_per_order" sort={sort} on={toggleSort} right>Cost / Order</SortTh>
+                  <SortTh k="gross_revenue" sort={sort} on={toggleSort} right>Gross Revenue</SortTh>
+                  <SortTh k="roi" sort={sort} on={toggleSort} right>ROI</SortTh>
+                  <SortTh k="impressions" sort={sort} on={toggleSort} right>Impr.</SortTh>
+                  <SortTh k="clicks" sort={sort} on={toggleSort} right>Clicks</SortTh>
+                  <SortTh k="click_rate" sort={sort} on={toggleSort} right>CTR</SortTh>
                 </tr>
               </thead>
               <tbody>
                 {pageRows.map((r) => (
                   <tr key={r.id} className="border-t border-line/60 hover:bg-white/50">
                     <td className="px-4 py-3">
-                      <div className="max-w-[360px] truncate font-semibold text-ink" title={r.campaign_name || ""}>
+                      <div className="max-w-[240px] truncate font-semibold text-ink" title={r.campaign_name || ""}>
                         {r.campaign_name || "—"}
                       </div>
-                      <div className="font-mono text-[11px] text-muted-fg">{r.campaign_id}</div>
+                      <div className="font-mono text-[11px] text-muted-fg">{r.product_id || r.campaign_id}</div>
                     </td>
+                    {isVideo && (
+                      <td className="px-4 py-3">
+                        <div className="max-w-[260px] truncate text-ink" title={r.video_title || ""}>
+                          {r.video_title && r.video_title !== "-" ? r.video_title : "—"}
+                        </div>
+                      </td>
+                    )}
+                    <td className="px-4 py-3 text-ink">{r.tiktok_account && r.tiktok_account !== "-" ? r.tiktok_account : "—"}</td>
                     <td className="px-4 py-3">
                       {r.brand_name
                         ? <span className="chip bg-primary/10 text-primary">{r.brand_name}</span>
                         : <span className="text-muted-fg/50">—</span>}
                     </td>
                     <td className="px-4 py-3 text-ink">{fmtDate(r.report_date)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-ink">{r.spend != null ? `RM${r.spend}` : "—"}</td>
+                    <td className="px-4 py-3 text-muted-fg">{r.status || "—"}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{money2(r.cost)}</td>
                     <td className="px-4 py-3 text-right">{r.sku_orders ?? "—"}</td>
-                    <td className="px-4 py-3 text-right">{r.cost_per_order != null ? `RM${r.cost_per_order}` : "—"}</td>
-                    <td className="px-4 py-3 text-right">{r.gross_revenue != null ? `RM${r.gross_revenue}` : "—"}</td>
+                    <td className="px-4 py-3 text-right">{money2(r.cost_per_order)}</td>
+                    <td className="px-4 py-3 text-right">{money2(r.gross_revenue)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
+                    <td className="px-4 py-3 text-right">{intOr(r.impressions)}</td>
+                    <td className="px-4 py-3 text-right">{intOr(r.clicks)}</td>
+                    <td className="px-4 py-3 text-right">{pct(r.click_rate)}</td>
                   </tr>
                 ))}
               </tbody>

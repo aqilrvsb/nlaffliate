@@ -20,7 +20,7 @@ export default async function MarketerPage() {
 
   // All six reads are independent, so issue them together rather than paying
   // six sequential round trips to Postgres before the page can render.
-  const [affiliateRows, profileRows, lives, unknowns, products, posts, overall] =
+  const [affiliateRows, profileRows, lives, unknowns, salesLive, salesCreative, posts, overall] =
     await Promise.all([
       db.prepare(
           `SELECT u.id, u.name, u.email, u.staff_id, u.phone, u.address, u.activated
@@ -103,13 +103,27 @@ export default async function MarketerPage() {
         ).all(user.id) as Promise<any[]>,
 
       db.prepare(
-          `SELECT p.id, p.report_date, p.brand_id, b.name AS brand_name,
-                  p.campaign_id, p.campaign_name, p.spend, p.sku_orders,
-                  p.cost_per_order, p.gross_revenue, p.roi
-             FROM product_gmv p
-             LEFT JOIN brands b ON b.id = p.brand_id
-            WHERE p.marketer_id = ?
-            ORDER BY p.report_date DESC, p.gross_revenue DESC`
+          `SELECT s.id, s.report_date, s.brand_id, b.name AS brand_name,
+                  s.row_time, s.cost, s.sku_orders, s.cost_per_order,
+                  s.gross_revenue, s.roi, s.currency
+             FROM sales_live s
+             LEFT JOIN brands b ON b.id = s.brand_id
+            WHERE s.marketer_id = ?
+            ORDER BY s.report_date DESC, s.row_time`
+        ).all(user.id) as Promise<any[]>,
+
+      db.prepare(
+          `SELECT s.id, s.report_date, s.brand_id, b.name AS brand_name,
+                  s.campaign_name, s.campaign_id, s.product_id, s.creative_type,
+                  s.video_title, s.video_id, s.tiktok_account, s.time_posted,
+                  s.status, s.authorization_type, s.cost, s.sku_orders,
+                  s.cost_per_order, s.gross_revenue, s.roi, s.impressions,
+                  s.clicks, s.click_rate, s.conversion_rate,
+                  s.view_2s, s.view_6s, s.view_25, s.view_50, s.view_75, s.view_100
+             FROM sales_creative s
+             LEFT JOIN brands b ON b.id = s.brand_id
+            WHERE s.marketer_id = ?
+            ORDER BY s.report_date DESC, s.gross_revenue DESC NULLS LAST`
         ).all(user.id) as Promise<any[]>,
 
       db.prepare(
@@ -139,7 +153,8 @@ export default async function MarketerPage() {
   // across the server/client boundary.
   return (
     <MarketerShell user={user} affiliates={affiliates} lives={plain(lives)}
-      unknowns={plain(unknowns)} products={plain(products)}
+      unknowns={plain(unknowns)} salesLive={plain(salesLive)}
+      salesCreative={plain(salesCreative)}
       overall={plain(overall)} posts={plain(posts)} />
   );
 }

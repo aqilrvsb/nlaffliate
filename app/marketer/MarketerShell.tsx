@@ -3607,7 +3607,6 @@ function LiveReportingTab({ sessions, liveUsers }: { sessions: LiveSession[]; li
   const rows = [...byUser.values()].filter((r) => r.lives > 0).sort((a, b) => b.gmv - a.gmv);
 
   const tGmv = rows.reduce((a, r) => a + r.gmv, 0);
-  const tBudget = rows.reduce((a, r) => a + r.budget, 0);
   const tSpend = rows.reduce((a, r) => a + r.spend, 0);
   const tGross = rows.reduce((a, r) => a + r.gross, 0);
   const tViewers = rows.reduce((a, r) => a + r.viewers, 0);
@@ -3629,7 +3628,6 @@ function LiveReportingTab({ sessions, liveUsers }: { sessions: LiveSession[]; li
         <Kpi Icon={Users} label="Viewers" value={int(tViewers)} />
         <Kpi Icon={ShoppingBag} label="Items Sold" value={int(tItems)} />
         <Kpi Icon={Timer} label="Duration" value={tDuration} />
-        <Kpi Icon={Wallet} label="Budget" value={money(tBudget)} />
         <Kpi Icon={Wallet} label="Spend" value={money(tSpend)} fill="red" />
         <Kpi Icon={TrendingUp} label="Gross Revenue" value={money(tGross)} fill="emerald" />
         <Kpi Icon={(tRoi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI" value={tRoi ?? "—"} />
@@ -3651,7 +3649,6 @@ function LiveReportingTab({ sessions, liveUsers }: { sessions: LiveSession[]; li
                 <th className="px-4 py-3 text-right font-semibold">Viewers</th>
                 <th className="px-4 py-3 text-right font-semibold">Items</th>
                 <th className="px-4 py-3 font-semibold">Duration</th>
-                <th className="px-4 py-3 text-right font-semibold">Budget</th>
                 <th className="px-4 py-3 text-right font-semibold">Spend</th>
                 <th className="px-4 py-3 text-right font-semibold">Gross Revenue</th>
                 <th className="px-4 py-3 text-right font-semibold">ROI</th>
@@ -3671,7 +3668,6 @@ function LiveReportingTab({ sessions, liveUsers }: { sessions: LiveSession[]; li
                     <td className="px-4 py-3 text-right">{int(r.viewers)}</td>
                     <td className="px-4 py-3 text-right">{int(r.items)}</td>
                     <td className="px-4 py-3 text-muted-fg">{sumDurations(r.durs)}</td>
-                    <td className="px-4 py-3 text-right">{money(r.budget)}</td>
                     <td className="px-4 py-3 text-right">{money(r.spend)}</td>
                     <td className="px-4 py-3 text-right">{money(r.gross)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{roi ?? "—"}</td>

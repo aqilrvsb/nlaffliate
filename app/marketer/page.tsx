@@ -11,13 +11,20 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 20;
 
 
-export default async function MarketerPage() {
+export default async function MarketerPage({ searchParams }: { searchParams: { m?: string } }) {
   const user = await getSession();
   if (!user) redirect("/login");
   if (user.role !== "marketer" && user.role !== "leader") redirect("/");
-  // A leader sees every marketer aggregated (null = no marketer filter);
-  // a marketer sees only their own.
-  const mid: number | null = user.role === "leader" ? null : user.id;
+  const isLeader = user.role === "leader";
+  // A leader sees every marketer aggregated (mid = null) unless they pick one
+  // from the switcher (?m=<id>); a marketer only ever sees their own.
+  const selMid = isLeader && searchParams?.m && /^\d+$/.test(searchParams.m) ? Number(searchParams.m) : null;
+  const mid: number | null = isLeader ? selMid : user.id;
+
+  // Marketer list powers the leader's switcher.
+  const marketers = isLeader
+    ? (await db.prepare("SELECT id, name, staff_id FROM users WHERE role = 'marketer' ORDER BY name").all()) as any[]
+    : [];
 
   const plain = <T,>(rows: T[]): T[] => rows.map((r) => ({ ...r }));
 
@@ -255,6 +262,7 @@ export default async function MarketerPage() {
       liveUsers={plain(liveUsers)} liveSessions={plain(liveSessions)}
       dataQuality={plain(dataQuality)} salesCard={plain(salesCard)}
       spendTtm={plain(spendTtm)} reportingSheet={plain(reportingSheet)}
-      salesLiveCampaign={plain(salesLiveCampaign)} salesProductCampaign={plain(salesProductCampaign)} />
+      salesLiveCampaign={plain(salesLiveCampaign)} salesProductCampaign={plain(salesProductCampaign)}
+      marketers={plain(marketers)} viewMid={selMid} />
   );
 }

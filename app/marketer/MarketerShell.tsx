@@ -226,7 +226,7 @@ const TAB_LABELS: Record<string, string> = {
 export default function MarketerShell({
   user, affiliates, lives, unknowns, salesLive, salesProduct, overall, posts, creatorReports,
   liveUsers, liveSessions, dataQuality, salesCard, spendTtm, reportingSheet,
-  salesLiveCampaign, salesProductCampaign,
+  salesLiveCampaign, salesProductCampaign, marketers = [], viewMid = null,
 }: {
   user: SessionUser; affiliates: Affiliate[]; lives: Live[];
   unknowns: Unknown[]; salesLive: SalesLive[]; salesProduct: SalesProduct[];
@@ -234,6 +234,7 @@ export default function MarketerShell({
   liveUsers: LiveUser[]; liveSessions: LiveSession[]; dataQuality: DataQuality[];
   salesCard: SalesCard[]; spendTtm: SpendTtm[]; reportingSheet: ReportingSheetRow[];
   salesLiveCampaign: SalesCampaign[]; salesProductCampaign: SalesCampaign[];
+  marketers?: { id: number; name: string; staff_id: string | null }[]; viewMid?: number | null;
 }) {
   const router = useRouter();
   const { navigate, prefetch, pending: navPending } = useNavigate();
@@ -264,6 +265,16 @@ export default function MarketerShell({
     setNavKey(key);
     navigate(qs ? `/marketer?${qs}` : "/marketer");
     setNavOpen(false);
+  }
+
+  // Leader-only: switch which marketer the whole dashboard is scoped to
+  // ("" = all marketers summed). Keeps the current tab and filters.
+  function goMarketer(id: string) {
+    const next = new URLSearchParams(params.toString());
+    if (id) next.set("m", id); else next.delete("m");
+    next.delete("page");
+    const qs = next.toString();
+    navigate(qs ? `/marketer?${qs}` : "/marketer");
   }
 
   async function logout() {
@@ -572,10 +583,26 @@ export default function MarketerShell({
 
         <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
           {user.role === "leader" && (
-            <p className="card flex items-center gap-2 border-amber-200 bg-amber-50/60 text-sm text-amber-800">
-              <Eye className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span><b>Leader view</b> — semua marketer digabungkan (reporting sahaja, read-only).</span>
-            </p>
+            <div className="card flex flex-wrap items-center gap-3 border-amber-200 bg-amber-50/60">
+              <span className="flex items-center gap-2 text-sm text-amber-800">
+                <Eye className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <b>Leader view</b> — read-only.
+              </span>
+              <div className="flex items-center gap-2">
+                <label className="text-[11px] font-bold uppercase tracking-wide text-amber-800" htmlFor="ldr-mkt">Marketer</label>
+                <select id="ldr-mkt" className="input cursor-pointer !w-auto !py-1.5 text-sm"
+                  value={viewMid != null ? String(viewMid) : ""}
+                  onChange={(e) => goMarketer(e.target.value)}>
+                  <option value="">Semua Marketer (jumlah)</option>
+                  {marketers.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}{m.staff_id ? ` (${m.staff_id})` : ""}</option>
+                  ))}
+                </select>
+              </div>
+              <span className="text-xs text-amber-800/80">
+                {viewMid != null ? "Menunjukkan satu marketer." : "Semua marketer digabungkan."}
+              </span>
+            </div>
           )}
           {active === "dashboard" && (
             <DashboardTab affiliates={affiliates} inRange={inRange}

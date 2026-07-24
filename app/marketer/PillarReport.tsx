@@ -15,7 +15,7 @@ import {
 } from "@/lib/pillars";
 
 type Entry = {
-  id: number; level: number; item_no: number; entry_date: string;
+  id: number; level: number; item_no: number; entry_date: string; item_name: string | null;
   brand_id: number | null; brand_name: string | null;
   problem: string | null; solution: string | null;
   planning: string | null; execution: string | null;
@@ -64,7 +64,9 @@ export default function PillarReport() {
     // touched on — otherwise daily updates would inflate coverage past 100%.
     const uniq = new Map<string, Entry>();
     for (const e of entries) uniq.set(`${e.level}:${e.item_no}`, e);
-    const unique = [...uniq.values()];
+    // Coverage is against the fixed catalogue; the custom row 17 is extra and
+    // must not push a level past 100%.
+    const unique = [...uniq.values()].filter((e) => getPillar(e.level)?.items.some((i) => i.no === e.item_no));
 
     const perLevel = PILLARS.map((p) => {
       const mine = unique.filter((e) => e.level === p.level);
@@ -215,7 +217,7 @@ function LevelDetail({ level, entries }: { level: number; entries: Entry[] }) {
           {entries.map((e) => (
             <tr key={e.id} className="border-t border-line/60 align-top">
               <td className="px-3 py-2 font-semibold text-ink">
-                {pillar.items.find((i) => i.no === e.item_no)?.name ?? `#${e.item_no}`}
+                {pillar.items.find((i) => i.no === e.item_no)?.name ?? e.item_name ?? `#${e.item_no}`}
               </td>
               <td className="whitespace-nowrap px-3 py-2">
                 {e.brand_name

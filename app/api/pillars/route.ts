@@ -46,7 +46,7 @@ export async function GET(req: Request) {
 
   const sql =
     `SELECT e.id, e.marketer_id, e.brand_id, b.name AS brand_name,
-            e.level, e.item_no, e.entry_date,
+            e.level, e.item_no, e.entry_date, e.item_name,
             e.problem, e.solution, e.planning, e.execution, e.updated_at
        FROM pillar_entries e
        LEFT JOIN brands b ON b.id = e.brand_id
@@ -97,21 +97,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "That brand is not yours." }, { status: 403 });
   }
 
+  // Item 17 is a per-level custom row: the marketer names it. Everything else
+  // must be a catalogue item number.
+  const CUSTOM_NO = 17;
   const valid = new Set(pillar.items.map((i) => i.no));
+  const itemNames = (body.item_names || {}) as Record<string, unknown>;
   let saved = 0;
   let cleared = 0;
 
   for (const [key, raw] of Object.entries(rows)) {
     const no = Number(key);
-    if (!valid.has(no)) continue; // ignore anything not in the catalogue
+    if (!valid.has(no) && no !== CUSTOM_NO) continue; // ignore anything unknown
 
     const v = (raw || {}) as Record<string, unknown>;
     const vals = COLS.map((c) => {
       const s = String(v[c] ?? "").trim();
       return s || null;
     });
+    const name = no === CUSTOM_NO ? (String(itemNames[no] ?? "").trim() || null) : null;
 
-    if (vals.every((x) => x === null)) {
+    // A custom row needs a name AND some content; a catalogue row just content.
+    const empty = vals.every((x) => x === null) && (no !== CUSTOM_NO || !name);
+    if (empty) {
       const res = await db
         .prepare(
           `DELETE FROM pillar_entries
@@ -125,16 +132,17 @@ export async function POST(req: Request) {
     await db
       .prepare(
         `INSERT INTO pillar_entries
-           (marketer_id, brand_id, level, item_no, entry_date, problem, solution, planning, execution)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           (marketer_id, brand_id, level, item_no, entry_date, item_name, problem, solution, planning, execution)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (marketer_id, brand_id, level, item_no, entry_date) DO UPDATE
-           SET problem = EXCLUDED.problem,
+           SET item_name = EXCLUDED.item_name,
+               problem = EXCLUDED.problem,
                solution = EXCLUDED.solution,
                planning = EXCLUDED.planning,
                execution = EXCLUDED.execution,
                updated_at = now()`
       )
-      .run(user.id, brandId, level, no, date, ...vals);
+      .run(user.id, brandId, level, no, date, name, ...vals);
     saved += 1;
   }
 

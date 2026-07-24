@@ -25,11 +25,14 @@ const COL_HEAD: Record<PillarColumnKey, string> = {
   execution: "bg-emerald-50 text-emerald-700",
 };
 
+const CUSTOM_NO = 17;
+
 export default function PillarCreate() {
   const [level, setLevel] = useState(1);
   const [date, setDate] = useState(todayKL());
   const [brand, setBrand] = useState("");
   const [rows, setRows] = useState<Record<number, Row>>({});
+  const [customName, setCustomName] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
@@ -43,7 +46,7 @@ export default function PillarCreate() {
     // Entries are per (brand, level, date) — with no brand chosen there is
     // nothing to load, so start from a blank sheet.
     if (!brand) {
-      setRows({});
+      setRows({}); setCustomName("");
       setLoading(false);
       return;
     }
@@ -51,6 +54,7 @@ export default function PillarCreate() {
       `/api/pillars?level=${level}&date=${date}&brand=${brand}`
     ).then((r) => r.json());
     const next: Record<number, Row> = {};
+    let cname = "";
     for (const e of d.entries || []) {
       next[e.item_no] = {
         problem: e.problem || "",
@@ -58,8 +62,9 @@ export default function PillarCreate() {
         planning: e.planning || "",
         execution: e.execution || "",
       };
+      if (e.item_no === CUSTOM_NO && e.item_name) cname = e.item_name;
     }
-    setRows(next);
+    setRows(next); setCustomName(cname);
     setLoading(false);
   }, [level, date, brand]);
 
@@ -85,7 +90,7 @@ export default function PillarCreate() {
     const res = await fetch("/api/pillars", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ level, date, brand_id: brand, rows }),
+      body: JSON.stringify({ level, date, brand_id: brand, rows, item_names: { [CUSTOM_NO]: customName } }),
     });
     const data = await res.json();
     setSaving(false);
@@ -261,6 +266,39 @@ export default function PillarCreate() {
                   </tr>
                 );
               })}
+
+              {/* Row 17 — a custom item the marketer names themselves. */}
+              {(() => {
+                const row = rows[CUSTOM_NO] || EMPTY;
+                const active = !!customName.trim() || PILLAR_COLUMNS.some((c) => (row[c.key] || "").trim());
+                return (
+                  <tr className={`border-t border-line/60 align-top ${active ? "bg-primary/[0.03]" : ""}`}>
+                    <td className="px-3 py-3 text-center text-muted-fg">{CUSTOM_NO}</td>
+                    <td className="px-3 py-3">
+                      <input
+                        value={customName}
+                        disabled={!brand}
+                        onChange={(e) => { setCustomName(e.target.value); setSaved(null); }}
+                        placeholder="Nama item tambahan…"
+                        aria-label="Nama item tambahan"
+                        className="w-full rounded-lg border border-dashed border-line bg-white/70 px-2.5 py-1.5 text-sm font-semibold text-ink outline-none transition-colors duration-200 focus:border-primary focus:ring-2 focus:ring-primary/10 disabled:cursor-not-allowed disabled:bg-muted/40"
+                      />
+                    </td>
+                    {PILLAR_COLUMNS.map((c) => (
+                      <td key={c.key} className="px-2 py-2">
+                        <textarea
+                          rows={2}
+                          value={row[c.key]}
+                          disabled={!brand}
+                          onChange={(e) => set(CUSTOM_NO, c.key, e.target.value)}
+                          aria-label={`Item tambahan — ${c.label}`}
+                          className={`w-full min-w-[180px] resize-y rounded-lg border border-line bg-white/70 px-2.5 py-1.5 text-sm text-ink outline-none transition-colors duration-200 focus:ring-2 disabled:cursor-not-allowed disabled:bg-muted/40 ${COL_TINT[c.key]}`}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })()}
             </tbody>
           </table>
         </div>

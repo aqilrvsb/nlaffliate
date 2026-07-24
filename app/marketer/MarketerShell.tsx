@@ -188,7 +188,7 @@ const SALES_CHILDREN = [
   { key: "sales-live-campaign", label: "Live · Campaign", icon: List },
   { key: "sales-product", label: "Product", icon: PackageSearch },
   { key: "sales-product-campaign", label: "Product · Campaign", icon: List },
-  { key: "sales-card", label: "Card", icon: CreditCard },
+  { key: "sales-card", label: "Product Card", icon: CreditCard },
 ] as const;
 
 const TAB_LABELS: Record<string, string> = {
@@ -207,7 +207,7 @@ const TAB_LABELS: Record<string, string> = {
   "sales-live-campaign": "Sales · Live Campaign",
   "sales-product": "Sales · Product",
   "sales-product-campaign": "Sales · Product Campaign",
-  "sales-card": "Sales · Card",
+  "sales-card": "Sales · Product Card",
   overall: "Overall",
   creator: "Creator",
   "live-users": "List Live User",
@@ -2505,14 +2505,90 @@ function SalesCampaignTab({ rows: all, kind }: { rows: SalesCampaign[]; kind: "l
 
 /* ── Sales · Card (manual entry) ───────────────────────── */
 
+/** Edit one daily Product-card total. Cost/Order and ROI auto-derive. */
+function CardEditModal({ row, onClose }: { row: SalesCard | null; onClose: () => void }) {
+  const router = useRouter();
+  const [f, setF] = useState({ cost: "", sku_orders: "", gross_revenue: "" });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!row) return;
+    const s = (v: number | null) => (v == null ? "" : String(v));
+    setF({ cost: s(row.cost), sku_orders: s(row.sku_orders), gross_revenue: s(row.gross_revenue) });
+    setError("");
+  }, [row]);
+
+  const costN = parseFloat(f.cost), grossN = parseFloat(f.gross_revenue), ordersN = parseFloat(f.sku_orders);
+  const roi = costN > 0 && Number.isFinite(grossN) ? Math.round((grossN / costN) * 100) / 100 : null;
+  const cpo = costN > 0 && ordersN > 0 ? Math.round((costN / ordersN) * 100) / 100 : null;
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!row) return;
+    setSaving(true); setError("");
+    const res = await fetch(`/api/marketer/sales/card/${row.id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        brand_id: row.brand_id, report_date: row.report_date,
+        cost: f.cost, sku_orders: f.sku_orders, cost_per_order: cpo ?? "", gross_revenue: f.gross_revenue,
+      }),
+    });
+    const data = await res.json();
+    setSaving(false);
+    if (!res.ok) return setError(data.error || "Save failed.");
+    onClose(); router.refresh();
+  }
+
+  const fld = (key: keyof typeof f, label: string) => (
+    <div>
+      <label className="label">{label}</label>
+      <input className="input" value={f[key]} inputMode="decimal"
+        onChange={(e) => setF((p) => ({ ...p, [key]: e.target.value }))} />
+    </div>
+  );
+
+  return (
+    <Modal open={!!row} onClose={onClose} title="Edit Product Card">
+      <form onSubmit={submit} className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          {fld("cost", "Cost (RM)")}
+          {fld("sku_orders", "SKU Order")}
+          {fld("gross_revenue", "Gross Revenue (RM)")}
+          <div>
+            <label className="label">Cost / Order <span className="font-normal text-muted-fg">(auto)</span></label>
+            <input className="input bg-muted/40" value={cpo != null ? cpo : "—"} readOnly />
+          </div>
+          <div>
+            <label className="label">ROI <span className="font-normal text-muted-fg">(auto)</span></label>
+            <input className="input bg-muted/40 font-semibold" value={roi != null ? roi : "—"} readOnly />
+          </div>
+        </div>
+        {error && (
+          <p className="flex items-center gap-1.5 text-sm text-danger">
+            <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />{error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn" disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
+            Save
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function SalesCardTab({ rows: all }: { rows: SalesCard[] }) {
   const router = useRouter();
   const params = useSearchParams();
   const { from, to } = resolveRange(
-    { from: params.get("from"), to: params.get("to"), all: params.get("all") },
-    "month"
+    { from: params.get("from"), to: params.get("to"), all: params.get("all") }, "month"
   );
   const [filterBrand, setFilterBrand] = useState("");
+  const [editing, setEditing] = useState<SalesCard | null>(null);
   const unsorted = all.filter((r) => {
     if (from && r.report_date < from) return false;
     if (to && r.report_date > to) return false;
@@ -2521,53 +2597,9 @@ function SalesCardTab({ rows: all }: { rows: SalesCard[] }) {
   });
   const { sorted: rows, sort, toggleSort } = useTableSort(unsorted);
 
-  // Form (also used to edit a row in place).
-  const empty = { report_date: "", brand_id: "", cost: "", sku_orders: "", cost_per_order: "", gross_revenue: "" };
-  const [f, setF] = useState(empty);
-  const [editId, setEditId] = useState<number | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
-  const [error, setError] = useState("");
-
-  const costN = parseFloat(f.cost);
-  const grossN = parseFloat(f.gross_revenue);
-  const roi = Number.isFinite(costN) && costN > 0 && Number.isFinite(grossN)
-    ? Math.round((grossN / costN) * 100) / 100 : null;
-
-  function reset() { setF(empty); setEditId(null); setError(""); setMsg(""); }
-  function loadEdit(r: SalesCard) {
-    const s = (v: number | null) => (v == null ? "" : String(v));
-    setF({
-      report_date: r.report_date, brand_id: r.brand_id != null ? String(r.brand_id) : "",
-      cost: s(r.cost), sku_orders: s(r.sku_orders), cost_per_order: s(r.cost_per_order),
-      gross_revenue: s(r.gross_revenue),
-    });
-    setEditId(r.id); setError(""); setMsg("");
-  }
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!f.report_date) return setError("Pilih tarikh.");
-    if (!f.brand_id) return setError("Pilih brand.");
-    if (f.cost === "" || f.sku_orders === "" || f.cost_per_order === "" || f.gross_revenue === "")
-      return setError("Isi semua nombor.");
-    setBusy(true); setError(""); setMsg("");
-    const res = await fetch(
-      editId ? `/api/marketer/sales/card/${editId}` : "/api/marketer/sales/card",
-      { method: editId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(f) }
-    );
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) return setError(data.error || "Gagal simpan.");
-    setMsg(editId ? "Dikemas kini" : "Disimpan");
-    reset();
-    router.refresh();
-  }
-
   async function remove(r: SalesCard) {
     if (!(await confirmDialog({ title: "Padam rekod card ini?", danger: true }))) return;
     await fetch(`/api/marketer/sales/card/${r.id}`, { method: "DELETE" });
-    if (editId === r.id) reset();
     router.refresh();
   }
 
@@ -2576,61 +2608,21 @@ function SalesCardTab({ rows: all }: { rows: SalesCard[] }) {
   const gross = rows.reduce((s, r) => s + (r.gross_revenue || 0), 0);
   const tRoi = cost > 0 ? Math.round((gross / cost) * 100) / 100 : null;
   const tCpo = orders > 0 ? Math.round((cost / orders) * 100) / 100 : null;
-
   const page = getPage(params.get("page"));
   const pageRows = paginate(rows, page, 20);
 
-  const numField = (key: keyof typeof f, label: string) => (
-    <div>
-      <label className="label">{label}</label>
-      <input className="input" value={f[key]} inputMode="decimal" required placeholder="0"
-        onChange={(e) => setF((p) => ({ ...p, [key]: e.target.value }))} />
-    </div>
-  );
-
   return (
     <>
-      <form onSubmit={submit} className="card space-y-3">
-        <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
-          <CreditCard className="h-4 w-4 text-primary" aria-hidden="true" />
-          {editId ? "Kemas kini Card" : "Card — key in manual"}
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="label">Tarikh</label>
-            <input type="date" className="input cursor-pointer" value={f.report_date} required
-              onChange={(e) => setF((p) => ({ ...p, report_date: e.target.value }))} />
-          </div>
-          <div>
-            <label className="label">Brand</label>
-            <BrandSelect id="card-brand" value={f.brand_id} onChange={(v) => setF((p) => ({ ...p, brand_id: v }))} />
-          </div>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {numField("cost", "Cost (RM)")}
-          {numField("sku_orders", "SKU Order")}
-          {numField("cost_per_order", "Cost / Order (RM)")}
-          {numField("gross_revenue", "Gross Revenue (RM)")}
-          <div>
-            <label className="label">ROI <span className="font-normal text-muted-fg">(auto)</span></label>
-            <input className="input bg-muted/40 font-semibold" value={roi != null ? roi : "—"} readOnly />
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <button className="btn !py-2.5" disabled={busy}>
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
-            {editId ? "Update" : "Submit"}
-          </button>
-          {editId && (
-            <button type="button" className="btn-ghost !py-2" onClick={reset}>Batal</button>
-          )}
-          <p className="text-[11px] text-muted-fg">Key in brand + tarikh yang sama untuk kemas kini rekod itu.</p>
-          {msg && <span className="text-xs font-medium text-emerald-600">{msg}</span>}
-          {error && <span className="text-xs text-danger">{error}</span>}
-        </div>
-      </form>
-
-      <DateRangeFilter count={rows.length} countNoun={["rekod", "rekod"]} defaultMode="month" />
+      <SalesImport
+        title="Import Creative Data — Product Card sahaja"
+        endpoint="/api/marketer/sales/card/import"
+        columns={["Creative type", "Cost", "SKU orders", "Cost per order", "Gross revenue"]}
+        note={<>TikTok Ads → <b>creative data for product campaigns</b>. Hanya baris <b>Creative type = Product card</b> diambil dan dijumlahkan jadi satu total harian ikut brand + tarikh.</>}
+        sampleHref="/examples/creative-product-campaigns-sample.xlsx"
+        brandInputId="card-brand"
+        resultLabel={(d) => `Product card: ${d.imported} baris · 1 baris harian`}
+      />
+      <DateRangeFilter count={rows.length} countNoun={["day", "days"]} defaultMode="month" />
       <BrandFilterCard id="card-filter-brand" value={filterBrand} onChange={setFilterBrand} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -2642,7 +2634,7 @@ function SalesCardTab({ rows: all }: { rows: SalesCard[] }) {
       </div>
 
       {rows.length === 0 ? (
-        <p className="card text-center text-sm text-muted-fg">Tiada rekod card dalam julat ini. Key in di atas.</p>
+        <p className="card text-center text-sm text-muted-fg">Tiada data Product Card dalam julat ini. Import .xlsx di atas.</p>
       ) : (
         <>
           <div className="glass overflow-x-auto rounded-2xl">
@@ -2662,7 +2654,7 @@ function SalesCardTab({ rows: all }: { rows: SalesCard[] }) {
               </thead>
               <tbody>
                 {pageRows.map((r, i) => (
-                  <tr key={r.id} className={`border-t border-line/60 hover:bg-white/50 ${editId === r.id ? "bg-primary/5" : ""}`}>
+                  <tr key={r.id} className={`border-t border-line/60 hover:bg-white/50 ${editing?.id === r.id ? "bg-primary/5" : ""}`}>
                     <td className="px-4 py-3 text-muted-fg">{(page - 1) * 20 + i + 1}</td>
                     <td className="px-4 py-3">
                       {r.brand_name
@@ -2677,7 +2669,7 @@ function SalesCardTab({ rows: all }: { rows: SalesCard[] }) {
                     <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
-                        <button onClick={() => loadEdit(r)}
+                        <button onClick={() => setEditing(r)}
                           className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent"
                           aria-label="Edit"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
                         <button onClick={() => remove(r)}
@@ -2693,6 +2685,7 @@ function SalesCardTab({ rows: all }: { rows: SalesCard[] }) {
           <Pagination page={page} total={rows.length} size={20} />
         </>
       )}
+      <CardEditModal row={editing} onClose={() => setEditing(null)} />
     </>
   );
 }

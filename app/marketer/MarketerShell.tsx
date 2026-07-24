@@ -590,17 +590,23 @@ export default function MarketerShell({
               </span>
               <div className="flex items-center gap-2">
                 <label className="text-[11px] font-bold uppercase tracking-wide text-amber-800" htmlFor="ldr-mkt">Marketer</label>
-                <select id="ldr-mkt" className="input cursor-pointer !w-auto !py-1.5 text-sm"
-                  value={viewMid != null ? String(viewMid) : ""}
-                  onChange={(e) => goMarketer(e.target.value)}>
-                  <option value="">Semua Marketer (jumlah)</option>
-                  {marketers.map((m) => (
-                    <option key={m.id} value={m.id}>{m.name}{m.staff_id ? ` (${m.staff_id})` : ""}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select id="ldr-mkt" disabled={navPending}
+                    className="input cursor-pointer !w-auto !py-1.5 pr-8 text-sm transition disabled:cursor-wait disabled:opacity-60"
+                    value={viewMid != null ? String(viewMid) : ""}
+                    onChange={(e) => goMarketer(e.target.value)}>
+                    <option value="">Semua Marketer (jumlah)</option>
+                    {marketers.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}{m.staff_id ? ` (${m.staff_id})` : ""}</option>
+                    ))}
+                  </select>
+                  {navPending && (
+                    <Loader2 className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-amber-600" aria-hidden="true" />
+                  )}
+                </div>
               </div>
-              <span className="text-xs text-amber-800/80">
-                {viewMid != null ? "Menunjukkan satu marketer." : "Semua marketer digabungkan."}
+              <span className="flex items-center gap-1.5 text-xs text-amber-800/80 transition-opacity">
+                {navPending ? "Memuatkan…" : viewMid != null ? "Menunjukkan satu marketer." : "Semua marketer digabungkan."}
               </span>
             </div>
           )}

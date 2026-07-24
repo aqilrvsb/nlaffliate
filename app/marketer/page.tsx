@@ -20,6 +20,9 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
   // from the switcher (?m=<id>); a marketer only ever sees their own.
   const selMid = isLeader && searchParams?.m && /^\d+$/.test(searchParams.m) ? Number(searchParams.m) : null;
   const mid: number | null = isLeader ? selMid : user.id;
+  // Marketer filter as literal SQL (mid is a validated integer or null) so a
+  // chosen marketer hits the index instead of an OR-with-param seq scan.
+  const mCond = (col: string) => (mid == null ? "TRUE" : `${col} = ${mid}`);
 
   // Marketer list powers the leader's switcher.
   const marketers = isLeader
@@ -35,9 +38,9 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
       db.prepare(
           `SELECT u.id, u.name, u.email, u.staff_id, u.phone, u.address, u.activated
              FROM users u
-            WHERE u.role = 'affiliate' AND (?::bigint IS NULL OR u.marketer_id = ?)
+            WHERE u.role = 'affiliate' AND ${mCond("u.marketer_id")}
             ORDER BY u.name`
-        ).all(mid, mid) as Promise<any[]>,
+        ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT p.id, p.user_id, p.label, p.url,
@@ -74,9 +77,9 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
              FROM tiktok_profiles p
              LEFT JOIN brands pb ON pb.id = p.brand_id
              JOIN users u ON u.id = p.user_id
-            WHERE (?::bigint IS NULL OR u.marketer_id = ?)
+            WHERE ${mCond("u.marketer_id")}
             ORDER BY p.id`
-        ).all(mid, mid) as Promise<any[]>,
+        ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT b.id AS booking_id, b.user_id AS affiliate_id,
@@ -102,15 +105,15 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
              LEFT JOIN brands pb ON pb.id = p.brand_id
              LEFT JOIN brands br ON br.id = b.brand_id
              LEFT JOIN live_results r ON r.booking_id = b.id
-            WHERE (?::bigint IS NULL OR u.marketer_id = ?)
+            WHERE ${mCond("u.marketer_id")}
             ORDER BY b.live_date DESC, b.start_time DESC`
-        ).all(mid, mid) as Promise<any[]>,
+        ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT id, live_name, live_date, live_time, duration, ad_spend, gross_revenue, roi
-             FROM unknown_lives WHERE (?::bigint IS NULL OR marketer_id = ?)
+             FROM unknown_lives WHERE ${mCond("marketer_id")}
             ORDER BY id DESC`
-        ).all(mid, mid) as Promise<any[]>,
+        ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT s.id, to_char(s.report_date, 'YYYY-MM-DD') AS report_date,
@@ -119,9 +122,9 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
                   s.cost_per_order, s.live_views, s.current_budget
              FROM sales_live s
              LEFT JOIN brands b ON b.id = s.brand_id
-            WHERE (?::bigint IS NULL OR s.marketer_id = ?)
+            WHERE ${mCond("s.marketer_id")}
             ORDER BY s.report_date DESC, s.gross_revenue DESC NULLS LAST`
-        ).all(mid, mid) as Promise<any[]>,
+        ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT s.id, to_char(s.report_date, 'YYYY-MM-DD') AS report_date,
@@ -130,15 +133,15 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
                   s.gross_revenue, s.roi
              FROM sales_product s
              LEFT JOIN brands b ON b.id = s.brand_id
-            WHERE (?::bigint IS NULL OR s.marketer_id = ?)
+            WHERE ${mCond("s.marketer_id")}
             ORDER BY s.report_date DESC, s.gross_revenue DESC NULLS LAST`
-        ).all(mid, mid) as Promise<any[]>,
+        ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT p.id, p.user_id AS affiliate_id, p.post_date, p.status
              FROM posts p JOIN users u ON u.id = p.user_id
-            WHERE (?::bigint IS NULL OR u.marketer_id = ?)`
-        ).all(mid, mid) as Promise<any[]>,
+            WHERE ${mCond("u.marketer_id")}`
+        ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT o.id, o.report_date, o.brand_id, b.name AS brand_name,
@@ -149,9 +152,9 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
                   o.gmv_video, o.gmv_video_creator, o.gmv_video_seller, o.gmv_product_cards
              FROM overall_reports o
              LEFT JOIN brands b ON b.id = o.brand_id
-            WHERE (?::bigint IS NULL OR o.marketer_id = ?)
+            WHERE ${mCond("o.marketer_id")}
             ORDER BY o.report_date DESC`
-        ).all(mid, mid) as Promise<any[]>,
+        ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT c.id, to_char(c.report_date, 'YYYY-MM-DD') AS report_date,
@@ -161,14 +164,14 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
                   c.creative_creators_mass_auth, c.img1_path, c.img2_path
              FROM creator_reports c
              LEFT JOIN brands b ON b.id = c.brand_id
-            WHERE (?::bigint IS NULL OR c.marketer_id = ?)
+            WHERE ${mCond("c.marketer_id")}
             ORDER BY c.report_date DESC`
-        ).all(mid, mid) as Promise<any[]>,
+        ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT id, name, user_type, phone, tiktok_link
-             FROM live_users WHERE (?::bigint IS NULL OR marketer_id = ?) ORDER BY name`
-        ).all(mid, mid) as Promise<any[]>,
+             FROM live_users WHERE ${mCond("marketer_id")} ORDER BY name`
+        ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT s.id, s.live_user_id, s.brand_id, s.live_date, s.start_time, s.end_time,
@@ -179,9 +182,9 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
              FROM live_sessions s
              JOIN live_users lu ON lu.id = s.live_user_id
              LEFT JOIN brands b ON b.id = s.brand_id
-            WHERE (?::bigint IS NULL OR s.marketer_id = ?)
+            WHERE ${mCond("s.marketer_id")}
             ORDER BY s.live_date DESC, s.start_time DESC`
-        ).all(mid, mid) as Promise<any[]>,
+        ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT q.id, to_char(q.report_date, 'YYYY-MM-DD') AS report_date,
@@ -190,9 +193,9 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
                   q.exploring, q.explored, q.outstanding, q.performing
              FROM data_quality q
              LEFT JOIN brands b ON b.id = q.brand_id
-            WHERE (?::bigint IS NULL OR q.marketer_id = ?)
+            WHERE ${mCond("q.marketer_id")}
             ORDER BY q.report_date DESC, q.id DESC`
-        ).all(mid, mid) as Promise<any[]>,
+        ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT c.id, to_char(c.report_date, 'YYYY-MM-DD') AS report_date,
@@ -200,18 +203,18 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
                   c.cost, c.sku_orders, c.cost_per_order, c.gross_revenue, c.roi
              FROM sales_card c
              LEFT JOIN brands b ON b.id = c.brand_id
-            WHERE (?::bigint IS NULL OR c.marketer_id = ?)
+            WHERE ${mCond("c.marketer_id")}
             ORDER BY c.report_date DESC, c.id DESC`
-        ).all(mid, mid) as Promise<any[]>,
+        ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT t.id, to_char(t.report_date, 'YYYY-MM-DD') AS report_date,
                   t.brand_id, b.name AS brand_name, t.ttm_cost, t.ttm_gross_revenue
              FROM spend_ttm t
              LEFT JOIN brands b ON b.id = t.brand_id
-            WHERE (?::bigint IS NULL OR t.marketer_id = ?)
+            WHERE ${mCond("t.marketer_id")}
             ORDER BY t.report_date DESC, t.id DESC`
-        ).all(mid, mid) as Promise<any[]>,
+        ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT r.id, to_char(r.report_date, 'YYYY-MM-DD') AS report_date,
@@ -219,9 +222,9 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
                   r.c_viewers, r.r_target, r.g_revenue, r.cost, r.v_boost, r.cv_boost, r.d_time
              FROM reporting_sheet r
              LEFT JOIN brands b ON b.id = r.brand_id
-            WHERE (?::bigint IS NULL OR r.marketer_id = ?)
+            WHERE ${mCond("r.marketer_id")}
             ORDER BY r.report_date DESC, r.ord`
-        ).all(mid, mid) as Promise<any[]>,
+        ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT c.id, to_char(c.report_date, 'YYYY-MM-DD') AS report_date,
@@ -230,9 +233,9 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
                   c.cost_per_order, c.live_views, c.current_budget
              FROM sales_live_campaign c
              LEFT JOIN brands b ON b.id = c.brand_id
-            WHERE (?::bigint IS NULL OR c.marketer_id = ?)
+            WHERE ${mCond("c.marketer_id")}
             ORDER BY c.report_date DESC, c.gross_revenue DESC NULLS LAST`
-        ).all(mid, mid) as Promise<any[]>,
+        ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT c.id, to_char(c.report_date, 'YYYY-MM-DD') AS report_date,
@@ -241,9 +244,9 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
                   c.cost_per_order, c.gross_revenue, c.roi
              FROM sales_product_campaign c
              LEFT JOIN brands b ON b.id = c.brand_id
-            WHERE (?::bigint IS NULL OR c.marketer_id = ?)
+            WHERE ${mCond("c.marketer_id")}
             ORDER BY c.report_date DESC, c.gross_revenue DESC NULLS LAST`
-        ).all(mid, mid) as Promise<any[]>,
+        ).all() as Promise<any[]>,
     ]);
 
   const affiliates = plain(affiliateRows).map((a: any) => ({

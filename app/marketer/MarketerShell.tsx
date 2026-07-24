@@ -275,6 +275,10 @@ export default function MarketerShell({
 
   const activeLabel = TAB_LABELS[active] || "Dashboard";
 
+  // Product already includes Card in the TikTok export, so everything downstream
+  // works with Product-only = imported − Card (in-memory, no query).
+  const salesProductAdj = adjustProductByCard(salesProduct, salesCard);
+
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
@@ -577,7 +581,7 @@ export default function MarketerShell({
           )}
           {active === "unknown" && <UnknownTab rows={unknowns} />}
           {active === "sales-live" && <SalesLiveTab rows={salesLive} />}
-          {active === "sales-product" && <SalesProductTab rows={salesProduct} />}
+          {active === "sales-product" && <SalesProductTab rows={salesProduct} cards={salesCard} />}
           {active === "sales-card" && <SalesCardTab rows={salesCard} />}
           {active === "brand" && <BrandsTab />}
           {active === "product" && <ProductsTab />}
@@ -588,7 +592,7 @@ export default function MarketerShell({
           {active === "live-success" && <LiveScheduleTab sessions={liveSessions} liveUsers={liveUsers} kind="success" />}
           {active === "live-reporting" && <LiveReportingTab sessions={liveSessions} liveUsers={liveUsers} />}
           {active === "data-quality" && <DataQualityTab rows={dataQuality} />}
-          {active === "spend" && <SpendTab spendTtm={spendTtm} salesLive={salesLive} salesProduct={salesProduct} salesCard={salesCard} />}
+          {active === "spend" && <SpendTab spendTtm={spendTtm} salesLive={salesLive} salesProduct={salesProductAdj} salesCard={salesCard} />}
           {active === "reporting-sheet" && <ReportingSheetTab rows={reportingSheet} userName={user.name} />}
           {active === "pillar-create" && <PillarCreate />}
           {active === "pillar-report" && <PillarReport />}
@@ -2266,7 +2270,34 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
   );
 }
 
-function SalesProductTab({ rows: all }: { rows: SalesProduct[] }) {
+/**
+ * Product totals already INCLUDE Card (the TikTok export bundles them), so the
+ * Product tab and Spend show Product-only = imported − Card for the matching
+ * brand + date. Pure in-memory maths over already-loaded data — no extra query.
+ */
+function adjustProductByCard(products: SalesProduct[], cards: SalesCard[]): SalesProduct[] {
+  const cmap = new Map<string, { cost: number; gross: number; orders: number }>();
+  for (const c of cards) {
+    const k = `${c.brand_id ?? 0}|${c.report_date}`;
+    const e = cmap.get(k) || { cost: 0, gross: 0, orders: 0 };
+    e.cost += c.cost || 0; e.gross += c.gross_revenue || 0; e.orders += c.sku_orders || 0;
+    cmap.set(k, e);
+  }
+  return products.map((p) => {
+    const c = cmap.get(`${p.brand_id ?? 0}|${p.report_date}`);
+    if (!c) return p;
+    const cost = (p.cost || 0) - c.cost;
+    const gross = (p.gross_revenue || 0) - c.gross;
+    const orders = (p.sku_orders || 0) - c.orders;
+    return {
+      ...p, cost, gross_revenue: gross, sku_orders: orders,
+      cost_per_order: orders > 0 ? Math.round((cost / orders) * 100) / 100 : null,
+      roi: cost > 0 ? Math.round((gross / cost) * 100) / 100 : null,
+    };
+  });
+}
+
+function SalesProductTab({ rows: rawAll, cards }: { rows: SalesProduct[]; cards: SalesCard[] }) {
   const router = useRouter();
   const params = useSearchParams();
   const { from, to } = resolveRange(
@@ -2274,6 +2305,9 @@ function SalesProductTab({ rows: all }: { rows: SalesProduct[] }) {
   );
   const [brand, setBrand] = useState("");
   const [editing, setEditing] = useState<SalesProduct | null>(null);
+  // Displayed rows are card-adjusted; editing operates on the raw import.
+  const all = adjustProductByCard(rawAll, cards);
+  const rawById = new Map(rawAll.map((r) => [r.id, r]));
   const unsorted = all.filter((p) => {
     if (from && p.report_date < from) return false;
     if (to && p.report_date > to) return false;
@@ -2310,6 +2344,9 @@ function SalesProductTab({ rows: all }: { rows: SalesProduct[] }) {
       />
       <DateRangeFilter count={rows.length} countNoun={["day", "days"]} defaultMode="month" />
       <BrandFilterCard id="sp-filter-brand" value={brand} onChange={setBrand} />
+      <p className="-mt-2 text-[11px] text-muted-fg">
+        Nilai di bawah = import <b>tolak Card</b> (brand + tarikh yang sama) supaya tak double-count. Edit menunjukkan nilai import mentah.
+      </p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Kpi Icon={Wallet} label="Cost" value={`RM${cost.toFixed(2)}`} fill="red" />
@@ -2356,7 +2393,7 @@ function SalesProductTab({ rows: all }: { rows: SalesProduct[] }) {
                     <td className="px-4 py-3 text-right">{money2(r.current_budget)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
-                        <button onClick={() => setEditing(r)} className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent" aria-label="Edit"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
+                        <button onClick={() => setEditing(rawById.get(r.id) ?? r)} className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent" title="Edit nilai import mentah" aria-label="Edit"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
                         <button onClick={() => remove(r)} className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger" aria-label="Delete"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
                       </div>
                     </td>

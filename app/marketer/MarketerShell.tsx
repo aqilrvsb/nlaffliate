@@ -11,7 +11,7 @@ import {
   HelpCircle, Upload, ImagePlus, TrendingDown, Pencil, BarChart3,
   PackageSearch, FileSpreadsheet, ShoppingCart, Layers, Eye, MousePointerClick,
   Send, Boxes, ClipboardList, Tag, CalendarPlus, Trash2, AlertCircle, Settings, Plus,
-  Package, ListChecks, CreditCard,
+  Package, ListChecks, CreditCard, Download, X,
 } from "lucide-react";
 import { AffiliateModal, AffiliateActions, ActivateAffiliate, type ManagedAffiliate } from "./AffiliateManager";
 import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
@@ -146,6 +146,7 @@ type LiveSession = {
   status: string; note: string | null;
   ads_budget: number | null; ad_spend: number | null; gross_revenue: number | null; roi: number | null;
   gmv: number | null; viewers: number | null; items_sold: number | null; duration_live: string | null;
+  attachment_path: string | null;
   live_user_name: string; user_type: string; brand_name: string | null;
 };
 const LIVE_USER_TYPES = ["KOL", "Affiliate Special", "Founder", "HQ"] as const;
@@ -3590,6 +3591,57 @@ function LiveResultModal({
   );
 }
 
+/** Attach / view / download an image on a live session (Pending + Success). */
+function LiveAttachment({ session }: { session: LiveSession }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+
+  async function upload(file: File | null) {
+    if (!file) return;
+    setBusy(true);
+    const { file: out } = await compressScreenshot(file);
+    const fd = new FormData();
+    fd.append("image", out);
+    await fetch(`/api/marketer/live-sessions/${session.id}/attachment`, { method: "POST", body: fd });
+    setBusy(false);
+    router.refresh();
+  }
+  async function remove() {
+    if (!(await confirmDialog({ title: "Buang gambar?", danger: true }))) return;
+    await fetch(`/api/marketer/live-sessions/${session.id}/attachment`, { method: "DELETE" });
+    router.refresh();
+  }
+
+  return (
+    <>
+      {session.attachment_path && (
+        <>
+          <a href={session.attachment_path} target="_blank" rel="noopener noreferrer" title="Lihat gambar"
+            className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent">
+            <Eye className="h-4 w-4" aria-hidden="true" />
+          </a>
+          <a href={session.attachment_path} download title="Muat turun"
+            className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent">
+            <Download className="h-4 w-4" aria-hidden="true" />
+          </a>
+          <button onClick={remove} title="Buang gambar"
+            className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger">
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </>
+      )}
+      <label title={session.attachment_path ? "Tukar gambar" : "Lampir gambar"}
+        className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent">
+        {busy
+          ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          : <ImagePlus className="h-4 w-4" aria-hidden="true" />}
+        <input type="file" accept="image/*" className="sr-only"
+          onChange={(e) => upload(e.target.files?.[0] || null)} />
+      </label>
+    </>
+  );
+}
+
 function LiveScheduleTab({
   sessions, liveUsers, kind,
 }: { sessions: LiveSession[]; liveUsers: LiveUser[]; kind: "pending" | "success" }) {
@@ -3726,6 +3778,7 @@ function LiveScheduleTab({
                           Success
                         </button>
                       )}
+                      <LiveAttachment session={s} />
                       <button onClick={() => (kind === "success" ? setResult(s) : (setEditing(s), setOpenAdd(true)))}
                         className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent"
                         aria-label="Edit">

@@ -119,6 +119,16 @@ type CreatorReport = {
   creative_total_creators: number | null; creative_creators_mass_auth: number | null;
   img1_path: string | null; img2_path: string | null;
 };
+type LiveUser = { id: number; name: string; user_type: string; phone: string | null };
+type LiveSession = {
+  id: number; live_user_id: number; brand_id: number | null;
+  live_date: string; start_time: string | null; end_time: string | null;
+  status: string; note: string | null;
+  ad_spend: number | null; gross_revenue: number | null; roi: number | null;
+  gmv: number | null; viewers: number | null; items_sold: number | null; duration_live: string | null;
+  live_user_name: string; user_type: string; brand_name: string | null;
+};
+const LIVE_USER_TYPES = ["KOL", "Affiliate Special", "Founder", "HQ"] as const;
 
 // Sidebar structure: a couple of top-level items + one expandable group.
 const AFFILIATE_CHILDREN = [
@@ -134,6 +144,14 @@ const AFFILIATE_CHILDREN = [
 const PILLAR_CHILDREN = [
   { key: "pillar-create", label: "Create Pillar", icon: ClipboardList },
   { key: "pillar-report", label: "Reporting Pillar", icon: BarChart3 },
+] as const;
+
+// Live Session — a parallel schedule for non-login live users (KOL, Founder…).
+const LIVE_CHILDREN = [
+  { key: "live-users", label: "List Live User", icon: List },
+  { key: "live-pending", label: "Pending Live", icon: Clock },
+  { key: "live-success", label: "Success Live", icon: CheckCircle2 },
+  { key: "live-reporting", label: "Reporting Live User", icon: BarChart3 },
 ] as const;
 
 // Sales: two TikTok campaign-data exports, one per view.
@@ -158,14 +176,20 @@ const TAB_LABELS: Record<string, string> = {
   "sales-product": "Sales · Product",
   overall: "Overall",
   creator: "Beg Kuning + Creator",
+  "live-users": "List Live User",
+  "live-pending": "Pending Live",
+  "live-success": "Success Live",
+  "live-reporting": "Reporting Live User",
 };
 
 export default function MarketerShell({
   user, affiliates, lives, unknowns, salesLive, salesProduct, overall, posts, creatorReports,
+  liveUsers, liveSessions,
 }: {
   user: SessionUser; affiliates: Affiliate[]; lives: Live[];
   unknowns: Unknown[]; salesLive: SalesLive[]; salesProduct: SalesProduct[];
   overall: Overall[]; posts: Post[]; creatorReports: CreatorReport[];
+  liveUsers: LiveUser[]; liveSessions: LiveSession[];
 }) {
   const router = useRouter();
   const { navigate, prefetch, pending: navPending } = useNavigate();
@@ -184,6 +208,8 @@ export default function MarketerShell({
   const [pillarOpen, setPillarOpen] = useState(true);
   const inSalesGroup = SALES_CHILDREN.some((c) => c.key === active);
   const [salesOpen, setSalesOpen] = useState(true);
+  const inLiveGroup = LIVE_CHILDREN.some((c) => c.key === active);
+  const [liveOpen, setLiveOpen] = useState(true);
 
   function go(key: string) {
     const next = new URLSearchParams(params.toString());
@@ -287,6 +313,40 @@ export default function MarketerShell({
             {groupOpen && (
               <div className="ml-4 flex flex-col gap-1 border-l border-line pl-3">
                 {AFFILIATE_CHILDREN.map((c) => {
+                  const Icon = c.icon;
+                  const on = c.key === active;
+                  return (
+                    <button key={c.key} onClick={() => go(c.key)}
+                      onMouseEnter={() => prefetch(`/marketer?tab=${c.key}`)}
+                      aria-busy={(navPending && navKey === c.key) || undefined}
+                      className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200 ${
+                        on ? "bg-primary text-primary-fg shadow-lift" : "text-muted-fg hover:bg-primary/10 hover:text-ink"
+                      }`}>
+                      {navPending && navKey === c.key
+                        ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+                        : <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Live Session group — non-login live users (KOL/Founder/HQ/…) */}
+            <button onClick={() => setLiveOpen((o) => !o)}
+              className={`mt-1 flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
+                inLiveGroup ? "text-primary" : "text-ink hover:bg-primary/10"
+              }`}
+              aria-expanded={liveOpen}>
+              <Radio className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="flex-1 text-left">Live Session</span>
+              <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${liveOpen ? "" : "-rotate-90"}`}
+                aria-hidden="true" />
+            </button>
+
+            {liveOpen && (
+              <div className="ml-4 flex flex-col gap-1 border-l border-line pl-3">
+                {LIVE_CHILDREN.map((c) => {
                   const Icon = c.icon;
                   const on = c.key === active;
                   return (
@@ -471,6 +531,10 @@ export default function MarketerShell({
           {active === "product" && <ProductsTab />}
           {active === "overall" && <OverallTab overall={overall} />}
           {active === "creator" && <CreatorTab reports={creatorReports} />}
+          {active === "live-users" && <ListLiveUserTab liveUsers={liveUsers} />}
+          {active === "live-pending" && <LiveScheduleTab sessions={liveSessions} liveUsers={liveUsers} kind="pending" />}
+          {active === "live-success" && <LiveScheduleTab sessions={liveSessions} liveUsers={liveUsers} kind="success" />}
+          {active === "live-reporting" && <LiveReportingTab sessions={liveSessions} liveUsers={liveUsers} />}
           {active === "pillar-create" && <PillarCreate />}
           {active === "pillar-report" && <PillarReport />}
         </div>
@@ -2613,6 +2677,591 @@ function CreatorTab({ reports }: { reports: CreatorReport[] }) {
                   </td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ── Live Session (non-login live users) ───────────────── */
+
+const LIVE_TYPE_STYLE: Record<string, string> = {
+  "KOL": "bg-violet-100 text-violet-700",
+  "Affiliate Special": "bg-sky-100 text-sky-700",
+  "Founder": "bg-amber-100 text-amber-700",
+  "HQ": "bg-emerald-100 text-emerald-700",
+};
+
+function LiveUserModal({
+  open, liveUser, onClose,
+}: { open: boolean; liveUser: LiveUser | null; onClose: () => void }) {
+  const router = useRouter();
+  const [f, setF] = useState({ name: "", user_type: "", phone: "" });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setF({
+      name: liveUser?.name || "",
+      user_type: liveUser?.user_type || "",
+      phone: liveUser?.phone || "",
+    });
+    setError("");
+  }, [open, liveUser]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!f.name.trim()) return setError("Nama diperlukan.");
+    if (!f.user_type) return setError("Pilih jenis.");
+    setSaving(true); setError("");
+    const res = await fetch(
+      liveUser ? `/api/marketer/live-users/${liveUser.id}` : "/api/marketer/live-users",
+      {
+        method: liveUser ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(f),
+      }
+    );
+    const data = await res.json();
+    setSaving(false);
+    if (!res.ok) return setError(data.error || "Save failed.");
+    onClose(); router.refresh();
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title={liveUser ? "Update Live User" : "Add Live User"}>
+      <form onSubmit={submit} className="space-y-3">
+        <div>
+          <label className="label" htmlFor="lu-name">Nama</label>
+          <input id="lu-name" className="input" value={f.name} autoFocus required
+            onChange={(e) => setF((p) => ({ ...p, name: e.target.value }))}
+            placeholder="e.g. Nur Aisyah" />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="lu-type">Jenis</label>
+            <select id="lu-type" className="input cursor-pointer" value={f.user_type} required
+              onChange={(e) => setF((p) => ({ ...p, user_type: e.target.value }))}>
+              <option value="">— Pilih jenis —</option>
+              {LIVE_USER_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label" htmlFor="lu-phone">
+              No WhatsApp <span className="font-normal text-muted-fg">(optional)</span>
+            </label>
+            <input id="lu-phone" className="input" value={f.phone}
+              onChange={(e) => setF((p) => ({ ...p, phone: e.target.value }))}
+              placeholder="0123456789" />
+          </div>
+        </div>
+        {error && (
+          <p className="flex items-center gap-1.5 text-sm text-danger">
+            <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />{error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn" disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
+            Save
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function ListLiveUserTab({ liveUsers }: { liveUsers: LiveUser[] }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<LiveUser | null>(null);
+
+  async function remove(u: LiveUser) {
+    if (!(await confirmDialog({
+      title: `Padam "${u.name}"?`, danger: true,
+      text: "Semua live session untuk live user ini akan dipadam sekali.",
+    }))) return;
+    await fetch(`/api/marketer/live-users/${u.id}`, { method: "DELETE" });
+    router.refresh();
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="section-title">List Live User</h2>
+          <p className="text-sm text-muted-fg">
+            KOL, Affiliate Special, Founder, HQ. Tiada login — rekod sahaja.
+          </p>
+        </div>
+        <button className="btn !py-2" onClick={() => { setEditing(null); setOpen(true); }}>
+          <Plus className="h-4 w-4" aria-hidden="true" />Add Live User
+        </button>
+      </div>
+
+      {liveUsers.length === 0 ? (
+        <p className="card text-center text-sm text-muted-fg">
+          Belum ada live user — klik Add Live User.
+        </p>
+      ) : (
+        <div className="glass overflow-x-auto rounded-2xl">
+          <table className="w-full min-w-[560px] text-sm">
+            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+              <tr>
+                <th className="px-4 py-3 font-semibold">Nama</th>
+                <th className="px-4 py-3 font-semibold">Jenis</th>
+                <th className="px-4 py-3 font-semibold">No WhatsApp</th>
+                <th className="px-4 py-3 font-semibold">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {liveUsers.map((u) => (
+                <tr key={u.id} className="border-t border-line/60 hover:bg-white/50">
+                  <td className="px-4 py-3 font-semibold text-ink">{u.name}</td>
+                  <td className="px-4 py-3">
+                    <span className={`chip ${LIVE_TYPE_STYLE[u.user_type] || "bg-muted text-muted-fg"}`}>{u.user_type}</span>
+                  </td>
+                  <td className="px-4 py-3 text-muted-fg">{u.phone || "—"}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => { setEditing(u); setOpen(true); }}
+                        className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent"
+                        aria-label={`Edit ${u.name}`}>
+                        <Pencil className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      <button onClick={() => remove(u)}
+                        className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger"
+                        aria-label={`Delete ${u.name}`}>
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <LiveUserModal open={open} liveUser={editing} onClose={() => setOpen(false)} />
+    </div>
+  );
+}
+
+/** Add / edit a live session's schedule fields. */
+function LiveSessionModal({
+  open, session, liveUsers, onClose,
+}: { open: boolean; session: LiveSession | null; liveUsers: LiveUser[]; onClose: () => void }) {
+  const router = useRouter();
+  const [f, setF] = useState({ live_user_id: "", brand_id: "", live_date: "", start_time: "", end_time: "", note: "" });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setF({
+      live_user_id: session ? String(session.live_user_id) : "",
+      brand_id: session?.brand_id != null ? String(session.brand_id) : "",
+      live_date: session?.live_date || "",
+      start_time: session?.start_time || "",
+      end_time: session?.end_time || "",
+      note: session?.note || "",
+    });
+    setError("");
+  }, [open, session]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!f.live_user_id) return setError("Pilih live user.");
+    if (!f.live_date) return setError("Pilih tarikh.");
+    setSaving(true); setError("");
+    const res = await fetch(
+      session ? `/api/marketer/live-sessions/${session.id}` : "/api/marketer/live-sessions",
+      {
+        method: session ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(f),
+      }
+    );
+    const data = await res.json();
+    setSaving(false);
+    if (!res.ok) return setError(data.error || "Save failed.");
+    onClose(); router.refresh();
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title={session ? "Update Live Session" : "Add Live Session"}>
+      <form onSubmit={submit} className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="ls-user">Live User</label>
+            <select id="ls-user" className="input cursor-pointer" value={f.live_user_id} required
+              onChange={(e) => setF((p) => ({ ...p, live_user_id: e.target.value }))}>
+              <option value="">— Pilih —</option>
+              {liveUsers.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.user_type})</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label" htmlFor="ls-brand">Brand <span className="font-normal text-muted-fg">(optional)</span></label>
+            <BrandSelect id="ls-brand" value={f.brand_id} onChange={(v) => setF((p) => ({ ...p, brand_id: v }))} />
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label className="label" htmlFor="ls-date">Tarikh</label>
+            <input id="ls-date" type="date" className="input cursor-pointer" value={f.live_date} required
+              onChange={(e) => setF((p) => ({ ...p, live_date: e.target.value }))} />
+          </div>
+          <div>
+            <label className="label" htmlFor="ls-start">Mula</label>
+            <input id="ls-start" type="time" className="input cursor-pointer" value={f.start_time}
+              onChange={(e) => setF((p) => ({ ...p, start_time: e.target.value }))} />
+          </div>
+          <div>
+            <label className="label" htmlFor="ls-end">Tamat</label>
+            <input id="ls-end" type="time" className="input cursor-pointer" value={f.end_time}
+              onChange={(e) => setF((p) => ({ ...p, end_time: e.target.value }))} />
+          </div>
+        </div>
+        <div>
+          <label className="label" htmlFor="ls-note">Nota <span className="font-normal text-muted-fg">(optional)</span></label>
+          <textarea id="ls-note" className="input resize-none" rows={2} value={f.note}
+            onChange={(e) => setF((p) => ({ ...p, note: e.target.value }))} />
+        </div>
+        {error && (
+          <p className="flex items-center gap-1.5 text-sm text-danger">
+            <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />{error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn" disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
+            Save
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Enter / edit a live session's results (and mark complete). */
+function LiveResultModal({
+  open, session, onClose,
+}: { open: boolean; session: LiveSession | null; onClose: () => void }) {
+  const router = useRouter();
+  const [f, setF] = useState({ gmv: "", viewers: "", items_sold: "", duration_live: "", ad_spend: "", gross_revenue: "", roi: "" });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open || !session) return;
+    const s = (v: number | null) => (v == null ? "" : String(v));
+    setF({
+      gmv: s(session.gmv), viewers: s(session.viewers), items_sold: s(session.items_sold),
+      duration_live: session.duration_live || "", ad_spend: s(session.ad_spend),
+      gross_revenue: s(session.gross_revenue), roi: s(session.roi),
+    });
+    setError("");
+  }, [open, session]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!session) return;
+    setSaving(true); setError("");
+    const res = await fetch(`/api/marketer/live-sessions/${session.id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...f, complete: true }),
+    });
+    const data = await res.json();
+    setSaving(false);
+    if (!res.ok) return setError(data.error || "Save failed.");
+    onClose(); router.refresh();
+  }
+
+  const field = (key: keyof typeof f, label: string, ph = "") => (
+    <div>
+      <label className="label">{label}</label>
+      <input className="input" value={f[key]} inputMode="decimal" placeholder={ph}
+        onChange={(e) => setF((p) => ({ ...p, [key]: e.target.value }))} />
+    </div>
+  );
+
+  return (
+    <Modal open={open} onClose={onClose} title="Live Results">
+      <form onSubmit={submit} className="space-y-3">
+        <p className="text-sm text-muted-fg">
+          {session ? `${session.live_user_name} · ${fmtDate(session.live_date)}` : ""}
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {field("gmv", "GMV (RM)")}
+          {field("gross_revenue", "Gross Revenue (RM)")}
+          {field("ad_spend", "Ad Spend (RM)")}
+          {field("roi", "ROI")}
+          {field("viewers", "Viewers")}
+          {field("items_sold", "Items Sold")}
+          {field("duration_live", "Duration", "e.g. 2:15:00")}
+        </div>
+        {error && (
+          <p className="flex items-center gap-1.5 text-sm text-danger">
+            <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />{error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn" disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
+            Save results
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function LiveScheduleTab({
+  sessions, liveUsers, kind,
+}: { sessions: LiveSession[]; liveUsers: LiveUser[]; kind: "pending" | "success" }) {
+  const router = useRouter();
+  const params = useSearchParams();
+  const { from, to } = resolveRange(
+    { from: params.get("from"), to: params.get("to"), all: params.get("all") },
+    kind === "pending" ? "today" : "month"
+  );
+  const [brand, setBrand] = useState("");
+  const [editing, setEditing] = useState<LiveSession | null>(null);
+  const [openAdd, setOpenAdd] = useState(false);
+  const [result, setResult] = useState<LiveSession | null>(null);
+
+  const wantStatus = kind === "pending" ? "pending" : "completed";
+  const rows = sessions.filter((s) => {
+    if (s.status !== wantStatus) return false;
+    if (from && s.live_date < from) return false;
+    if (to && s.live_date > to) return false;
+    if (brand && String(s.brand_id ?? "") !== brand) return false;
+    return true;
+  });
+
+  async function remove(s: LiveSession) {
+    if (!(await confirmDialog({ title: "Padam live session ini?", danger: true }))) return;
+    await fetch(`/api/marketer/live-sessions/${s.id}`, { method: "DELETE" });
+    router.refresh();
+  }
+
+  const gmv = rows.reduce((a, r) => a + (r.gmv || 0), 0);
+  const spend = rows.reduce((a, r) => a + (r.ad_spend || 0), 0);
+  const gross = rows.reduce((a, r) => a + (r.gross_revenue || 0), 0);
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="section-title">{kind === "pending" ? "Pending Live" : "Success Live"}</h2>
+        {kind === "pending" && (
+          <button className="btn !py-2" onClick={() => { setEditing(null); setOpenAdd(true); }}
+            disabled={liveUsers.length === 0}
+            title={liveUsers.length === 0 ? "Tambah live user dahulu" : undefined}>
+            <CalendarPlus className="h-4 w-4" aria-hidden="true" />Add Live Session
+          </button>
+        )}
+      </div>
+
+      <DateRangeFilter count={rows.length} countNoun={["live", "live"]}
+        defaultMode={kind === "pending" ? "today" : "month"} />
+      <BrandFilterCard id={`live-${kind}-brand`} value={brand} onChange={setBrand} />
+
+      {kind === "success" && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Kpi Icon={CheckCircle2} label="Total Live" value={rows.length} />
+          <Kpi Icon={TrendingUp} label="GMV" value={money(gmv)} fill="yellow" />
+          <Kpi Icon={Wallet} label="Spend" value={money(spend)} fill="red" />
+          <Kpi Icon={TrendingUp} label="Gross Revenue" value={money(gross)} fill="emerald" />
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <p className="card text-center text-sm text-muted-fg">
+          {kind === "pending" ? "Tiada pending live dalam julat ini." : "Tiada success live dalam julat ini."}
+        </p>
+      ) : (
+        <div className="glass overflow-x-auto rounded-2xl">
+          <table className="w-full min-w-[820px] text-sm">
+            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+              <tr>
+                <th className="px-4 py-3 font-semibold">Live User</th>
+                <th className="px-4 py-3 font-semibold">Brand</th>
+                <th className="px-4 py-3 font-semibold">Date</th>
+                <th className="px-4 py-3 font-semibold">Time</th>
+                {kind === "success" ? (
+                  <>
+                    <th className="px-4 py-3 text-right font-semibold">GMV</th>
+                    <th className="px-4 py-3 text-right font-semibold">Spend</th>
+                    <th className="px-4 py-3 text-right font-semibold">Gross</th>
+                    <th className="px-4 py-3 text-right font-semibold">ROI</th>
+                    <th className="px-4 py-3 text-right font-semibold">Viewers</th>
+                    <th className="px-4 py-3 text-right font-semibold">Items</th>
+                    <th className="px-4 py-3 font-semibold">Duration</th>
+                  </>
+                ) : (
+                  <th className="px-4 py-3 font-semibold">Nota</th>
+                )}
+                <th className="px-4 py-3 font-semibold">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((s) => (
+                <tr key={s.id} className="border-t border-line/60 hover:bg-white/50">
+                  <td className="px-4 py-3">
+                    <div className="font-semibold text-ink">{s.live_user_name}</div>
+                    <span className={`chip mt-0.5 ${LIVE_TYPE_STYLE[s.user_type] || "bg-muted text-muted-fg"}`}>{s.user_type}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {s.brand_name
+                      ? <span className="chip bg-primary/10 text-primary">{s.brand_name}</span>
+                      : <span className="text-muted-fg/50">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-ink">{fmtDate(s.live_date)}</td>
+                  <td className="px-4 py-3 text-muted-fg">{fmtTimeRange(s.start_time, s.end_time) || "—"}</td>
+                  {kind === "success" ? (
+                    <>
+                      <td className="px-4 py-3 text-right font-semibold text-ink">{money(s.gmv)}</td>
+                      <td className="px-4 py-3 text-right">{money(s.ad_spend)}</td>
+                      <td className="px-4 py-3 text-right">{money(s.gross_revenue)}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-ink">{s.roi ?? "—"}</td>
+                      <td className="px-4 py-3 text-right">{int(s.viewers)}</td>
+                      <td className="px-4 py-3 text-right">{int(s.items_sold)}</td>
+                      <td className="px-4 py-3 text-muted-fg">{s.duration_live || "—"}</td>
+                    </>
+                  ) : (
+                    <td className="px-4 py-3 text-muted-fg">{s.note || "—"}</td>
+                  )}
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      {kind === "pending" && (
+                        <button onClick={() => setResult(s)}
+                          className="cursor-pointer rounded-lg bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-fg hover:opacity-90"
+                          title="Masukkan result & tandakan siap">
+                          Complete
+                        </button>
+                      )}
+                      <button onClick={() => (kind === "success" ? setResult(s) : (setEditing(s), setOpenAdd(true)))}
+                        className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent"
+                        aria-label="Edit">
+                        <Pencil className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      <button onClick={() => remove(s)}
+                        className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger"
+                        aria-label="Delete">
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <LiveSessionModal open={openAdd} session={editing} liveUsers={liveUsers} onClose={() => setOpenAdd(false)} />
+      <LiveResultModal open={!!result} session={result} onClose={() => setResult(null)} />
+    </>
+  );
+}
+
+function LiveReportingTab({ sessions, liveUsers }: { sessions: LiveSession[]; liveUsers: LiveUser[] }) {
+  const params = useSearchParams();
+  const { from, to } = resolveRange(
+    { from: params.get("from"), to: params.get("to"), all: params.get("all") },
+    "month"
+  );
+  const [brand, setBrand] = useState("");
+
+  const done = sessions.filter((s) => {
+    if (s.status !== "completed") return false;
+    if (from && s.live_date < from) return false;
+    if (to && s.live_date > to) return false;
+    if (brand && String(s.brand_id ?? "") !== brand) return false;
+    return true;
+  });
+
+  // Aggregate per live user.
+  const byUser = new Map<number, { u: LiveUser; lives: number; gmv: number; spend: number; gross: number; viewers: number; items: number }>();
+  for (const u of liveUsers) byUser.set(u.id, { u, lives: 0, gmv: 0, spend: 0, gross: 0, viewers: 0, items: 0 });
+  for (const s of done) {
+    const row = byUser.get(s.live_user_id);
+    if (!row) continue;
+    row.lives += 1;
+    row.gmv += s.gmv || 0;
+    row.spend += s.ad_spend || 0;
+    row.gross += s.gross_revenue || 0;
+    row.viewers += s.viewers || 0;
+    row.items += s.items_sold || 0;
+  }
+  const rows = [...byUser.values()].filter((r) => r.lives > 0).sort((a, b) => b.gmv - a.gmv);
+
+  const tGmv = rows.reduce((a, r) => a + r.gmv, 0);
+  const tSpend = rows.reduce((a, r) => a + r.spend, 0);
+  const tGross = rows.reduce((a, r) => a + r.gross, 0);
+  const tLives = rows.reduce((a, r) => a + r.lives, 0);
+  const tRoi = tSpend > 0 ? Math.round((tGross / tSpend) * 100) / 100 : null;
+
+  return (
+    <>
+      <h2 className="section-title">Reporting Live User</h2>
+      <DateRangeFilter count={tLives} countNoun={["live", "live"]} defaultMode="month" />
+      <BrandFilterCard id="live-report-brand" value={brand} onChange={setBrand} />
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <Kpi Icon={Users} label="Live Users" value={rows.length} />
+        <Kpi Icon={CheckCircle2} label="Total Live" value={tLives} />
+        <Kpi Icon={TrendingUp} label="GMV" value={money(tGmv)} fill="yellow" />
+        <Kpi Icon={Wallet} label="Spend" value={money(tSpend)} fill="red" />
+        <Kpi Icon={(tRoi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI" value={tRoi ?? "—"} />
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="card text-center text-sm text-muted-fg">
+          Tiada success live dalam julat ini.
+        </p>
+      ) : (
+        <div className="glass overflow-x-auto rounded-2xl">
+          <table className="w-full min-w-[820px] text-sm">
+            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+              <tr>
+                <th className="px-4 py-3 font-semibold">Live User</th>
+                <th className="px-4 py-3 font-semibold">Jenis</th>
+                <th className="px-4 py-3 text-right font-semibold">Total Live</th>
+                <th className="px-4 py-3 text-right font-semibold">GMV</th>
+                <th className="px-4 py-3 text-right font-semibold">Spend</th>
+                <th className="px-4 py-3 text-right font-semibold">Gross Revenue</th>
+                <th className="px-4 py-3 text-right font-semibold">ROI</th>
+                <th className="px-4 py-3 text-right font-semibold">Viewers</th>
+                <th className="px-4 py-3 text-right font-semibold">Items</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const roi = r.spend > 0 ? Math.round((r.gross / r.spend) * 100) / 100 : null;
+                return (
+                  <tr key={r.u.id} className="border-t border-line/60 hover:bg-white/50">
+                    <td className="px-4 py-3 font-semibold text-ink">{r.u.name}</td>
+                    <td className="px-4 py-3">
+                      <span className={`chip ${LIVE_TYPE_STYLE[r.u.user_type] || "bg-muted text-muted-fg"}`}>{r.u.user_type}</span>
+                    </td>
+                    <td className="px-4 py-3 text-right">{r.lives}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{money(r.gmv)}</td>
+                    <td className="px-4 py-3 text-right">{money(r.spend)}</td>
+                    <td className="px-4 py-3 text-right">{money(r.gross)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{roi ?? "—"}</td>
+                    <td className="px-4 py-3 text-right">{int(r.viewers)}</td>
+                    <td className="px-4 py-3 text-right">{int(r.items)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

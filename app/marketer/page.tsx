@@ -20,7 +20,7 @@ export default async function MarketerPage() {
 
   // All six reads are independent, so issue them together rather than paying
   // six sequential round trips to Postgres before the page can render.
-  const [affiliateRows, profileRows, lives, unknowns, salesLive, salesProduct, posts, overall, creatorReports] =
+  const [affiliateRows, profileRows, lives, unknowns, salesLive, salesProduct, posts, overall, creatorReports, liveUsers, liveSessions] =
     await Promise.all([
       db.prepare(
           `SELECT u.id, u.name, u.email, u.staff_id, u.phone, u.address, u.activated
@@ -155,6 +155,24 @@ export default async function MarketerPage() {
             WHERE c.marketer_id = ?
             ORDER BY c.report_date DESC`
         ).all(user.id) as Promise<any[]>,
+
+      db.prepare(
+          `SELECT id, name, user_type, phone
+             FROM live_users WHERE marketer_id = ? ORDER BY name`
+        ).all(user.id) as Promise<any[]>,
+
+      db.prepare(
+          `SELECT s.id, s.live_user_id, s.brand_id, s.live_date, s.start_time, s.end_time,
+                  s.status, s.note, s.ad_spend, s.gross_revenue, s.roi, s.gmv, s.viewers,
+                  s.items_sold, s.duration_live,
+                  lu.name AS live_user_name, lu.user_type,
+                  b.name AS brand_name
+             FROM live_sessions s
+             JOIN live_users lu ON lu.id = s.live_user_id
+             LEFT JOIN brands b ON b.id = s.brand_id
+            WHERE s.marketer_id = ?
+            ORDER BY s.live_date DESC, s.start_time DESC`
+        ).all(user.id) as Promise<any[]>,
     ]);
 
   const affiliates = plain(affiliateRows).map((a: any) => ({
@@ -169,6 +187,7 @@ export default async function MarketerPage() {
       unknowns={plain(unknowns)} salesLive={plain(salesLive)}
       salesProduct={plain(salesProduct)}
       overall={plain(overall)} posts={plain(posts)}
-      creatorReports={plain(creatorReports)} />
+      creatorReports={plain(creatorReports)}
+      liveUsers={plain(liveUsers)} liveSessions={plain(liveSessions)} />
   );
 }

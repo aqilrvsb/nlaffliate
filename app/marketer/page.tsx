@@ -20,7 +20,7 @@ export default async function MarketerPage() {
 
   // All six reads are independent, so issue them together rather than paying
   // six sequential round trips to Postgres before the page can render.
-  const [affiliateRows, profileRows, lives, unknowns, salesLive, salesProduct, posts, overall, creatorReports, liveUsers, liveSessions] =
+  const [affiliateRows, profileRows, lives, unknowns, salesLive, salesProduct, posts, overall, creatorReports, liveUsers, liveSessions, dataQuality] =
     await Promise.all([
       db.prepare(
           `SELECT u.id, u.name, u.email, u.staff_id, u.phone, u.address, u.activated
@@ -173,6 +173,16 @@ export default async function MarketerPage() {
             WHERE s.marketer_id = ?
             ORDER BY s.live_date DESC, s.start_time DESC`
         ).all(user.id) as Promise<any[]>,
+
+      db.prepare(
+          `SELECT q.id, to_char(q.report_date, 'YYYY-MM-DD') AS report_date,
+                  q.brand_id, b.name AS brand_name, q.product_id, q.product_name,
+                  q.inque, q.learning, q.delivering
+             FROM data_quality q
+             LEFT JOIN brands b ON b.id = q.brand_id
+            WHERE q.marketer_id = ?
+            ORDER BY q.report_date DESC, q.id DESC`
+        ).all(user.id) as Promise<any[]>,
     ]);
 
   const affiliates = plain(affiliateRows).map((a: any) => ({
@@ -188,6 +198,7 @@ export default async function MarketerPage() {
       salesProduct={plain(salesProduct)}
       overall={plain(overall)} posts={plain(posts)}
       creatorReports={plain(creatorReports)}
-      liveUsers={plain(liveUsers)} liveSessions={plain(liveSessions)} />
+      liveUsers={plain(liveUsers)} liveSessions={plain(liveSessions)}
+      dataQuality={plain(dataQuality)} />
   );
 }

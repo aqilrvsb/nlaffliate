@@ -11,7 +11,7 @@ import {
   HelpCircle, Upload, ImagePlus, TrendingDown, Pencil, BarChart3,
   PackageSearch, FileSpreadsheet, ShoppingCart, Layers, Eye, MousePointerClick,
   Send, Boxes, ClipboardList, Tag, CalendarPlus, Trash2, AlertCircle, Settings, Plus,
-  Package,
+  Package, ListChecks,
 } from "lucide-react";
 import { AffiliateModal, AffiliateActions, ActivateAffiliate, type ManagedAffiliate } from "./AffiliateManager";
 import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
@@ -129,6 +129,12 @@ type LiveSession = {
   live_user_name: string; user_type: string; brand_name: string | null;
 };
 const LIVE_USER_TYPES = ["KOL", "Affiliate Special", "Founder", "HQ"] as const;
+type DataQuality = {
+  id: number; report_date: string;
+  brand_id: number | null; brand_name: string | null;
+  product_id: number | null; product_name: string | null;
+  inque: number; learning: number; delivering: number;
+};
 
 // Sidebar structure: a couple of top-level items + one expandable group.
 const AFFILIATE_CHILDREN = [
@@ -180,16 +186,17 @@ const TAB_LABELS: Record<string, string> = {
   "live-pending": "Pending Live",
   "live-success": "Success Live",
   "live-reporting": "Reporting Live User",
+  "data-quality": "Data Quality",
 };
 
 export default function MarketerShell({
   user, affiliates, lives, unknowns, salesLive, salesProduct, overall, posts, creatorReports,
-  liveUsers, liveSessions,
+  liveUsers, liveSessions, dataQuality,
 }: {
   user: SessionUser; affiliates: Affiliate[]; lives: Live[];
   unknowns: Unknown[]; salesLive: SalesLive[]; salesProduct: SalesProduct[];
   overall: Overall[]; posts: Post[]; creatorReports: CreatorReport[];
-  liveUsers: LiveUser[]; liveSessions: LiveSession[];
+  liveUsers: LiveUser[]; liveSessions: LiveSession[]; dataQuality: DataQuality[];
 }) {
   const router = useRouter();
   const { navigate, prefetch, pending: navPending } = useNavigate();
@@ -419,6 +426,15 @@ export default function MarketerShell({
               Beg Kuning + Creator
             </button>
 
+            {/* Data Quality — its own main category */}
+            <button onClick={() => go("data-quality")}
+              className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
+                active === "data-quality" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
+              }`}>
+              <NavIcon Icon={ListChecks} busy={navPending && navKey === "data-quality"} />
+              Data Quality
+            </button>
+
             {/* Pillar group */}
             <button onClick={() => setPillarOpen((o) => !o)}
               className={`mt-1 flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
@@ -535,6 +551,7 @@ export default function MarketerShell({
           {active === "live-pending" && <LiveScheduleTab sessions={liveSessions} liveUsers={liveUsers} kind="pending" />}
           {active === "live-success" && <LiveScheduleTab sessions={liveSessions} liveUsers={liveUsers} kind="success" />}
           {active === "live-reporting" && <LiveReportingTab sessions={liveSessions} liveUsers={liveUsers} />}
+          {active === "data-quality" && <DataQualityTab rows={dataQuality} />}
           {active === "pillar-create" && <PillarCreate />}
           {active === "pillar-report" && <PillarReport />}
         </div>
@@ -3265,6 +3282,209 @@ function LiveReportingTab({ sessions, liveUsers }: { sessions: LiveSession[]; li
             </tbody>
           </table>
         </div>
+      )}
+    </>
+  );
+}
+
+/* ── Data Quality ──────────────────────────────────────── */
+
+function DataQualityForm() {
+  const router = useRouter();
+  const [date, setDate] = useState("");
+  const [brand, setBrand] = useState("");
+  const [product, setProduct] = useState("");
+  const [products, setProducts] = useState<{ id: number; name: string }[]>([]);
+  const [inque, setInque] = useState("");
+  const [learning, setLearning] = useState("");
+  const [delivering, setDelivering] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
+
+  // Product dropdown is populated from the chosen brand's catalogue.
+  useEffect(() => {
+    setProduct("");
+    if (!brand) { setProducts([]); return; }
+    fetch(`/api/products?brand=${brand}`)
+      .then((r) => r.json())
+      .then((d) => setProducts(d.products || []))
+      .catch(() => setProducts([]));
+  }, [brand]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!date) return setError("Pilih tarikh.");
+    if (!brand) return setError("Pilih brand.");
+    if (!product) return setError("Pilih product.");
+    if (inque === "" || learning === "" || delivering === "")
+      return setError("Isi semua nombor (Inque, Learning, Delivering).");
+    setBusy(true); setError(""); setMsg("");
+    const res = await fetch("/api/marketer/data-quality", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        report_date: date, brand_id: brand, product_id: product,
+        inque, learning, delivering,
+      }),
+    });
+    const data = await res.json();
+    setBusy(false);
+    if (!res.ok) return setError(data.error || "Gagal simpan.");
+    setMsg("Disimpan");
+    setInque(""); setLearning(""); setDelivering("");
+    router.refresh();
+  }
+
+  return (
+    <form onSubmit={submit} className="card space-y-3">
+      <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
+        <ListChecks className="h-4 w-4 text-primary" aria-hidden="true" />
+        Data Quality — key in video status
+      </p>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div>
+          <label className="label" htmlFor="dq-date">Tarikh</label>
+          <input id="dq-date" type="date" className="input cursor-pointer" value={date} required
+            onChange={(e) => setDate(e.target.value)} />
+        </div>
+        <div>
+          <label className="label" htmlFor="dq-brand">Brand</label>
+          <BrandSelect id="dq-brand" value={brand} onChange={setBrand} />
+        </div>
+        <div>
+          <label className="label" htmlFor="dq-product">Product</label>
+          <select id="dq-product" className="input cursor-pointer" value={product} required
+            onChange={(e) => setProduct(e.target.value)} disabled={!brand}>
+            <option value="">{brand ? "— Pilih product —" : "Pilih brand dahulu"}</option>
+            {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div>
+          <label className="label" htmlFor="dq-inque">Inque</label>
+          <input id="dq-inque" type="number" min={0} className="input" value={inque} required
+            onChange={(e) => setInque(e.target.value)} placeholder="0" />
+        </div>
+        <div>
+          <label className="label" htmlFor="dq-learning">Learning</label>
+          <input id="dq-learning" type="number" min={0} className="input" value={learning} required
+            onChange={(e) => setLearning(e.target.value)} placeholder="0" />
+        </div>
+        <div>
+          <label className="label" htmlFor="dq-delivering">Delivering</label>
+          <input id="dq-delivering" type="number" min={0} className="input" value={delivering} required
+            onChange={(e) => setDelivering(e.target.value)} placeholder="0" />
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <button className="btn !py-2.5" disabled={busy}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
+          Submit
+        </button>
+        <p className="text-[11px] text-muted-fg">
+          Key in brand + product + tarikh yang sama untuk kemas kini rekod itu.
+        </p>
+        {msg && <span className="text-xs font-medium text-emerald-600">{msg}</span>}
+        {error && <span className="text-xs text-danger">{error}</span>}
+      </div>
+    </form>
+  );
+}
+
+function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
+  const router = useRouter();
+  const params = useSearchParams();
+  const { from, to } = resolveRange(
+    { from: params.get("from"), to: params.get("to"), all: params.get("all") },
+    "month"
+  );
+  const [brand, setBrand] = useState("");
+  const unsorted = all.filter((r) => {
+    if (from && r.report_date < from) return false;
+    if (to && r.report_date > to) return false;
+    if (brand && String(r.brand_id ?? "") !== brand) return false;
+    return true;
+  });
+  const { sorted: rows, sort, toggleSort } = useTableSort(unsorted);
+
+  const inque = rows.reduce((s, r) => s + (r.inque || 0), 0);
+  const learning = rows.reduce((s, r) => s + (r.learning || 0), 0);
+  const delivering = rows.reduce((s, r) => s + (r.delivering || 0), 0);
+  const total = inque + learning + delivering;
+
+  const page = getPage(params.get("page"));
+  const pageRows = paginate(rows, page, 20);
+
+  async function remove(r: DataQuality) {
+    if (!(await confirmDialog({ title: "Padam rekod ini?", danger: true }))) return;
+    await fetch(`/api/marketer/data-quality/${r.id}`, { method: "DELETE" });
+    router.refresh();
+  }
+
+  return (
+    <>
+      <DataQualityForm />
+      <DateRangeFilter count={rows.length} countNoun={["rekod", "rekod"]} defaultMode="month" />
+      <BrandFilterCard id="dq-filter-brand" value={brand} onChange={setBrand} />
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Kpi Icon={ListChecks} label="Total Video" value={int(total)} fill="yellow" />
+        <Kpi Icon={Clock} label="Total Video Inque" value={int(inque)} />
+        <Kpi Icon={Boxes} label="Total Video Learning" value={int(learning)} />
+        <Kpi Icon={Send} label="Total Video Delivering" value={int(delivering)} fill="emerald" />
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="card text-center text-sm text-muted-fg">
+          Tiada rekod dalam julat ini. Key in di atas.
+        </p>
+      ) : (
+        <>
+          <div className="glass overflow-x-auto rounded-2xl">
+            <table className="w-full min-w-[820px] text-sm">
+              <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">No</th>
+                  <SortTh k="brand_name" sort={sort} on={toggleSort}>Brand</SortTh>
+                  <SortTh k="report_date" sort={sort} on={toggleSort}>Date</SortTh>
+                  <SortTh k="product_name" sort={sort} on={toggleSort}>Product</SortTh>
+                  <SortTh k="inque" sort={sort} on={toggleSort} right>Inque</SortTh>
+                  <SortTh k="learning" sort={sort} on={toggleSort} right>Learning</SortTh>
+                  <SortTh k="delivering" sort={sort} on={toggleSort} right>Delivering</SortTh>
+                  <th className="px-4 py-3 text-right font-semibold">Total</th>
+                  <th className="px-4 py-3 font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map((r, i) => (
+                  <tr key={r.id} className="border-t border-line/60 hover:bg-white/50">
+                    <td className="px-4 py-3 text-muted-fg">{(page - 1) * 20 + i + 1}</td>
+                    <td className="px-4 py-3">
+                      {r.brand_name
+                        ? <span className="chip bg-primary/10 text-primary">{r.brand_name}</span>
+                        : <span className="text-muted-fg/50">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-ink">{fmtDMY(r.report_date)}</td>
+                    <td className="px-4 py-3 text-ink">{r.product_name || "—"}</td>
+                    <td className="px-4 py-3 text-right">{int(r.inque)}</td>
+                    <td className="px-4 py-3 text-right">{int(r.learning)}</td>
+                    <td className="px-4 py-3 text-right">{int(r.delivering)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{int((r.inque || 0) + (r.learning || 0) + (r.delivering || 0))}</td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => remove(r)}
+                        className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger"
+                        aria-label="Delete">
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pagination page={page} total={rows.length} size={20} />
+        </>
       )}
     </>
   );

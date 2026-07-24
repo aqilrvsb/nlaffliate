@@ -42,10 +42,12 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   await db.prepare(
       `UPDATE data_quality
           SET brand_id = ?, product_id = ?, product_name = ?, report_date = ?,
-              inque = ?, learning = ?, delivering = ?
+              inque = ?, learning = ?, delivering = ?,
+              exploring = ?, explored = ?, outstanding = ?, performing = ?
         WHERE id = ?`
     ).run(brandId, p.id, p.name, reportDate,
-          intOr0(body.inque), intOr0(body.learning), intOr0(body.delivering), id);
+          intOr0(body.inque), intOr0(body.learning), intOr0(body.delivering),
+          intOr0(body.exploring), intOr0(body.explored), intOr0(body.outstanding), intOr0(body.performing), id);
   return NextResponse.json({ ok: true });
 }
 

@@ -27,6 +27,10 @@ export async function POST(req: Request) {
   const inque = intOr0(body.inque);
   const learning = intOr0(body.learning);
   const delivering = intOr0(body.delivering);
+  const exploring = intOr0(body.exploring);
+  const explored = intOr0(body.explored);
+  const outstanding = intOr0(body.outstanding);
+  const performing = intOr0(body.performing);
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(reportDate))
     return NextResponse.json({ error: "Pilih tarikh yang sah." }, { status: 400 });
@@ -56,9 +60,11 @@ export async function POST(req: Request) {
 
   const info = await db.prepare(
       `INSERT INTO data_quality
-         (marketer_id, brand_id, product_id, product_name, report_date, inque, learning, delivering)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`
-    ).run(user.id, brandId, pid, productName, reportDate, inque, learning, delivering);
+         (marketer_id, brand_id, product_id, product_name, report_date, inque, learning, delivering,
+          exploring, explored, outstanding, performing)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`
+    ).run(user.id, brandId, pid, productName, reportDate, inque, learning, delivering,
+          exploring, explored, outstanding, performing);
 
   return NextResponse.json({ ok: true, id: Number(info.lastInsertRowid) });
 }

@@ -158,6 +158,7 @@ type DataQuality = {
   brand_id: number | null; brand_name: string | null;
   product_id: number | null; product_name: string | null;
   inque: number; learning: number; delivering: number;
+  exploring: number; explored: number; outstanding: number; performing: number;
 };
 
 // Sidebar structure: a couple of top-level items + one expandable group.
@@ -3948,7 +3949,7 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
   const { sorted: rows, sort, toggleSort } = useTableSort(unsorted);
 
   // Entry form (also edits a row in place).
-  const empty = { date: "", brand: "", product: "", inque: "", learning: "", delivering: "" };
+  const empty = { date: "", brand: "", product: "", inque: "", learning: "", delivering: "", exploring: "", explored: "", outstanding: "", performing: "" };
   const [f, setF] = useState(empty);
   const [editId, setEditId] = useState<number | null>(null);
   const [productList, setProductList] = useState<{ id: number; name: string }[]>([]);
@@ -3973,6 +3974,8 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
       date: r.report_date, brand: r.brand_id != null ? String(r.brand_id) : "",
       product: r.product_id != null ? String(r.product_id) : "",
       inque: String(r.inque ?? ""), learning: String(r.learning ?? ""), delivering: String(r.delivering ?? ""),
+      exploring: String(r.exploring ?? ""), explored: String(r.explored ?? ""),
+      outstanding: String(r.outstanding ?? ""), performing: String(r.performing ?? ""),
     });
     setEditId(r.id); setError(""); setMsg("");
   }
@@ -3982,8 +3985,9 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
     if (!f.date) return setError("Pilih tarikh.");
     if (!f.brand) return setError("Pilih brand.");
     if (!f.product) return setError("Pilih product.");
-    if (f.inque === "" || f.learning === "" || f.delivering === "")
-      return setError("Isi semua nombor (Inque, Learning, Delivering).");
+    if (f.inque === "" || f.learning === "" || f.delivering === ""
+        || f.exploring === "" || f.explored === "" || f.outstanding === "" || f.performing === "")
+      return setError("Isi semua nombor.");
     setBusy(true); setError(""); setMsg("");
     const res = await fetch(
       editId ? `/api/marketer/data-quality/${editId}` : "/api/marketer/data-quality",
@@ -3992,6 +3996,7 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
         body: JSON.stringify({
           report_date: f.date, brand_id: f.brand, product_id: f.product,
           inque: f.inque, learning: f.learning, delivering: f.delivering,
+          exploring: f.exploring, explored: f.explored, outstanding: f.outstanding, performing: f.performing,
         }),
       }
     );
@@ -4010,9 +4015,10 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
     router.refresh();
   }
 
-  const inque = rows.reduce((s, r) => s + (r.inque || 0), 0);
-  const learning = rows.reduce((s, r) => s + (r.learning || 0), 0);
-  const delivering = rows.reduce((s, r) => s + (r.delivering || 0), 0);
+  const dsum = (k: keyof DataQuality) => rows.reduce((s, r) => s + ((r[k] as number) || 0), 0);
+  const inque = dsum("inque"), learning = dsum("learning"), delivering = dsum("delivering");
+  const exploring = dsum("exploring"), explored = dsum("explored");
+  const outstanding = dsum("outstanding"), performing = dsum("performing");
   const total = inque + learning + delivering;
 
   const page = getPage(params.get("page"));
@@ -4062,6 +4068,28 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
               onChange={(e) => setF((p) => ({ ...p, delivering: e.target.value }))} />
           </div>
         </div>
+        <div className="grid gap-3 sm:grid-cols-4">
+          <div>
+            <label className="label">Exploring</label>
+            <input type="number" min={0} className="input" value={f.exploring} required placeholder="0"
+              onChange={(e) => setF((p) => ({ ...p, exploring: e.target.value }))} />
+          </div>
+          <div>
+            <label className="label">Explored</label>
+            <input type="number" min={0} className="input" value={f.explored} required placeholder="0"
+              onChange={(e) => setF((p) => ({ ...p, explored: e.target.value }))} />
+          </div>
+          <div>
+            <label className="label">Outstanding</label>
+            <input type="number" min={0} className="input" value={f.outstanding} required placeholder="0"
+              onChange={(e) => setF((p) => ({ ...p, outstanding: e.target.value }))} />
+          </div>
+          <div>
+            <label className="label">Performing</label>
+            <input type="number" min={0} className="input" value={f.performing} required placeholder="0"
+              onChange={(e) => setF((p) => ({ ...p, performing: e.target.value }))} />
+          </div>
+        </div>
         <div className="flex items-center gap-3">
           <button className="btn !py-2.5" disabled={busy}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
@@ -4083,6 +4111,12 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
         <Kpi Icon={Boxes} label="Total Video Learning" value={int(learning)} />
         <Kpi Icon={Send} label="Total Video Delivering" value={int(delivering)} fill="emerald" />
       </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Kpi Icon={Eye} label="Exploring" value={int(exploring)} />
+        <Kpi Icon={CheckCircle2} label="Explored" value={int(explored)} />
+        <Kpi Icon={TrendingUp} label="Outstanding" value={int(outstanding)} fill="yellow" />
+        <Kpi Icon={TrendingUp} label="Performing" value={int(performing)} fill="emerald" />
+      </div>
 
       {rows.length === 0 ? (
         <p className="card text-center text-sm text-muted-fg">
@@ -4101,6 +4135,10 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
                   <SortTh k="inque" sort={sort} on={toggleSort} right>Inque</SortTh>
                   <SortTh k="learning" sort={sort} on={toggleSort} right>Learning</SortTh>
                   <SortTh k="delivering" sort={sort} on={toggleSort} right>Delivering</SortTh>
+                  <SortTh k="exploring" sort={sort} on={toggleSort} right>Exploring</SortTh>
+                  <SortTh k="explored" sort={sort} on={toggleSort} right>Explored</SortTh>
+                  <SortTh k="outstanding" sort={sort} on={toggleSort} right>Outstanding</SortTh>
+                  <SortTh k="performing" sort={sort} on={toggleSort} right>Performing</SortTh>
                   <th className="px-4 py-3 text-right font-semibold">Total</th>
                   <th className="px-4 py-3 font-semibold">Action</th>
                 </tr>
@@ -4119,6 +4157,10 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
                     <td className="px-4 py-3 text-right">{int(r.inque)}</td>
                     <td className="px-4 py-3 text-right">{int(r.learning)}</td>
                     <td className="px-4 py-3 text-right">{int(r.delivering)}</td>
+                    <td className="px-4 py-3 text-right">{int(r.exploring)}</td>
+                    <td className="px-4 py-3 text-right">{int(r.explored)}</td>
+                    <td className="px-4 py-3 text-right">{int(r.outstanding)}</td>
+                    <td className="px-4 py-3 text-right">{int(r.performing)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{int((r.inque || 0) + (r.learning || 0) + (r.delivering || 0))}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">

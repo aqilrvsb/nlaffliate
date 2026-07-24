@@ -176,7 +176,8 @@ export default async function MarketerPage() {
       db.prepare(
           `SELECT q.id, to_char(q.report_date, 'YYYY-MM-DD') AS report_date,
                   q.brand_id, b.name AS brand_name, q.product_id, q.product_name,
-                  q.inque, q.learning, q.delivering
+                  q.inque, q.learning, q.delivering,
+                  q.exploring, q.explored, q.outstanding, q.performing
              FROM data_quality q
              LEFT JOIN brands b ON b.id = q.brand_id
             WHERE q.marketer_id = ?

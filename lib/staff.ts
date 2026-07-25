@@ -10,7 +10,7 @@ import db from "@/lib/db";
  */
 
 const PREFIX: Record<string, { seq: string; code: string }> = {
-  admin:     { seq: "staff_seq_adm", code: "ADMINNL" },
+  admin:     { seq: "staff_seq_adm", code: "ADMINHQ" },
   marketer:  { seq: "staff_seq_mnl", code: "MNL" },
   affiliate: { seq: "staff_seq_afl", code: "AFL" },
   leader:    { seq: "staff_seq_lmnl", code: "LMNL" },

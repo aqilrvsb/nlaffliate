@@ -166,15 +166,13 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   // say what would be lost instead of doing it silently.
   const o = await count("SELECT COUNT(*)::int AS n FROM overall_reports WHERE brand_id = ?");
   const p = await count("SELECT COUNT(*)::int AS n FROM pillar_entries WHERE brand_id = ?");
-  const g = await count("SELECT COUNT(*)::int AS n FROM product_gmv WHERE brand_id = ?");
   // Lives are the affiliate's own history, so they survive and simply lose
   // the brand tag (ON DELETE SET NULL) — worth saying, since it differs.
   const l = await count("SELECT COUNT(*)::int AS n FROM bookings WHERE brand_id = ?");
 
-  if (o + p + g + l > 0 && !force) {
+  if (o + p + l > 0 && !force) {
     const removed = [
       `${o} Overall report(s)`,
-      `${g} Product GMV row(s)`,
       `${p} Pillar entr(ies)`,
     ].join(", ");
     const kept = l > 0 ? ` ${l} scheduled live(s) will be kept but lose their brand tag.` : "";
@@ -183,7 +181,6 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
         error: `Deleting this brand removes ${removed}.${kept}`,
         needsConfirm: true,
         overall: o,
-        products: g,
         pillars: p,
         lives: l,
       },

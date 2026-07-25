@@ -62,9 +62,6 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
       overall_reports: await count(
         "SELECT COUNT(*)::int AS n FROM overall_reports WHERE marketer_id = ?"
       ),
-      product_gmv_rows: await count(
-        "SELECT COUNT(*)::int AS n FROM product_gmv WHERE marketer_id = ?"
-      ),
       pillar_entries: await count(
         "SELECT COUNT(*)::int AS n FROM pillar_entries WHERE marketer_id = ?"
       ),

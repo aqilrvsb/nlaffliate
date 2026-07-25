@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(req: Request) {
   const user = await getSession();
-  if (!user || user.role !== "marketer")
+  if (!user || user.role !== "marketer" && user.role !== "leader")
     return NextResponse.json({ error: "Marketers only." }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));

@@ -200,6 +200,7 @@ const TAB_LABELS: Record<string, string> = {
   "pillar-create": "Create Pillar",
   "pillar-report": "Reporting Pillar",
   dashboard: "Dashboard",
+  team: "List Marketer",
   affiliates: "List Affiliate",
   pending: "Pending Affiliate",
   success: "Success Affiliate",
@@ -226,7 +227,7 @@ const TAB_LABELS: Record<string, string> = {
 export default function MarketerShell({
   user, affiliates, lives, unknowns, salesLive, salesProduct, overall, posts, creatorReports,
   liveUsers, liveSessions, dataQuality, salesCard, spendTtm, reportingSheet,
-  salesLiveCampaign, salesProductCampaign, marketers = [], viewMid = null,
+  salesLiveCampaign, salesProductCampaign, marketers = [], viewMode = "own", canEdit = true,
 }: {
   user: SessionUser; affiliates: Affiliate[]; lives: Live[];
   unknowns: Unknown[]; salesLive: SalesLive[]; salesProduct: SalesProduct[];
@@ -234,7 +235,11 @@ export default function MarketerShell({
   liveUsers: LiveUser[]; liveSessions: LiveSession[]; dataQuality: DataQuality[];
   salesCard: SalesCard[]; spendTtm: SpendTtm[]; reportingSheet: ReportingSheetRow[];
   salesLiveCampaign: SalesCampaign[]; salesProductCampaign: SalesCampaign[];
-  marketers?: { id: number; name: string; staff_id: string | null }[]; viewMid?: number | null;
+  marketers?: { id: number; name: string; staff_id: string | null }[];
+  /** Leader switcher state: own workspace, whole team, or one teammate id. */
+  viewMode?: "own" | "all" | number;
+  /** False when a leader is monitoring someone else — hide entry controls. */
+  canEdit?: boolean;
 }) {
   const router = useRouter();
   const { navigate, prefetch, pending: navPending } = useNavigate();
@@ -267,11 +272,11 @@ export default function MarketerShell({
     setNavOpen(false);
   }
 
-  // Leader-only: switch which marketer the whole dashboard is scoped to
-  // ("" = all marketers summed). Keeps the current tab and filters.
-  function goMarketer(id: string) {
+  // Leader-only: switch scope. "" = Saya (own, editable), "all" = whole team
+  // aggregate, a numeric id = one teammate. Keeps the current tab and filters.
+  function goMarketer(val: string) {
     const next = new URLSearchParams(params.toString());
-    if (id) next.set("m", id); else next.delete("m");
+    if (val) next.set("m", val); else next.delete("m");
     next.delete("page");
     const qs = next.toString();
     navigate(qs ? `/marketer?${qs}` : "/marketer");
@@ -336,6 +341,17 @@ export default function MarketerShell({
               <NavIcon Icon={LayoutDashboard} busy={navPending && navKey === "dashboard"} />
               Dashboard
             </button>
+
+            {/* Leader-only: manage the marketers under this leader. */}
+            {user.role === "leader" && (
+              <button onClick={() => go("team")}
+                className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
+                  active === "team" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
+                }`}>
+                <NavIcon Icon={Users} busy={navPending && navKey === "team"} />
+                List Marketer
+              </button>
+            )}
 
             {/* Brand leads: everything below is scoped by it. */}
             <button onClick={() => go("brand")}
@@ -583,30 +599,35 @@ export default function MarketerShell({
 
         <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
           {user.role === "leader" && (
-            <div className="card flex flex-wrap items-center gap-3 border-amber-200 bg-amber-50/60">
-              <span className="flex items-center gap-2 text-sm text-amber-800">
-                <Eye className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <b>Leader view</b> — read-only.
+            <div className={`card flex flex-wrap items-center gap-3 ${canEdit ? "border-emerald-200 bg-emerald-50/60" : "border-amber-200 bg-amber-50/60"}`}>
+              <span className={`flex items-center gap-2 text-sm ${canEdit ? "text-emerald-800" : "text-amber-800"}`}>
+                {canEdit
+                  ? <><Pencil className="h-4 w-4 shrink-0" aria-hidden="true" /><b>Workspace saya</b> — boleh edit.</>
+                  : <><Eye className="h-4 w-4 shrink-0" aria-hidden="true" /><b>Monitor</b> — read-only.</>}
               </span>
               <div className="flex w-full items-center gap-2 sm:w-auto">
-                <label className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-amber-800" htmlFor="ldr-mkt">Marketer</label>
+                <label className={`shrink-0 text-[11px] font-bold uppercase tracking-wide ${canEdit ? "text-emerald-800" : "text-amber-800"}`} htmlFor="ldr-mkt">Papar</label>
                 <div className="relative min-w-0 flex-1 sm:flex-none">
                   <select id="ldr-mkt" disabled={navPending}
                     className="input w-full max-w-full cursor-pointer !py-1.5 pr-8 text-sm transition disabled:cursor-wait disabled:opacity-60 sm:!w-64"
-                    value={viewMid != null ? String(viewMid) : ""}
+                    value={viewMode === "own" ? "" : String(viewMode)}
                     onChange={(e) => goMarketer(e.target.value)}>
-                    <option value="">Semua Marketer (jumlah)</option>
+                    <option value="">Saya (workspace saya)</option>
+                    {marketers.length > 0 && <option value="all">Semua Team (jumlah)</option>}
                     {marketers.map((m) => (
                       <option key={m.id} value={m.id}>{m.name}{m.staff_id ? ` (${m.staff_id})` : ""}</option>
                     ))}
                   </select>
                   {navPending && (
-                    <Loader2 className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-amber-600" aria-hidden="true" />
+                    <Loader2 className={`pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin ${canEdit ? "text-emerald-600" : "text-amber-600"}`} aria-hidden="true" />
                   )}
                 </div>
               </div>
-              <span className="flex items-center gap-1.5 text-xs text-amber-800/80 transition-opacity">
-                {navPending ? "Memuatkan…" : viewMid != null ? "Menunjukkan satu marketer." : "Semua marketer digabungkan."}
+              <span className={`flex items-center gap-1.5 text-xs transition-opacity ${canEdit ? "text-emerald-800/80" : "text-amber-800/80"}`}>
+                {navPending ? "Memuatkan…"
+                  : viewMode === "own" ? "Data marketer anda sendiri."
+                  : viewMode === "all" ? "Semua team digabungkan."
+                  : "Menunjukkan satu marketer team."}
               </span>
             </div>
           )}
@@ -657,8 +678,149 @@ export default function MarketerShell({
           {active === "reporting-sheet" && <ReportingSheetTab rows={reportingSheet} userName={user.name} />}
           {active === "pillar-create" && <PillarCreate />}
           {active === "pillar-report" && <PillarReport />}
+          {active === "team" && user.role === "leader" && (
+            <LeaderTeamTab team={marketers} onView={(id) => goMarketer(String(id))} />
+          )}
         </div>
       </main>
+    </div>
+  );
+}
+
+/* ── List Marketer (leader) ────────────────────────────── */
+
+/**
+ * A leader's team roster. Shows the marketers assigned to them, and lets the
+ * leader claim ("COP") another marketer by staff ID. The server refuses a
+ * marketer already held by a different leader, so two leaders can't share one.
+ */
+function LeaderTeamTab({ team, onView }: {
+  team: { id: number; name: string; staff_id: string | null }[];
+  onView: (id: number) => void;
+}) {
+  const { refresh } = useNavigate();
+  const [staffId, setStaffId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function claim(e: React.FormEvent) {
+    e.preventDefault();
+    const id = staffId.trim().toUpperCase();
+    if (!id) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/leader/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staff_id: id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMsg({ ok: false, text: data.error || "Gagal COP marketer." });
+      } else {
+        setMsg({ ok: true, text: `${data.name || id} kini dalam team anda.` });
+        setStaffId("");
+        refresh();
+      }
+    } catch {
+      setMsg({ ok: false, text: "Ralat rangkaian." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function release(id: number, name: string) {
+    if (!confirm(`Keluarkan ${name} dari team anda?`)) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/leader/claim", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ marketer_id: id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) setMsg({ ok: false, text: data.error || "Gagal keluarkan." });
+      else { setMsg({ ok: true, text: `${name} dikeluarkan dari team.` }); refresh(); }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* COP box */}
+      <div className="card space-y-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-bold text-ink">
+            <Plus className="h-5 w-5 text-primary" aria-hidden="true" /> COP Marketer
+          </h2>
+          <p className="mt-1 text-sm text-muted-fg">
+            Masukkan ID Staff marketer (cth. <span className="font-mono">MNL-007</span>) untuk letak dia bawah jagaan anda.
+          </p>
+        </div>
+        <form onSubmit={claim} className="flex flex-wrap items-center gap-2">
+          <input className="input font-mono w-full sm:w-56" placeholder="MNL-001"
+            value={staffId} onChange={(e) => setStaffId(e.target.value)}
+            autoCapitalize="characters" spellCheck={false} />
+          <button className="btn" disabled={busy || !staffId.trim()}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
+            COP
+          </button>
+        </form>
+        {msg && (
+          <p className={`flex items-start gap-2 rounded-xl px-3 py-2 text-sm ${msg.ok ? "bg-emerald-500/10 text-emerald-700" : "bg-danger/10 text-danger"}`}>
+            {msg.ok ? <Check className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /> : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />}
+            {msg.text}
+          </p>
+        )}
+      </div>
+
+      {/* Roster */}
+      <div className="card">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-ink">Marketer bawah jagaan</h2>
+          <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-sm font-semibold text-primary">{team.length}</span>
+        </div>
+        {team.length === 0 ? (
+          <p className="rounded-xl bg-surface-2 px-4 py-8 text-center text-sm text-muted-fg">
+            Belum ada marketer. COP satu di atas untuk mula memantau.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+                  <th className="py-2 pr-3 font-semibold">Nama</th>
+                  <th className="py-2 pr-3 font-semibold">ID Staff</th>
+                  <th className="py-2 pr-3 text-right font-semibold">Tindakan</th>
+                </tr>
+              </thead>
+              <tbody>
+                {team.map((m) => (
+                  <tr key={m.id} className="border-b border-line/60 last:border-0">
+                    <td className="py-2.5 pr-3 font-medium text-ink">{m.name}</td>
+                    <td className="py-2.5 pr-3 font-mono text-muted-fg">{m.staff_id || "—"}</td>
+                    <td className="py-2.5 pr-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <button onClick={() => onView(m.id)}
+                          className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/20">
+                          <Eye className="h-3.5 w-3.5" aria-hidden="true" /> Monitor
+                        </button>
+                        <button onClick={() => release(m.id, m.name)} disabled={busy}
+                          className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-danger/10 px-2.5 py-1.5 text-xs font-semibold text-danger transition hover:bg-danger/20 disabled:opacity-50">
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Keluar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

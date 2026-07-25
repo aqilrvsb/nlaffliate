@@ -24,7 +24,7 @@ async function canEdit(profileId: string) {
 
   // The owning affiliate, or the marketer responsible for them — the same
   // pair who can create these links in the first place.
-  if (user.role === "marketer") {
+  if (user.role === "marketer" || user.role === "leader") {
     return row.marketer_id === user.id
       ? { adminOverride: true, userId: null }
       : null;
@@ -58,7 +58,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const allowed =
     user.role === "admin" ||
-    (user.role === "marketer" && owner.marketer_id === user.id);
+    ((user.role === "marketer" || user.role === "leader") && owner.marketer_id === user.id);
   if (!allowed) {
     return NextResponse.json(
       {

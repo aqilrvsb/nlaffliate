@@ -58,7 +58,7 @@ export async function POST(req: Request) {
   const user = await getSession();
   // The catalogue is shared: a marketer filling it in when admin is busy is
   // the point, not an exception. Affiliates stay read-only.
-  if (!user || (user.role !== "admin" && user.role !== "marketer")) {
+  if (!user || (user.role !== "admin" && user.role !== "marketer" && user.role !== "leader")) {
     return NextResponse.json(
       { error: "Only admin or a marketer can edit products." },
       { status: 403 }

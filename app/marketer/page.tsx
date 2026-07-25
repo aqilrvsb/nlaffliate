@@ -16,18 +16,46 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
   if (!user) redirect("/login");
   if (user.role !== "marketer" && user.role !== "leader") redirect("/");
   const isLeader = user.role === "leader";
-  // A leader sees every marketer aggregated (mid = null) unless they pick one
-  // from the switcher (?m=<id>); a marketer only ever sees their own.
-  const selMid = isLeader && searchParams?.m && /^\d+$/.test(searchParams.m) ? Number(searchParams.m) : null;
-  const mid: number | null = isLeader ? selMid : user.id;
-  // Marketer filter as literal SQL (mid is a validated integer or null) so a
-  // chosen marketer hits the index instead of an OR-with-param seq scan.
-  const mCond = (col: string) => (mid == null ? "TRUE" : `${col} = ${mid}`);
 
-  // Marketer list powers the leader's switcher.
-  const marketers = isLeader
-    ? (await db.prepare("SELECT id, name, staff_id FROM users WHERE role = 'marketer' ORDER BY name").all()) as any[]
+  // A leader oversees a TEAM: the marketers whose leader_id points at them.
+  // They also have their own marketer workspace (their own user id), so the
+  // switcher has three modes, chosen by ?m:
+  //   (absent)  -> "Saya": the leader's own data, fully editable
+  //   all       -> the team aggregated (read-only monitoring)
+  //   <id>      -> one assigned marketer (read-only), only if on their team
+  // A plain marketer never has a team and only ever sees their own id.
+  const team = isLeader
+    ? ((await db
+        .prepare("SELECT id, name, staff_id FROM users WHERE role = 'marketer' AND leader_id = ? ORDER BY name")
+        .all(user.id)) as any[])
     : [];
+  const teamIds = team.map((m) => Number(m.id));
+
+  const rawM = searchParams?.m;
+  const wantAll = isLeader && rawM === "all";
+  const pickedId =
+    isLeader && rawM && /^\d+$/.test(rawM) && teamIds.includes(Number(rawM))
+      ? Number(rawM)
+      : null;
+
+  // mid: the single marketer in view (own or one teammate). When aggregating
+  // the team, mid is null and the filter uses the id list instead.
+  const mid: number | null = wantAll ? null : (pickedId ?? user.id);
+  // The leader edits only their own workspace; monitoring views are read-only.
+  const canEdit = !isLeader || (!wantAll && pickedId === null);
+  // What the switcher currently shows: "own" | "all" | a teammate id.
+  const viewMode: "own" | "all" | number = wantAll ? "all" : (pickedId ?? "own");
+
+  // Marketer filter as literal SQL — mid/teamIds are validated integers, so a
+  // single marketer hits the index and the team uses an IN-list.
+  const mCond = (col: string) => {
+    if (mid != null) return `${col} = ${mid}`;
+    // team aggregate: empty team -> match nothing
+    return teamIds.length ? `${col} IN (${teamIds.join(",")})` : "FALSE";
+  };
+
+  // The switcher lists the leader's own team only.
+  const marketers = team;
 
   const plain = <T,>(rows: T[]): T[] => rows.map((r) => ({ ...r }));
 
@@ -266,6 +294,6 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
       dataQuality={plain(dataQuality)} salesCard={plain(salesCard)}
       spendTtm={plain(spendTtm)} reportingSheet={plain(reportingSheet)}
       salesLiveCampaign={plain(salesLiveCampaign)} salesProductCampaign={plain(salesProductCampaign)}
-      marketers={plain(marketers)} viewMid={selMid} />
+      marketers={plain(marketers)} viewMode={viewMode} canEdit={canEdit} />
   );
 }

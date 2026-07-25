@@ -27,7 +27,7 @@ type Candidate = {
 
 export async function POST(req: Request) {
   const user = await getSession();
-  if (!user || user.role !== "marketer")
+  if (!user || user.role !== "marketer" && user.role !== "leader")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const form = await req.formData();

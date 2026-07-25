@@ -10,7 +10,7 @@ const clean = (v: any) => String(v ?? "").trim();
 /** The marketer must own the brand the link hangs off. */
 async function mine(id: number) {
   const user = await getSession();
-  if (!user || user.role !== "marketer") return null;
+  if (!user || user.role !== "marketer" && user.role !== "leader") return null;
   const row = await db.prepare(
       `SELECT l.id FROM brand_links l
          JOIN brands b ON b.id = l.brand_id

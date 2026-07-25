@@ -13,7 +13,7 @@ const intOr0 = (v: any) => {
 /** Update one data-quality row (brand + product + date + the three counts). */
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   const user = await getSession();
-  if (!user || user.role !== "marketer")
+  if (!user || user.role !== "marketer" && user.role !== "leader")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const id = Number(params.id);
 
@@ -53,7 +53,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const user = await getSession();
-  if (!user || user.role !== "marketer")
+  if (!user || user.role !== "marketer" && user.role !== "leader")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const id = Number(params.id);
   const res = await db

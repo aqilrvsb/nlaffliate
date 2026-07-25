@@ -14,7 +14,7 @@ const intOrNull = (v: any) => { const n = num(v); return n == null ? null : Math
 
 async function mine(id: number) {
   const user = await getSession();
-  if (!user || user.role !== "marketer") return null;
+  if (!user || user.role !== "marketer" && user.role !== "leader") return null;
   const row = await db.prepare("SELECT id FROM sales_product WHERE id = ? AND marketer_id = ?").get(id, user.id);
   return row ? user : null;
 }

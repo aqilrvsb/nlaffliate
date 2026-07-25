@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const user = await getSession();
-  if (!user || user.role !== "marketer")
+  if (!user || user.role !== "marketer" && user.role !== "leader")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const row = await db
@@ -108,7 +108,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 /** Discard a row that should not become a schedule at all. */
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const user = await getSession();
-  if (!user || user.role !== "marketer")
+  if (!user || user.role !== "marketer" && user.role !== "leader")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const info = await db

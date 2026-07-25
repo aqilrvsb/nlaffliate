@@ -60,14 +60,10 @@ export async function GET(req: Request) {
            FROM brands b LEFT JOIN users u ON u.id = b.marketer_id
           ORDER BY b.name, u.name`
       ).all();
-  } else if (user.role === "leader") {
-    // A leader oversees every marketer, so the brand filter spans them all.
-    brands = await db.prepare(
-        `SELECT b.id, b.name, b.marketer_id, u.name AS marketer_name
-           FROM brands b JOIN users u ON u.id = b.marketer_id
-          ORDER BY b.name, u.name`
-      ).all();
-  } else if (user.role === "marketer") {
+  } else if (user.role === "marketer" || user.role === "leader") {
+    // A leader has their own marketer workspace, so — like a marketer — they
+    // see and manage their own brands. (Team monitoring is server-scoped
+    // elsewhere; the shared brand filter defaults to "all".)
     brands = await db.prepare(
         `SELECT id, name, marketer_id, catalogue_id, wa_group_url,
                 COALESCE(
@@ -108,7 +104,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const user = await getSession();
-  if (!user || (user.role !== "marketer" && user.role !== "admin")) {
+  if (!user || (user.role !== "marketer" && user.role !== "leader" && user.role !== "admin")) {
     return NextResponse.json({ error: "Not allowed." }, { status: 403 });
   }
 

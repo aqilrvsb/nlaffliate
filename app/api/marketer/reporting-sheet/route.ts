@@ -22,7 +22,7 @@ const str = (v: any) => (v != null && String(v).trim() !== "" ? String(v).trim()
  */
 export async function POST(req: Request) {
   const user = await getSession();
-  if (!user || user.role !== "marketer")
+  if (!user || user.role !== "marketer" && user.role !== "leader")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));
@@ -71,7 +71,7 @@ export async function POST(req: Request) {
 /** Delete a whole day's sheet for one brand.  DELETE { brand_id, report_date } */
 export async function DELETE(req: Request) {
   const user = await getSession();
-  if (!user || user.role !== "marketer")
+  if (!user || user.role !== "marketer" && user.role !== "leader")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const body = await req.json().catch(() => ({}));
   const reportDate = String(body.report_date ?? "").trim();

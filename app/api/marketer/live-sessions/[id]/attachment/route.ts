@@ -8,7 +8,7 @@ export const maxDuration = 60;
 
 async function mine(id: number) {
   const user = await getSession();
-  if (!user || user.role !== "marketer") return null;
+  if (!user || user.role !== "marketer" && user.role !== "leader") return null;
   const row = await db.prepare("SELECT id FROM live_sessions WHERE id = ? AND marketer_id = ?")
     .get(id, user.id);
   return row ? user : null;

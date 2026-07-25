@@ -27,7 +27,8 @@ import { useSearchParams } from "next/navigation";
 import { fmtDate, fmtTimeRange, sumDurations } from "@/lib/format";
 import { confirmDialog, alertDialog } from "@/lib/swal";
 
-type Marketer = { id: number; name: string; email?: string | null; staff_id?: string | null; phone?: string | null };
+type Marketer = { id: number; name: string; email?: string | null; staff_id?: string | null; phone?: string | null; leader_id?: number | null; leader_name?: string | null; leader_staff?: string | null };
+type Leader = { id: number; name: string; staff_id: string | null };
 type Affiliate = {
   id: number; name: string; email?: string | null; staff_id?: string | null; phone: string | null;
   marketer_id: number | null; marketer_name: string | null;
@@ -42,9 +43,10 @@ type Row = {
 };
 
 export default function AdminDashboard({
-  marketers, affiliates, rows, links,
+  marketers, affiliates, rows, links, leaders = [],
 }: {
   marketers: Marketer[]; affiliates: Affiliate[]; rows: Row[]; links: AdminLink[];
+  leaders?: Leader[];
 }) {
   const router = useRouter();
   const [savingId, setSavingId] = useState<number | null>(null);
@@ -104,6 +106,18 @@ export default function AdminDashboard({
         text: data.notify_note, variant: "warning",
       });
     }
+    router.refresh();
+  }
+
+  // Assign a marketer to a leader (or clear it).
+  async function assignLeader(marketerId: number, leaderId: string) {
+    setSavingId(marketerId);
+    await fetch("/api/admin/assign-leader", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ marketer_id: marketerId, leader_id: leaderId || null }),
+    });
+    setSavingId(null);
     router.refresh();
   }
 
@@ -185,22 +199,37 @@ export default function AdminDashboard({
           {marketers.map((m) => {
             const owned = affiliates.filter((a) => a.marketer_id === m.id).length;
             return (
-              <div key={m.id} className="card flex items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary text-sm font-bold text-white">
-                  {m.name.charAt(0).toUpperCase()}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-bold text-ink">{m.name}</p>
-                  <p className="truncate text-xs font-mono text-muted-fg">{m.staff_id}</p>
-                  <p className="text-xs text-muted-fg">
-                    {owned} affiliate{owned === 1 ? "" : "s"}
-                  </p>
+              <div key={m.id} className="card flex flex-col gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary text-sm font-bold text-white">
+                    {m.name.charAt(0).toUpperCase()}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-bold text-ink">{m.name}</p>
+                    <p className="truncate text-xs font-mono text-muted-fg">{m.staff_id}</p>
+                    <p className="text-xs text-muted-fg">
+                      {owned} affiliate{owned === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <button onClick={() => removeUser(m.id, m.name)}
+                    aria-label={`Delete ${m.name}`} title="Delete account"
+                    className="shrink-0 cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger">
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
                 </div>
-                <button onClick={() => removeUser(m.id, m.name)}
-                  aria-label={`Delete ${m.name}`} title="Delete account"
-                  className="shrink-0 cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger">
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </button>
+                <label className="flex items-center gap-2 border-t border-line pt-2">
+                  <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-muted-fg">Leader</span>
+                  <select
+                    className="input !py-1.5 flex-1 cursor-pointer text-sm disabled:opacity-60"
+                    value={m.leader_id != null ? String(m.leader_id) : ""}
+                    disabled={savingId === m.id}
+                    onChange={(e) => assignLeader(m.id, e.target.value)}>
+                    <option value="">— Tiada leader —</option>
+                    {leaders.map((l) => (
+                      <option key={l.id} value={l.id}>{l.staff_id || l.name}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
             );
           })}

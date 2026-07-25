@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  */
 export async function GET() {
   const user = await getSession();
-  if (!user || user.role !== "marketer")
+  if (!user || user.role !== "marketer" && user.role !== "leader")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const rows = await db
     .prepare("SELECT id, name, user_type, phone, tiktok_link FROM live_users WHERE marketer_id = ? ORDER BY name")
@@ -24,7 +24,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const user = await getSession();
-  if (!user || user.role !== "marketer")
+  if (!user || user.role !== "marketer" && user.role !== "leader")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));

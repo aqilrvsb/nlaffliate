@@ -30,8 +30,9 @@ export async function PUT(req: Request) {
   await db.prepare("UPDATE users SET name = ?, phone = ?, address = ? WHERE id = ?")
     .run(name, normalisePhone(phone), address, user.id);
 
-  // Only a marketer owns a group link; their affiliates read it off this row.
-  if (user.role === "marketer") {
+  // A marketer — or a leader in their own workspace — owns a group link that
+  // their affiliates read off this row.
+  if (user.role === "marketer" || user.role === "leader") {
     const link = String(wa_group_url ?? "").trim();
     if (link && !/^https?:\/\//i.test(link)) {
       return NextResponse.json(

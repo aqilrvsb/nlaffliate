@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 /** A marketer may only reach affiliates assigned to them. */
 async function mine(id: number) {
   const user = await getSession();
-  if (!user || user.role !== "marketer") return null;
+  if (!user || user.role !== "marketer" && user.role !== "leader") return null;
   const row = await db
     .prepare(
       "SELECT id, name, phone, staff_id, activated FROM users WHERE id = ? AND role = 'affiliate' AND marketer_id = ?"

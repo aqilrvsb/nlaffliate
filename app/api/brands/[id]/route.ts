@@ -20,7 +20,7 @@ async function reach(id: number) {
   if (!row) return null;
 
   if (user.role === "admin" && row.marketer_id === null) return { user, row };
-  if (user.role === "marketer" && row.marketer_id === user.id) return { user, row };
+  if ((user.role === "marketer" || user.role === "leader") && row.marketer_id === user.id) return { user, row };
   return null;
 }
 
@@ -38,7 +38,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
    * shared catalogue row, and is saved on its own without touching the name.
    */
   if ("wa_group_url" in body) {
-    if (user.role !== "marketer") {
+    if (user.role !== "marketer" && user.role !== "leader") {
       return NextResponse.json(
         { error: "The group link belongs to the marketer working the brand." },
         { status: 403 }

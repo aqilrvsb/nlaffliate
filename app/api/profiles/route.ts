@@ -29,7 +29,7 @@ async function targetUserId(
       .get(asked);
     return exists ? asked : null;
   }
-  if (user.role === "marketer") {
+  if (user.role === "marketer" || user.role === "leader") {
     const mine = await db
       .prepare("SELECT id FROM users WHERE id = ? AND role = 'affiliate' AND marketer_id = ?")
       .get(asked, user.id);

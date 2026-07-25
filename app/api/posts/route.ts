@@ -22,7 +22,7 @@ export async function GET(req: Request) {
         .prepare("SELECT id FROM users WHERE id = ? AND role = 'affiliate'")
         .get(asked);
       if (!ok) return NextResponse.json({ error: "Not allowed." }, { status: 403 });
-    } else if (user.role === "marketer") {
+    } else if (user.role === "marketer" || user.role === "leader") {
       const mine = await db
         .prepare("SELECT id FROM users WHERE id = ? AND role = 'affiliate' AND marketer_id = ?")
         .get(asked, user.id);

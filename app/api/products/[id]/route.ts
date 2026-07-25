@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 async function requireAdmin() {
   const user = await getSession();
   // Shared catalogue — admin and marketers maintain it together.
-  return user && (user.role === "admin" || user.role === "marketer") ? user : null;
+  return user && (user.role === "admin" || user.role === "marketer" || user.role === "leader") ? user : null;
 }
 
 

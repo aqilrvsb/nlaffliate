@@ -13,7 +13,7 @@ import { completeIfReady } from "@/lib/status";
  */
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   const user = await getSession();
-  if (!user || user.role !== "marketer")
+  if (!user || user.role !== "marketer" && user.role !== "leader")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   // Booking must belong to an affiliate assigned to this marketer.
@@ -162,7 +162,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
  */
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const user = await getSession();
-  if (!user || user.role !== "marketer")
+  if (!user || user.role !== "marketer" && user.role !== "leader")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const row = await db.prepare(

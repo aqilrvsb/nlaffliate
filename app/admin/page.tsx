@@ -42,7 +42,17 @@ export default async function AdminPage({
   const plain = <T,>(rows: T[]): T[] => rows.map((r) => ({ ...r }));
 
   const marketers = plain(
-    await db.prepare("SELECT id, name, email, staff_id, phone FROM users WHERE role = 'marketer' ORDER BY name")
+    await db.prepare(
+      `SELECT m.id, m.name, m.email, m.staff_id, m.phone, m.leader_id,
+              l.name AS leader_name, l.staff_id AS leader_staff
+         FROM users m
+         LEFT JOIN users l ON l.id = m.leader_id
+        WHERE m.role = 'marketer' ORDER BY m.name`
+    ).all() as any[]
+  );
+
+  const leaders = plain(
+    await db.prepare("SELECT id, name, staff_id FROM users WHERE role = 'leader' ORDER BY staff_id")
       .all() as any[]
   );
 
@@ -113,7 +123,7 @@ export default async function AdminPage({
       <Header user={user} />
       <main className="mx-auto max-w-6xl px-4 py-8">
         <AdminDashboard marketers={marketers} affiliates={affiliates}
-          rows={rows} links={links} />
+          rows={rows} links={links} leaders={leaders} />
       </main>
     </div>
   );

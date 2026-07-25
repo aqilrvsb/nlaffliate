@@ -23,7 +23,7 @@ const intOrNull = (v: any) => {
  */
 export async function POST(req: Request) {
   const user = await getSession();
-  if (!user || user.role !== "marketer")
+  if (!user || user.role !== "marketer" && user.role !== "leader")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   const user = await getSession();
-  if (!user || user.role !== "marketer")
+  if (!user || user.role !== "marketer" && user.role !== "leader")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const body = await req.json().catch(() => ({}));
   const ids = Array.isArray(body.ids)

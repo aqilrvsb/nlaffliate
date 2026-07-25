@@ -13,7 +13,7 @@ async function scope() {
   const user = await getSession();
   if (!user) return null;
   // Leaders read every marketer's pillars, same as admin.
-  if (user.role !== "marketer" && user.role !== "admin" && user.role !== "leader") return null;
+  if (user.role !== "marketer" && user.role !== "leader" && user.role !== "admin") return null;
   return user;
 }
 
@@ -35,7 +35,9 @@ export async function GET(req: Request) {
   const where: string[] = [];
   const args: any[] = [];
 
-  if (user.role === "marketer") {
+  // A marketer — and a leader in their own workspace — sees only their own
+  // pillars. (Admin sees everyone's.)
+  if (user.role === "marketer" || user.role === "leader") {
     where.push("e.marketer_id = ?");
     args.push(user.id);
   }
@@ -70,7 +72,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const user = await scope();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  if (user.role !== "marketer") {
+  if (user.role !== "marketer" && user.role !== "leader") {
     return NextResponse.json({ error: "Marketers only." }, { status: 403 });
   }
 

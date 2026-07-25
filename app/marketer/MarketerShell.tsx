@@ -294,6 +294,24 @@ export default function MarketerShell({
     router.refresh();
   }
 
+  // Stop managing a marketer and return to the leader's own dashboard.
+  async function exitManage() {
+    await fetch("/api/leader/act-as", { method: "DELETE" });
+    router.push("/marketer");
+    router.refresh();
+  }
+
+  // Enter "manage as" for the marketer currently in the switcher.
+  async function manageCurrent() {
+    if (typeof viewValue !== "string" || !/^\d+$/.test(viewValue)) return;
+    const res = await fetch("/api/leader/act-as", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ marketer_id: Number(viewValue) }),
+    });
+    if (res.ok) window.location.href = "/marketer";
+  }
+
   // Default date range depends on the active tab:
   //   pending  -> today (the schedule the marketer manages now)
   //   success  -> current month (completed lives are past-dated)
@@ -605,6 +623,18 @@ export default function MarketerShell({
 
         <EditContext.Provider value={canEdit}>
         <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
+          {user.impersonatorId != null && (
+            <div className="card flex flex-wrap items-center gap-3 border-indigo-200 bg-indigo-50/70">
+              <span className="flex items-center gap-2 text-sm text-indigo-800">
+                <Pencil className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span><b>Mod Urus</b> — anda menguruskan <b>{user.name}</b> sebagai leader. Apa yang anda tambah disimpan bawah marketer ini.</span>
+              </span>
+              <button onClick={exitManage}
+                className="ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-indigo-700">
+                <LogOut className="h-3.5 w-3.5" aria-hidden="true" /> Keluar Mod Urus
+              </button>
+            </div>
+          )}
           {overseer !== "" && (
             <div className={`card flex flex-wrap items-center gap-3 ${canEdit ? "border-emerald-200 bg-emerald-50/60" : "border-amber-200 bg-amber-50/60"}`}>
               <span className={`flex items-center gap-2 text-sm ${canEdit ? "text-emerald-800" : "text-amber-800"}`}>
@@ -662,6 +692,13 @@ export default function MarketerShell({
                     : viewValue === "all" ? "Semua team digabungkan."
                     : "Menunjukkan satu marketer team."}
               </span>
+              {overseer === "leader" && /^\d+$/.test(viewValue) && (
+                <button onClick={manageCurrent}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-fg shadow-lift transition hover:opacity-90"
+                  title="Urus marketer ini — tambah/edit bagi pihak mereka">
+                  <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Urus marketer ini
+                </button>
+              )}
             </div>
           )}
           {active === "dashboard" && (
@@ -764,6 +801,30 @@ function LeaderTeamTab({ team, onView }: {
     }
   }
 
+  // Enter "manage as" mode: the whole dashboard becomes this marketer's, fully
+  // editable. A hard reload picks up the new (impersonated) session cleanly.
+  async function manage(id: number, name: string) {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/leader/act-as", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ marketer_id: id }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setMsg({ ok: false, text: data.error || "Gagal urus." });
+        setBusy(false);
+        return;
+      }
+      window.location.href = "/marketer";
+    } catch {
+      setMsg({ ok: false, text: "Ralat rangkaian." });
+      setBusy(false);
+    }
+  }
+
   async function release(id: number, name: string) {
     if (!confirm(`Keluarkan ${name} dari team anda?`)) return;
     setBusy(true);
@@ -838,6 +899,11 @@ function LeaderTeamTab({ team, onView }: {
                     <td className="py-2.5 pr-3 font-mono text-muted-fg">{m.staff_id || "—"}</td>
                     <td className="py-2.5 pr-3">
                       <div className="flex items-center justify-end gap-2">
+                        <button onClick={() => manage(m.id, m.name)} disabled={busy}
+                          className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-primary px-2.5 py-1.5 text-xs font-semibold text-primary-fg shadow-lift transition hover:opacity-90 disabled:opacity-50"
+                          title="Urus marketer ini — tambah/edit data bagi pihak mereka">
+                          <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Urus
+                        </button>
                         <button onClick={() => onView(m.id)}
                           className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/20">
                           <Eye className="h-3.5 w-3.5" aria-hidden="true" /> Monitor

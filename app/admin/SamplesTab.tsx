@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Package, Truck, Loader2, AlertCircle, Check, PackageCheck,
-  Phone, MapPin, StickyNote, Boxes,
+  Phone, MapPin, StickyNote, Boxes, Trash2, X,
 } from "lucide-react";
 import Modal from "@/components/Modal";
 import TabBar from "@/components/TabBar";
@@ -11,7 +11,7 @@ import { useSearchParams } from "next/navigation";
 import { fmtDate } from "@/lib/format";
 import { SampleStatusBadge, type SampleRequest } from "../affiliate/SampleTab";
 import type { Product } from "./ProductsTab";
-import { alertDialog } from "@/lib/swal";
+import { alertDialog, confirmDialog } from "@/lib/swal";
 
 type AdminSample = SampleRequest & {
   affiliate_name: string;
@@ -32,6 +32,51 @@ export default function SamplesTab() {
   const [loading, setLoading] = useState(true);
   const [picking, setPicking] = useState<AdminSample | null>(null);
   const [tracking, setTracking] = useState<AdminSample | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  // One PATCH helper for every admin lifecycle action.
+  async function act(r: AdminSample, body: Record<string, unknown>) {
+    setBusyId(r.id);
+    try {
+      const res = await fetch(`/api/samples/${r.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) await alertDialog({ title: "Tidak berjaya", text: data.error || "Ralat.", variant: "warning" });
+      else await load();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function clearTracking(r: AdminSample) {
+    const go = await confirmDialog({
+      title: "Clear tracking?",
+      text: `Buang nombor tracking untuk ${r.affiliate_name}. Status kembali ke Processing.`,
+      danger: true,
+    });
+    if (go) await act(r, { action: "clear_tracking" });
+  }
+
+  async function removeRequest(r: AdminSample) {
+    const go = await confirmDialog({
+      title: `Delete sample request?`,
+      text: `Permintaan sample ${r.affiliate_name} akan dipadam terus.`,
+      danger: true,
+    });
+    if (!go) return;
+    setBusyId(r.id);
+    try {
+      const res = await fetch(`/api/samples/${r.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) await alertDialog({ title: "Tidak berjaya", text: data.error || "Ralat.", variant: "warning" });
+      else await load();
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   const load = useCallback(async () => {
     const safe = (url: string): Promise<any> =>
@@ -133,6 +178,28 @@ export default function SamplesTab() {
                   <Truck className="h-4 w-4" aria-hidden="true" />
                   {r.tracking_number ? "Edit tracking" : "Add tracking"}
                 </button>
+
+                {/* Admin overrides: jump the status to any step, or delete. */}
+                <select
+                  className="input !w-auto !py-2 cursor-pointer text-sm disabled:opacity-50"
+                  value={r.status}
+                  disabled={busyId === r.id}
+                  title="Tukar / revert status"
+                  onChange={(e) => act(r, { action: "set_status", status: e.target.value })}>
+                  <option value="pending">Pending</option>
+                  <option value="processing">Processing</option>
+                  <option value="shipped">Shipped</option>
+                  <option value="received">Received</option>
+                </select>
+
+                <button className="btn-ghost !py-2 !text-danger hover:!bg-danger/10"
+                  onClick={() => removeRequest(r)} disabled={busyId === r.id}
+                  title="Delete sample request">
+                  {busyId === r.id
+                    ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    : <Trash2 className="h-4 w-4" aria-hidden="true" />}
+                  Delete
+                </button>
               </div>
             </div>
 
@@ -186,6 +253,11 @@ export default function SamplesTab() {
                   {r.courier ? `${r.courier} · ` : ""}
                   <span className="font-bold">{r.tracking_number}</span>
                 </span>
+                <button onClick={() => clearTracking(r)} disabled={busyId === r.id}
+                  className="ml-auto inline-flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-danger transition hover:bg-danger/10 disabled:opacity-50"
+                  title="Buang tracking (kembali ke Processing)">
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />Clear tracking
+                </button>
               </div>
             )}
           </div>

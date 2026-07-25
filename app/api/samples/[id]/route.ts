@@ -144,6 +144,53 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ ok: true, status: "shipped", notified, notify_note });
   }
 
+  // Clear the courier/tracking. A parcel with no tracking cannot be "shipped",
+  // so it steps back to processing (its products are kept).
+  if (action === "clear_tracking") {
+    await db.prepare(
+        `UPDATE sample_requests
+            SET tracking_number = NULL, courier = NULL,
+                shipped_at = NULL, received_at = NULL,
+                status = CASE WHEN status IN ('shipped', 'received') THEN 'processing' ELSE status END
+          WHERE id = ?`
+      ).run(id);
+    return NextResponse.json({ ok: true, status: "processing" });
+  }
+
+  // Revert (or set) the status to any point in the lifecycle. Moving a step
+  // back clears the fields that belong to the steps ahead of the target, so
+  // the record stays consistent (e.g. going back to processing drops tracking).
+  if (action === "set_status") {
+    const target = String(body.status || "");
+    const valid = ["pending", "processing", "shipped", "received"];
+    if (!valid.includes(target)) {
+      return NextResponse.json({ error: "Invalid status." }, { status: 400 });
+    }
+    if (target === "shipped") {
+      const t = await db
+        .prepare("SELECT tracking_number FROM sample_requests WHERE id = ?")
+        .get<{ tracking_number: string | null }>(id);
+      if (!t?.tracking_number) {
+        return NextResponse.json(
+          { error: "Add a tracking number before marking it shipped." },
+          { status: 409 }
+        );
+      }
+    }
+    const sqlByTarget: Record<string, string> = {
+      pending:
+        "UPDATE sample_requests SET status='pending', tracking_number=NULL, courier=NULL, processed_at=NULL, shipped_at=NULL, received_at=NULL WHERE id=?",
+      processing:
+        "UPDATE sample_requests SET status='processing', tracking_number=NULL, courier=NULL, shipped_at=NULL, received_at=NULL, processed_at=COALESCE(processed_at, now()) WHERE id=?",
+      shipped:
+        "UPDATE sample_requests SET status='shipped', received_at=NULL, shipped_at=COALESCE(shipped_at, now()) WHERE id=?",
+      received:
+        "UPDATE sample_requests SET status='received', received_at=COALESCE(received_at, now()) WHERE id=?",
+    };
+    await db.prepare(sqlByTarget[target]).run(id);
+    return NextResponse.json({ ok: true, status: target });
+  }
+
   return NextResponse.json({ error: "Unknown action." }, { status: 400 });
 }
 
@@ -169,6 +216,8 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
     );
   }
 
+  // Remove line items first in case the FK has no ON DELETE CASCADE.
+  await db.prepare("DELETE FROM sample_request_items WHERE request_id = ?").run(id);
   await db.prepare("DELETE FROM sample_requests WHERE id = ?").run(id);
   return NextResponse.json({ ok: true });
 }

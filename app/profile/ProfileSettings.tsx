@@ -29,9 +29,13 @@ export default function ProfileSettings({ role }: { role: string }) {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const d = await fetch("/api/profile").then((r) => r.json());
-    setMe(d.profile);
-    setLoading(false);
+    try {
+      const r = await fetch("/api/profile");
+      const d = r.ok ? await r.json() : {};
+      setMe(d.profile);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -413,9 +417,13 @@ function TikTokProfilesCard() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const d = await fetch("/api/profiles").then((r) => r.json());
-    setProfiles(d.profiles || []);
-    setLoading(false);
+    try {
+      const r = await fetch("/api/profiles");
+      const d = r.ok ? await r.json() : {};
+      setProfiles(d.profiles || []);
+    } finally {
+      setLoading(false);
+    }
   }, []);
   useEffect(() => { load(); }, [load]);
 

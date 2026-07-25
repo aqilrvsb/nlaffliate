@@ -52,22 +52,24 @@ export default function PillarCreate() {
       setLoading(false);
       return;
     }
-    const d = await fetch(
-      `/api/pillars?level=${level}&date=${date}&brand=${brand}`
-    ).then((r) => r.json());
-    const next: Record<number, Row> = {};
-    let cname = "";
-    for (const e of d.entries || []) {
-      next[e.item_no] = {
-        problem: e.problem || "",
-        solution: e.solution || "",
-        planning: e.planning || "",
-        execution: e.execution || "",
-      };
-      if (e.item_no === CUSTOM_NO && e.item_name) cname = e.item_name;
+    try {
+      const r = await fetch(`/api/pillars?level=${level}&date=${date}&brand=${brand}`);
+      const d = r.ok ? await r.json() : {};
+      const next: Record<number, Row> = {};
+      let cname = "";
+      for (const e of d.entries || []) {
+        next[e.item_no] = {
+          problem: e.problem || "",
+          solution: e.solution || "",
+          planning: e.planning || "",
+          execution: e.execution || "",
+        };
+        if (e.item_no === CUSTOM_NO && e.item_name) cname = e.item_name;
+      }
+      setRows(next); setCustomName(cname);
+    } finally {
+      setLoading(false);
     }
-    setRows(next); setCustomName(cname);
-    setLoading(false);
   }, [level, date, brand]);
 
   useEffect(() => { load(); }, [load]);

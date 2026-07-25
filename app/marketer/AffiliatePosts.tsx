@@ -23,9 +23,13 @@ export default function AffiliatePosts({
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const d = await fetch(`/api/posts?user_id=${affiliateId}`).then((r) => r.json());
-    setPosts(d.posts || []);
-    setLoading(false);
+    try {
+      const r = await fetch(`/api/posts?user_id=${affiliateId}`);
+      const d = r.ok ? await r.json() : {};
+      setPosts(d.posts || []);
+    } finally {
+      setLoading(false);
+    }
   }, [affiliateId]);
   useEffect(() => { load(); }, [load]);
 

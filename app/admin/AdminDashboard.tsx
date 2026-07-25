@@ -389,8 +389,11 @@ function TikTokLinksModal({
 
   const load = useCallback(async () => {
     if (!affiliate) return;
-    const d = await fetch(`/api/profiles?user_id=${affiliate.id}`).then((r) => r.json());
-    setLinks(d.profiles || []);
+    try {
+      const r = await fetch(`/api/profiles?user_id=${affiliate.id}`);
+      const d = r.ok ? await r.json() : {};
+      setLinks(d.profiles || []);
+    } catch { setLinks([]); }
   }, [affiliate]);
 
   useEffect(() => {
@@ -517,7 +520,10 @@ function WhatsAppCard() {
   const [result, setResult] = useState<any>(null);
 
   const load = useCallback(async () => {
-    setCfg(await fetch("/api/admin/whatsapp").then((r) => r.json()));
+    try {
+      const r = await fetch("/api/admin/whatsapp");
+      setCfg(r.ok ? await r.json() : {});
+    } catch { setCfg({}); }
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -621,7 +627,11 @@ function AiSettingsCard() {
   const [test, setTest] = useState<any>(null);
 
   async function load() {
-    const d = await fetch("/api/admin/settings").then((r) => r.json());
+    let d: any = {};
+    try {
+      const r = await fetch("/api/admin/settings");
+      d = r.ok ? await r.json() : {};
+    } catch { d = {}; }
     setCfg(d);
     setProvider(d.provider || "grsai");
     setModel(d.model || "");

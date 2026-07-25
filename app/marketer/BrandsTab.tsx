@@ -28,9 +28,13 @@ export default function BrandsTab({ onChange }: { onChange?: () => void }) {
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
-    const d = await fetch("/api/brands").then((r) => r.json());
-    setBrands(d.brands || []);
-    setLoading(false);
+    try {
+      const r = await fetch("/api/brands");
+      const d = r.ok ? await r.json() : {};
+      setBrands(d.brands || []);
+    } finally {
+      setLoading(false);
+    }
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -379,8 +383,9 @@ export function BrandSelect({
 
   useEffect(() => {
     fetch("/api/brands")
-      .then((r) => r.json())
-      .then((d) => setBrands(d.brands || []));
+      .then((r): any => (r.ok ? r.json() : {}))
+      .then((d) => setBrands(d.brands || []))
+      .catch(() => setBrands([]));
   }, []);
 
   return (

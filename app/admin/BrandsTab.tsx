@@ -20,9 +20,13 @@ export default function AdminBrandsTab() {
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
-    const d = await fetch("/api/brands?scope=catalogue").then((r) => r.json());
-    setBrands(d.brands || []);
-    setLoading(false);
+    try {
+      const r = await fetch("/api/brands?scope=catalogue");
+      const d = r.ok ? await r.json() : {};
+      setBrands(d.brands || []);
+    } finally {
+      setLoading(false);
+    }
   }, []);
   useEffect(() => { load(); }, [load]);
 

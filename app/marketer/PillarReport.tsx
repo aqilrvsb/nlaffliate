@@ -52,9 +52,13 @@ export default function PillarReport() {
     if (from) qs.set("from", from);
     if (to) qs.set("to", to);
     if (brand) qs.set("brand", brand); // omitted = All Brands
-    const d = await fetch(`/api/pillars?${qs}`).then((r) => r.json());
-    setEntries(d.entries || []);
-    setLoading(false);
+    try {
+      const r = await fetch(`/api/pillars?${qs}`);
+      const d = r.ok ? await r.json() : {};
+      setEntries(d.entries || []);
+    } finally {
+      setLoading(false);
+    }
   }, [from, to, brand]);
 
   useEffect(() => { load(); }, [load]);

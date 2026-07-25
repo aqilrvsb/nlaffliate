@@ -27,9 +27,13 @@ export default function ProductsTab() {
   const [filter, setFilter] = useState("");
 
   const load = useCallback(async () => {
-    const d = await fetch("/api/products").then((r) => r.json());
-    setProducts(d.products || []);
-    setLoading(false);
+    try {
+      const r = await fetch("/api/products");
+      const d = r.ok ? await r.json() : {};
+      setProducts(d.products || []);
+    } finally {
+      setLoading(false);
+    }
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -190,7 +194,10 @@ function ProductModal({
     setPreview(product?.image_url || null);
     setFile(null);
     setError("");
-    fetch("/api/brands?scope=catalogue").then((r) => r.json()).then((d) => setBrands(d.brands || []));
+    fetch("/api/brands?scope=catalogue")
+      .then((r): any => (r.ok ? r.json() : {}))
+      .then((d) => setBrands(d.brands || []))
+      .catch(() => setBrands([]));
   }, [open, product]);
 
   async function pick(f: File | null) {

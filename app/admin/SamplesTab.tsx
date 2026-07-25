@@ -34,13 +34,15 @@ export default function SamplesTab() {
   const [tracking, setTracking] = useState<AdminSample | null>(null);
 
   const load = useCallback(async () => {
-    const [s, p] = await Promise.all([
-      fetch("/api/samples").then((r) => r.json()),
-      fetch("/api/products").then((r) => r.json()),
-    ]);
-    setRequests(s.requests || []);
-    setProducts(p.products || []);
-    setLoading(false);
+    const safe = (url: string): Promise<any> =>
+      fetch(url).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    try {
+      const [s, p] = await Promise.all([safe("/api/samples"), safe("/api/products")]);
+      setRequests(s.requests || []);
+      setProducts(p.products || []);
+    } finally {
+      setLoading(false);
+    }
   }, []);
   useEffect(() => { load(); }, [load]);
 

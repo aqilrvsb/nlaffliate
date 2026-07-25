@@ -31,6 +31,7 @@ import DurationInput from "@/components/DurationInput";
 import { compressScreenshot } from "@/lib/image";
 import PillarCreate from "./PillarCreate";
 import PillarReport from "./PillarReport";
+import { EditContext, useCanEdit } from "./edit-context";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import Pagination from "@/components/Pagination";
 import ImageModal from "@/components/ImageModal";
@@ -602,6 +603,7 @@ export default function MarketerShell({
           <SopButton role="marketer" tab={active} />
         </div>
 
+        <EditContext.Provider value={canEdit}>
         <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
           {overseer !== "" && (
             <div className={`card flex flex-wrap items-center gap-3 ${canEdit ? "border-emerald-200 bg-emerald-50/60" : "border-amber-200 bg-amber-50/60"}`}>
@@ -713,6 +715,7 @@ export default function MarketerShell({
             <LeaderTeamTab team={marketers} onView={(id) => goMarketer(String(id))} />
           )}
         </div>
+        </EditContext.Provider>
       </main>
     </div>
   );
@@ -922,6 +925,7 @@ function DashboardTab({ affiliates, inRange, pending, success, overall, from, to
 /* ── List Of Affiliate ─────────────────────────────────── */
 
 function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: Live[] }) {
+  const canEdit = useCanEdit();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<ManagedAffiliate | null>(null);
 
@@ -944,10 +948,12 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
             Affiliate di bawah anda. Yang anda daftar sendiri terus boleh login.
           </p>
         </div>
-        <button className="btn !py-2" onClick={openAdd}>
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          Add Affiliate
-        </button>
+        {canEdit && (
+          <button className="btn !py-2" onClick={openAdd}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Add Affiliate
+          </button>
+        )}
       </div>
 
       {affiliates.length === 0 ? (
@@ -963,10 +969,12 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
               {a.name.charAt(0).toUpperCase()}
             </span>
             <p className="min-w-0 flex-1 truncate font-bold text-ink">{a.name}</p>
-            <ActivateAffiliate id={a.id} activated={a.activated} name={a.name} />
-            <AffiliateActions
-              affiliate={{ id: a.id, name: a.name, staff_id: a.staff_id, phone: a.phone, address: a.address }}
-              onEdit={() => openEdit(a)} />
+            {canEdit && <ActivateAffiliate id={a.id} activated={a.activated} name={a.name} />}
+            {canEdit && (
+              <AffiliateActions
+                affiliate={{ id: a.id, name: a.name, staff_id: a.staff_id, phone: a.phone, address: a.address }}
+                onEdit={() => openEdit(a)} />
+            )}
           </div>
 
           <div className="space-y-1 text-xs text-muted-fg">
@@ -1018,11 +1026,13 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
                           <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
                         </a>
                       </span>
-                      <span className="flex shrink-0 items-center gap-1">
-                        <CommissionButton
-                          onClick={() => setRatesFor({ pid: l.id, brands: l.brands ?? [] })} />
-                        <DeleteProfileLink id={l.id} name={l.url} />
-                      </span>
+                      {canEdit && (
+                        <span className="flex shrink-0 items-center gap-1">
+                          <CommissionButton
+                            onClick={() => setRatesFor({ pid: l.id, brands: l.brands ?? [] })} />
+                          <DeleteProfileLink id={l.id} name={l.url} />
+                        </span>
+                      )}
                     </div>
                     {/* The brands decide which WhatsApp groups the affiliate
                         sees against this account, and what each one pays. */}
@@ -1034,7 +1044,7 @@ function AffiliatesTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: 
             )}
             {/* The marketer can add links too — affiliates often paste the
                 wrong URL, and this is who ends up fixing it. */}
-            <AddProfileLink userId={a.id} />
+            {canEdit && <AddProfileLink userId={a.id} />}
           </div>
         </div>
       ))}
@@ -1058,6 +1068,7 @@ function ScheduleTab({ title, rows, kind, showUpload, affiliates, defaultMode = 
   affiliates?: Affiliate[];
   defaultMode?: "today" | "month" | "all";
 }) {
+  const canEdit = useCanEdit();
   const params = useSearchParams();
   // "" = All Brands, the default.
   const [brand, setBrand] = useState("");
@@ -1071,7 +1082,7 @@ function ScheduleTab({ title, rows, kind, showUpload, affiliates, defaultMode = 
     <>
       <DateRangeFilter count={shown.length} defaultMode={defaultMode} />
 
-      {showUpload && (
+      {showUpload && canEdit && (
         <div className="flex justify-end">
           <button className="btn !py-2" onClick={() => setAddOpen(true)}>
             <CalendarPlus className="h-4 w-4" aria-hidden="true" />
@@ -1710,6 +1721,7 @@ function BulkUpload() {
     router.refresh();
   }
 
+  if (!useCanEdit()) return null; // hidden while monitoring someone else
   return (
     <div className="card w-full sm:w-auto">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -1783,6 +1795,7 @@ function LivePerformanceImport() {
     router.refresh();
   }
 
+  if (!useCanEdit()) return null; // hidden while monitoring someone else
   return (
     <div className="card space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2274,6 +2287,7 @@ function SalesImport({
     router.refresh();
   }
 
+  if (!useCanEdit()) return null; // hidden while monitoring someone else
   return (
     <div className="card space-y-3">
       <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
@@ -2414,6 +2428,7 @@ function SalesDailyEditModal({ kind, row, onClose }: {
 }
 
 function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
+  const canEdit = useCanEdit();
   const router = useRouter();
   const params = useSearchParams();
   const { from, to } = resolveRange(
@@ -2447,6 +2462,7 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
 
   return (
     <>
+      {canEdit && (
       <SalesImport
         title="Import Live Campaign Data (.xlsx) — Live"
         endpoint="/api/marketer/sales/live/import"
@@ -2456,6 +2472,7 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
         brandInputId="sl-brand"
         resultLabel={(d) => `Dijumlahkan ${d.imported} live · 1 baris harian`}
       />
+      )}
       <DateRangeFilter count={rows.length} countNoun={["day", "days"]} defaultMode="month" />
       <BrandFilterCard id="sl-filter-brand" value={brand} onChange={setBrand} />
 
@@ -2498,10 +2515,12 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
                     <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
                     <td className="px-4 py-3 text-right">{intOr(r.live_views)}</td>
                     <td className="px-4 py-3">
+                      {canEdit && (
                       <div className="flex items-center gap-1">
                         <button onClick={() => setEditing(r)} className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent" aria-label="Edit"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
                         <button onClick={() => remove(r)} className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger" aria-label="Delete"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
                       </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -2544,6 +2563,7 @@ function adjustProductByCard(products: SalesProduct[], cards: SalesCard[]): Sale
 }
 
 function SalesProductTab({ rows: rawAll, cards }: { rows: SalesProduct[]; cards: SalesCard[] }) {
+  const canEdit = useCanEdit();
   const router = useRouter();
   const params = useSearchParams();
   const { from, to } = resolveRange(
@@ -2631,10 +2651,12 @@ function SalesProductTab({ rows: rawAll, cards }: { rows: SalesProduct[]; cards:
                     <td className="px-4 py-3 text-right">{money2(r.gross_revenue)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
                     <td className="px-4 py-3">
+                      {canEdit && (
                       <div className="flex items-center gap-1">
                         <button onClick={() => setEditing(rawById.get(r.id) ?? r)} className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent" title="Edit nilai import mentah" aria-label="Edit"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
                         <button onClick={() => remove(r)} className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger" aria-label="Delete"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
                       </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -2818,6 +2840,7 @@ function CardEditModal({ row, onClose }: { row: SalesCard | null; onClose: () =>
 }
 
 function SalesCardTab({ rows: all }: { rows: SalesCard[] }) {
+  const canEdit = useCanEdit();
   const router = useRouter();
   const params = useSearchParams();
   const { from, to } = resolveRange(
@@ -2904,6 +2927,7 @@ function SalesCardTab({ rows: all }: { rows: SalesCard[] }) {
                     <td className="px-4 py-3 text-right">{money(r.gross_revenue)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
                     <td className="px-4 py-3">
+                      {canEdit && (
                       <div className="flex items-center gap-1">
                         <button onClick={() => setEditing(r)}
                           className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent"
@@ -2912,6 +2936,7 @@ function SalesCardTab({ rows: all }: { rows: SalesCard[] }) {
                           className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger"
                           aria-label="Delete"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
                       </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -2989,6 +3014,7 @@ function OverallImport() {
     </div>
   );
 
+  if (!useCanEdit()) return null; // hidden while monitoring someone else
   return (
     <div className="card space-y-3">
       <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
@@ -3231,6 +3257,7 @@ function CreatorImport() {
     </div>
   );
 
+  if (!useCanEdit()) return null; // hidden while monitoring someone else
   return (
     <div className="card space-y-3">
       <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
@@ -3269,6 +3296,7 @@ function CreatorImport() {
 }
 
 function CreatorTab({ reports }: { reports: CreatorReport[] }) {
+  const canEdit = useCanEdit();
   const router = useRouter();
   const params = useSearchParams();
   const { from, to } = resolveRange(
@@ -3562,6 +3590,7 @@ function LiveUserModal({
 }
 
 function ListLiveUserTab({ liveUsers }: { liveUsers: LiveUser[] }) {
+  const canEdit = useCanEdit();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<LiveUser | null>(null);
@@ -3584,9 +3613,11 @@ function ListLiveUserTab({ liveUsers }: { liveUsers: LiveUser[] }) {
             KOL, Affiliate Special, Founder, HQ. Tiada login — rekod sahaja.
           </p>
         </div>
-        <button className="btn !py-2" onClick={() => { setEditing(null); setOpen(true); }}>
-          <Plus className="h-4 w-4" aria-hidden="true" />Add Live User
-        </button>
+        {canEdit && (
+          <button className="btn !py-2" onClick={() => { setEditing(null); setOpen(true); }}>
+            <Plus className="h-4 w-4" aria-hidden="true" />Add Live User
+          </button>
+        )}
       </div>
 
       {liveUsers.length === 0 ? (
@@ -3619,6 +3650,7 @@ function ListLiveUserTab({ liveUsers }: { liveUsers: LiveUser[] }) {
                       : <span className="text-muted-fg/50">—</span>}
                   </td>
                   <td className="px-4 py-3">
+                    {canEdit && (
                     <div className="flex items-center gap-1">
                       <button onClick={() => { setEditing(u); setOpen(true); }}
                         className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent"
@@ -3631,6 +3663,7 @@ function ListLiveUserTab({ liveUsers }: { liveUsers: LiveUser[] }) {
                         <Trash2 className="h-4 w-4" aria-hidden="true" />
                       </button>
                     </div>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -3893,6 +3926,7 @@ function LiveAttachment({ session }: { session: LiveSession }) {
 function LiveScheduleTab({
   sessions, liveUsers, kind,
 }: { sessions: LiveSession[]; liveUsers: LiveUser[]; kind: "pending" | "success" }) {
+  const canEdit = useCanEdit();
   const router = useRouter();
   const params = useSearchParams();
   const { from, to } = resolveRange(
@@ -3932,7 +3966,7 @@ function LiveScheduleTab({
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="section-title">{kind === "pending" ? "Pending Live" : "Success Live"}</h2>
-        {kind === "pending" && (
+        {kind === "pending" && canEdit && (
           <button className="btn !py-2" onClick={() => { setEditing(null); setOpenAdd(true); }}
             disabled={liveUsers.length === 0}
             title={liveUsers.length === 0 ? "Tambah live user dahulu" : undefined}>
@@ -4019,7 +4053,7 @@ function LiveScheduleTab({
                   )}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
-                      {kind === "pending" && (
+                      {kind === "pending" && canEdit && (
                         <button onClick={() => setResult(s)}
                           className="cursor-pointer rounded-lg bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-fg hover:opacity-90"
                           title="Masukkan result & tandakan siap">
@@ -4027,16 +4061,20 @@ function LiveScheduleTab({
                         </button>
                       )}
                       <LiveAttachment session={s} />
+                      {canEdit && (
                       <button onClick={() => (kind === "success" ? setResult(s) : (setEditing(s), setOpenAdd(true)))}
                         className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent"
                         aria-label="Edit">
                         <Pencil className="h-4 w-4" aria-hidden="true" />
                       </button>
+                      )}
+                      {canEdit && (
                       <button onClick={() => remove(s)}
                         className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger"
                         aria-label="Delete">
                         <Trash2 className="h-4 w-4" aria-hidden="true" />
                       </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -4053,6 +4091,7 @@ function LiveScheduleTab({
 }
 
 function LiveReportingTab({ sessions, liveUsers }: { sessions: LiveSession[]; liveUsers: LiveUser[] }) {
+  const canEdit = useCanEdit();
   const params = useSearchParams();
   const { from, to } = resolveRange(
     { from: params.get("from"), to: params.get("to"), all: params.get("all") },
@@ -4165,6 +4204,7 @@ function LiveReportingTab({ sessions, liveUsers }: { sessions: LiveSession[]; li
 /* ── Data Quality ──────────────────────────────────────── */
 
 function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
+  const canEdit = useCanEdit();
   const router = useRouter();
   const params = useSearchParams();
   const { from, to } = resolveRange(
@@ -4258,6 +4298,7 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
 
   return (
     <>
+      {canEdit && (
       <form onSubmit={submit} className="card space-y-3">
         <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
           <ListChecks className="h-4 w-4 text-primary" aria-hidden="true" />
@@ -4333,6 +4374,7 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
           {error && <span className="text-xs text-danger">{error}</span>}
         </div>
       </form>
+      )}
 
       <DateRangeFilter count={rows.length} countNoun={["rekod", "rekod"]} defaultMode="month" />
       <BrandFilterCard id="dq-filter-brand" value={filterBrand} onChange={setFilterBrand} />
@@ -4395,6 +4437,7 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
                     <td className="px-4 py-3 text-right">{int(r.performing)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{int((r.inque || 0) + (r.learning || 0) + (r.delivering || 0))}</td>
                     <td className="px-4 py-3">
+                      {canEdit && (
                       <div className="flex items-center gap-1">
                         <button onClick={() => loadEdit(r)}
                           className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent"
@@ -4403,6 +4446,7 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
                           className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger"
                           aria-label="Delete"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
                       </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -4427,6 +4471,7 @@ type SpendRow = {
 function SpendTab({ spendTtm, salesLive, salesProduct, salesCard }: {
   spendTtm: SpendTtm[]; salesLive: SalesLive[]; salesProduct: SalesProduct[]; salesCard: SalesCard[];
 }) {
+  const canEdit = useCanEdit();
   const router = useRouter();
   const params = useSearchParams();
   const { from, to } = resolveRange(
@@ -4519,6 +4564,7 @@ function SpendTab({ spendTtm, salesLive, salesProduct, salesCard }: {
 
   return (
     <>
+      {canEdit && (
       <form onSubmit={submit} className="card space-y-3">
         <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
           <Wallet className="h-4 w-4 text-primary" aria-hidden="true" />
@@ -4556,6 +4602,7 @@ function SpendTab({ spendTtm, salesLive, salesProduct, salesCard }: {
           {error && <span className="text-xs text-danger">{error}</span>}
         </div>
       </form>
+      )}
 
       <DateRangeFilter count={rows.length} countNoun={["day", "days"]} defaultMode="month" />
       <BrandFilterCard id="spend-filter-brand" value={filterBrand} onChange={setFilterBrand} />
@@ -4604,6 +4651,7 @@ function SpendTab({ spendTtm, salesLive, salesProduct, salesCard }: {
                     <td className="px-4 py-3 text-right">{money(r.gmvCost)}</td>
                     <td className="px-4 py-3 text-right">{money(r.gmvGross)}</td>
                     <td className="px-4 py-3">
+                      {canEdit && (
                       <div className="flex items-center gap-1">
                         <button onClick={() => loadEdit(r)} title="Edit TTAM"
                           className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent"
@@ -4612,6 +4660,7 @@ function SpendTab({ spendTtm, salesLive, salesProduct, salesCard }: {
                           className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger disabled:opacity-30"
                           aria-label="Delete TTAM"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
                       </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -4653,6 +4702,7 @@ const RS_FIELDS = ["c_viewers", "r_target", "g_revenue", "cost", "v_boost", "cv_
 type RsCell = Record<(typeof RS_FIELDS)[number], string>;
 
 function ReportingSheetTab({ rows: all, userName }: { rows: ReportingSheetRow[]; userName: string }) {
+  const canEdit = useCanEdit();
   const router = useRouter();
   const params = useSearchParams();
   const { from, to } = resolveRange(
@@ -4870,12 +4920,14 @@ function ReportingSheetTab({ rows: all, userName }: { rows: ReportingSheetRow[];
                     <td className="px-4 py-3 text-right">{money(o.v_boost)}</td>
                     <td className="px-4 py-3 text-right">{money(o.cv_boost)}</td>
                     <td className="px-4 py-3">
+                      {canEdit && (
                       <div className="flex items-center gap-1">
                         <button onClick={() => editDay(o)} title="Edit sheet"
                           className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-accent/10 hover:text-accent" aria-label="Edit"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
                         <button onClick={() => removeDay(o)} title="Delete sheet"
                           className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger" aria-label="Delete"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
                       </div>
+                      )}
                     </td>
                   </tr>
                 );
@@ -4891,6 +4943,7 @@ function ReportingSheetTab({ rows: all, userName }: { rows: ReportingSheetRow[];
 /* ── Unknown Affiliate ─────────────────────────────────── */
 
 function UnknownTab({ rows }: { rows: Unknown[] }) {
+  const canEdit = useCanEdit();
   const router = useRouter();
   const [convert, setConvert] = useState<Unknown | null>(null);
 
@@ -4946,6 +4999,7 @@ function UnknownTab({ rows }: { rows: Unknown[] }) {
                 <td className="px-4 py-3 text-right">{r.gross_revenue != null ? `RM${r.gross_revenue}` : "—"}</td>
                 <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
                 <td className="px-4 py-3">
+                  {canEdit && (
                   <div className="flex items-center gap-1.5">
                     <button className="btn !py-1.5 text-xs" onClick={() => setConvert(r)}>
                       <CalendarPlus className="h-3.5 w-3.5" aria-hidden="true" />
@@ -4956,6 +5010,7 @@ function UnknownTab({ rows }: { rows: Unknown[] }) {
                       <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                     </button>
                   </div>
+                  )}
                 </td>
               </tr>
             ))}

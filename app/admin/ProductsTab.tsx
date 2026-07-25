@@ -7,6 +7,7 @@ import {
 import Modal from "@/components/Modal";
 import { compressScreenshot, fmtBytes, MAX_UPLOAD_BYTES } from "@/lib/image";
 import { confirmDialog } from "@/lib/swal";
+import { useCanEdit } from "@/app/marketer/edit-context";
 
 export type Product = {
   id: number; name: string; image_url: string | null;
@@ -16,6 +17,7 @@ export type Product = {
 };
 
 export default function ProductsTab() {
+  const canEdit = useCanEdit();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Product | null>(null);
@@ -59,11 +61,13 @@ export default function ProductsTab() {
     <>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="section-title">Product Catalogue</h2>
-        <button className="btn !py-2"
-          onClick={() => { setEditing(null); setOpen(true); }}>
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          Add Product
-        </button>
+        {canEdit && (
+          <button className="btn !py-2"
+            onClick={() => { setEditing(null); setOpen(true); }}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Add Product
+          </button>
+        )}
       </div>
 
       {error && (
@@ -126,6 +130,7 @@ export default function ProductsTab() {
                 )}
               </div>
 
+              {canEdit && (
               <div className="flex shrink-0 items-center gap-1">
                 <button onClick={() => { setEditing(p); setOpen(true); }}
                   className="cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-accent/10 hover:text-accent"
@@ -138,6 +143,7 @@ export default function ProductsTab() {
                   <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
+              )}
             </div>
           ))}
         </div>

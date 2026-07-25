@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  HelpCircle, Save, Loader2, Check, AlertCircle, Layers, CalendarDays, X, Tag,
+  HelpCircle, Save, Loader2, Check, AlertCircle, Layers, CalendarDays, X, Tag, Eye,
 } from "lucide-react";
 import { BrandSelect } from "./BrandsTab";
 import { PILLARS, PILLAR_COLUMNS, getPillar, type PillarColumnKey } from "@/lib/pillars";
 import { todayKL } from "@/lib/daterange";
+import { useCanEdit } from "./edit-context";
 
 type Row = Record<PillarColumnKey, string>;
 const EMPTY: Row = { problem: "", solution: "", planning: "", execution: "" };
@@ -28,6 +29,7 @@ const COL_HEAD: Record<PillarColumnKey, string> = {
 const CUSTOM_NO = 17;
 
 export default function PillarCreate() {
+  const canEdit = useCanEdit();
   const [level, setLevel] = useState(1);
   const [date, setDate] = useState(todayKL());
   const [brand, setBrand] = useState("");
@@ -97,6 +99,13 @@ export default function PillarCreate() {
     if (!res.ok) return setError(data.error || "Could not save.");
     setSaved(`${data.saved} item disimpan${data.cleared ? `, ${data.cleared} dikosongkan` : ""}`);
   }
+
+  if (!canEdit) return (
+    <p className="card flex items-center gap-2 text-sm text-muted-fg">
+      <Eye className="h-4 w-4 shrink-0" aria-hidden="true" />
+      Create Pillar hanya untuk workspace anda sendiri. Guna <b>Reporting Pillar</b> untuk lihat pillar marketer ini.
+    </p>
+  );
 
   return (
     <div className="space-y-5">

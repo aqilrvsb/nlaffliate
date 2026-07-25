@@ -8,6 +8,7 @@ import {
 // Tag doubles as the brand-filter icon below.
 import Modal from "@/components/Modal";
 import { confirmDialog } from "@/lib/swal";
+import { useCanEdit } from "./edit-context";
 
 export type BrandLink = { id: number; name: string; url: string; link_type: "self" | "affiliate" };
 export type Brand = {
@@ -19,6 +20,7 @@ export type Brand = {
 type CatalogueBrand = { id: number; name: string };
 
 export default function BrandsTab({ onChange }: { onChange?: () => void }) {
+  const canEdit = useCanEdit();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Brand | null>(null);
@@ -72,11 +74,13 @@ export default function BrandsTab({ onChange }: { onChange?: () => void }) {
             Overall dan Pillar disimpan mengikut brand.
           </p>
         </div>
-        <button className="btn !py-2"
-          onClick={() => { setEditing(null); setOpen(true); }}>
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          Add Brand
-        </button>
+        {canEdit && (
+          <button className="btn !py-2"
+            onClick={() => { setEditing(null); setOpen(true); }}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Add Brand
+          </button>
+        )}
       </div>
 
       {error && (
@@ -98,6 +102,7 @@ export default function BrandsTab({ onChange }: { onChange?: () => void }) {
                 <Tag className="h-4 w-4" aria-hidden="true" />
               </span>
               <p className="min-w-0 flex-1 truncate font-bold text-ink">{b.name}</p>
+              {canEdit && (
               <div className="flex shrink-0 items-center gap-1">
                 <button onClick={() => { setEditing(b); setOpen(true); }}
                   className="cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-accent/10 hover:text-accent"
@@ -110,6 +115,7 @@ export default function BrandsTab({ onChange }: { onChange?: () => void }) {
                   <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
+              )}
               </div>
 
               <BrandLinksEditor brand={b} onSaved={load} />

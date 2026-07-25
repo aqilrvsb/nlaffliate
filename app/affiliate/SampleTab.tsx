@@ -59,9 +59,13 @@ export default function SampleTab() {
   const [open, setOpen] = useState(false);
 
   const load = useCallback(async () => {
-    const d = await fetch("/api/samples").then((r) => r.json());
-    setRequests(d.requests || []);
-    setLoading(false);
+    try {
+      const r = await fetch("/api/samples");
+      const d = r.ok ? await r.json() : {};
+      setRequests(d.requests || []);
+    } finally {
+      setLoading(false);
+    }
   }, []);
   useEffect(() => { load(); }, [load]);
 

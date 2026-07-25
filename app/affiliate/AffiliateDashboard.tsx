@@ -89,17 +89,24 @@ export default function AffiliateDashboard({
   const [brandFilter, setBrandFilter] = useState("");
 
   const load = useCallback(async () => {
-    const [p, b, po, br] = await Promise.all([
-      fetch("/api/profiles").then((r) => r.json()),
-      fetch("/api/bookings").then((r) => r.json()),
-      fetch("/api/posts").then((r) => r.json()),
-      fetch("/api/brands").then((r) => r.json()),
-    ]);
-    setProfiles(p.profiles || []);
-    setBookings(b.bookings || []);
-    setPosts(po.posts || []);
-    setBrands(br.brands || []);
-    setLoading(false);
+    // Never let one failed endpoint hang the whole page on "Loading…": each
+    // fetch degrades to an empty result, and loading always clears in finally.
+    const safe = (url: string): Promise<any> =>
+      fetch(url).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    try {
+      const [p, b, po, br] = await Promise.all([
+        safe("/api/profiles"),
+        safe("/api/bookings"),
+        safe("/api/posts"),
+        safe("/api/brands"),
+      ]);
+      setProfiles(p.profiles || []);
+      setBookings(b.bookings || []);
+      setPosts(po.posts || []);
+      setBrands(br.brands || []);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);

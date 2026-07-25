@@ -22,15 +22,17 @@ export default function BrandsView() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const [p, br] = await Promise.all([
-      fetch("/api/profiles").then((r) => r.json()),
-      fetch("/api/brands").then((r) => r.json()),
-    ]);
-    setProfiles(p.profiles || []);
-    const map: Record<number, BrandLink[]> = {};
-    for (const b of br.brands || []) map[b.id] = b.links || [];
-    setLinksByBrand(map);
-    setLoading(false);
+    const safe = (url: string): Promise<any> =>
+      fetch(url).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    try {
+      const [p, br] = await Promise.all([safe("/api/profiles"), safe("/api/brands")]);
+      setProfiles(p.profiles || []);
+      const map: Record<number, BrandLink[]> = {};
+      for (const b of br.brands || []) map[b.id] = b.links || [];
+      setLinksByBrand(map);
+    } finally {
+      setLoading(false);
+    }
   }, []);
   useEffect(() => { load(); }, [load]);
 

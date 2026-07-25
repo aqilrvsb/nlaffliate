@@ -89,8 +89,12 @@ export async function GET(req: Request) {
      * brand can sit on several of their links. Only affiliate-type links are
      * exposed to them; self links stay with the marketer.
      */
+    // GROUP BY, not DISTINCT: one brand can sit on several of the affiliate's
+    // links, and Postgres can't DISTINCT a row that carries a `json` column
+    // (json has no equality operator). Grouping by the brand dedups it and the
+    // correlated links subquery still runs once per brand.
     brands = await db.prepare(
-        `SELECT DISTINCT b.id, b.name, b.marketer_id, b.wa_group_url,
+        `SELECT b.id, b.name, b.marketer_id, b.wa_group_url,
                 COALESCE(
                   (SELECT json_agg(json_build_object(
                             'id', l.id, 'name', l.name, 'url', l.url, 'link_type', l.link_type
@@ -102,6 +106,7 @@ export async function GET(req: Request) {
            JOIN tiktok_profiles p ON p.id = pb.profile_id
            JOIN brands b ON b.id = pb.brand_id
           WHERE p.user_id = ?
+          GROUP BY b.id, b.name, b.marketer_id, b.wa_group_url
           ORDER BY b.name`
       ).all(user.id);
   }

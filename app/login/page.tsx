@@ -26,7 +26,7 @@ export default function LoginPage() {
     if (!res.ok) return setError(data.error || "Login failed");
     router.push(
       data.role === "admin" ? "/admin"
-        : data.role === "marketer" || data.role === "leader" ? "/marketer"
+        : data.role === "marketer" || data.role === "leader" || data.role === "director" ? "/marketer"
           : "/affiliate"
     );
     router.refresh();

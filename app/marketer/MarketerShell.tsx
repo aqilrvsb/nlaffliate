@@ -227,7 +227,8 @@ const TAB_LABELS: Record<string, string> = {
 export default function MarketerShell({
   user, affiliates, lives, unknowns, salesLive, salesProduct, overall, posts, creatorReports,
   liveUsers, liveSessions, dataQuality, salesCard, spendTtm, reportingSheet,
-  salesLiveCampaign, salesProductCampaign, marketers = [], viewMode = "own", canEdit = true,
+  salesLiveCampaign, salesProductCampaign, marketers = [], leaders = [],
+  overseer = "", viewValue = "", canEdit = true,
 }: {
   user: SessionUser; affiliates: Affiliate[]; lives: Live[];
   unknowns: Unknown[]; salesLive: SalesLive[]; salesProduct: SalesProduct[];
@@ -235,10 +236,14 @@ export default function MarketerShell({
   liveUsers: LiveUser[]; liveSessions: LiveSession[]; dataQuality: DataQuality[];
   salesCard: SalesCard[]; spendTtm: SpendTtm[]; reportingSheet: ReportingSheetRow[];
   salesLiveCampaign: SalesCampaign[]; salesProductCampaign: SalesCampaign[];
-  marketers?: { id: number; name: string; staff_id: string | null }[];
-  /** Leader switcher state: own workspace, whole team, or one teammate id. */
-  viewMode?: "own" | "all" | number;
-  /** False when a leader is monitoring someone else — hide entry controls. */
+  marketers?: { id: number; name: string; staff_id: string | null; leader_id?: number | null }[];
+  /** Director-only: the leaders they can drill into (per-team option groups). */
+  leaders?: { id: number; name: string; staff_id: string | null }[];
+  /** Which oversight role is viewing, if any. */
+  overseer?: "leader" | "director" | "";
+  /** The switcher's current <option> value ("" = Saya, "all", "team-<id>", "<id>"). */
+  viewValue?: string;
+  /** False when monitoring someone else — the workspace is read-only. */
   canEdit?: boolean;
 }) {
   const router = useRouter();
@@ -598,25 +603,47 @@ export default function MarketerShell({
         </div>
 
         <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
-          {user.role === "leader" && (
+          {overseer !== "" && (
             <div className={`card flex flex-wrap items-center gap-3 ${canEdit ? "border-emerald-200 bg-emerald-50/60" : "border-amber-200 bg-amber-50/60"}`}>
               <span className={`flex items-center gap-2 text-sm ${canEdit ? "text-emerald-800" : "text-amber-800"}`}>
                 {canEdit
                   ? <><Pencil className="h-4 w-4 shrink-0" aria-hidden="true" /><b>Workspace saya</b> — boleh edit.</>
-                  : <><Eye className="h-4 w-4 shrink-0" aria-hidden="true" /><b>Monitor</b> — read-only.</>}
+                  : <><Eye className="h-4 w-4 shrink-0" aria-hidden="true" /><b>{overseer === "director" ? "Director" : "Monitor"}</b> — read-only.</>}
               </span>
               <div className="flex w-full items-center gap-2 sm:w-auto">
                 <label className={`shrink-0 text-[11px] font-bold uppercase tracking-wide ${canEdit ? "text-emerald-800" : "text-amber-800"}`} htmlFor="ldr-mkt">Papar</label>
                 <div className="relative min-w-0 flex-1 sm:flex-none">
                   <select id="ldr-mkt" disabled={navPending}
-                    className="input w-full max-w-full cursor-pointer !py-1.5 pr-8 text-sm transition disabled:cursor-wait disabled:opacity-60 sm:!w-64"
-                    value={viewMode === "own" ? "" : String(viewMode)}
+                    className="input w-full max-w-full cursor-pointer !py-1.5 pr-8 text-sm transition disabled:cursor-wait disabled:opacity-60 sm:!w-72"
+                    value={viewValue}
                     onChange={(e) => goMarketer(e.target.value)}>
-                    <option value="">Saya (workspace saya)</option>
-                    {marketers.length > 0 && <option value="all">Semua Team (jumlah)</option>}
-                    {marketers.map((m) => (
-                      <option key={m.id} value={m.id}>{m.name}{m.staff_id ? ` (${m.staff_id})` : ""}</option>
-                    ))}
+                    {overseer === "leader" ? (
+                      <>
+                        <option value="">Saya (workspace saya)</option>
+                        {marketers.length > 0 && <option value="all">Semua Team (jumlah)</option>}
+                        {marketers.map((m) => (
+                          <option key={m.id} value={m.id}>{m.name}{m.staff_id ? ` (${m.staff_id})` : ""}</option>
+                        ))}
+                      </>
+                    ) : (
+                      <>
+                        <option value="all">Semua Syarikat (jumlah)</option>
+                        {leaders.length > 0 && (
+                          <optgroup label="Team Leader">
+                            {leaders.map((l) => (
+                              <option key={`t${l.id}`} value={`team-${l.id}`}>Team {l.staff_id || l.name}</option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {marketers.length > 0 && (
+                          <optgroup label="Marketer">
+                            {marketers.map((m) => (
+                              <option key={m.id} value={m.id}>{m.name}{m.staff_id ? ` (${m.staff_id})` : ""}</option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </>
+                    )}
                   </select>
                   {navPending && (
                     <Loader2 className={`pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin ${canEdit ? "text-emerald-600" : "text-amber-600"}`} aria-hidden="true" />
@@ -625,9 +652,13 @@ export default function MarketerShell({
               </div>
               <span className={`flex items-center gap-1.5 text-xs transition-opacity ${canEdit ? "text-emerald-800/80" : "text-amber-800/80"}`}>
                 {navPending ? "Memuatkan…"
-                  : viewMode === "own" ? "Data marketer anda sendiri."
-                  : viewMode === "all" ? "Semua team digabungkan."
-                  : "Menunjukkan satu marketer team."}
+                  : overseer === "director"
+                    ? (viewValue === "all" ? "Semua syarikat digabungkan."
+                      : viewValue.startsWith("team-") ? "Team leader (leader + marketernya) digabungkan."
+                      : "Menunjukkan seorang.")
+                    : viewValue === "" ? "Data marketer anda sendiri."
+                    : viewValue === "all" ? "Semua team digabungkan."
+                    : "Menunjukkan satu marketer team."}
               </span>
             </div>
           )}

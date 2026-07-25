@@ -10,7 +10,7 @@ import db from "@/lib/db";
  */
 
 const PREFIX: Record<string, { seq: string; code: string }> = {
-  admin:     { seq: "staff_seq_adm", code: "HQNL" },
+  admin:     { seq: "staff_seq_adm", code: "ADMINNL" },
   marketer:  { seq: "staff_seq_mnl", code: "MNL" },
   affiliate: { seq: "staff_seq_afl", code: "AFL" },
   leader:    { seq: "staff_seq_lmnl", code: "LMNL" },
@@ -18,9 +18,10 @@ const PREFIX: Record<string, { seq: string; code: string }> = {
 
 /** The next staff ID for a role, e.g. "AFL-007". Atomic and collision-free. */
 export async function nextStaffId(role: string): Promise<string> {
-  // The company has one HQ account, so admin is a fixed "HQNL" rather than a
-  // numbered series.
-  if (role === "admin") return "HQNL";
+  // Single-seat oversight roles get a fixed login rather than a numbered
+  // series: admin is ADMINNL, the director is HQNL.
+  if (role === "admin") return "ADMINNL";
+  if (role === "director") return "HQNL";
   const p = PREFIX[role];
   if (!p) throw new Error(`No staff-ID scheme for role "${role}".`);
   // nextval is atomic even under concurrency, so no two callers collide.

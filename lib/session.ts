@@ -11,9 +11,9 @@ export type SessionUser = {
   id: number;
   name: string;
   email: string;
-  /** The login identity: MNL-/AFL-/HQNL/LMNL-. */
+  /** The login identity: MNL-/AFL-/ADMINNL/LMNL-/HQNL. */
   staff_id: string;
-  role: "marketer" | "affiliate" | "admin" | "leader";
+  role: "marketer" | "affiliate" | "admin" | "leader" | "director";
 };
 
 export async function createSession(user: SessionUser) {

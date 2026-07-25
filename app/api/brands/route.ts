@@ -60,6 +60,13 @@ export async function GET(req: Request) {
            FROM brands b LEFT JOIN users u ON u.id = b.marketer_id
           ORDER BY b.name, u.name`
       ).all();
+  } else if (user.role === "director") {
+    // The director oversees everyone, so the brand filter spans all marketers.
+    brands = await db.prepare(
+        `SELECT b.id, b.name, b.marketer_id, u.name AS marketer_name
+           FROM brands b JOIN users u ON u.id = b.marketer_id
+          ORDER BY b.name, u.name`
+      ).all();
   } else if (user.role === "marketer" || user.role === "leader") {
     // A leader has their own marketer workspace, so — like a marketer — they
     // see and manage their own brands. (Team monitoring is server-scoped

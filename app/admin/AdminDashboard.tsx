@@ -126,6 +126,21 @@ export default function AdminDashboard({
     router.refresh();
   }
 
+  // Admin manages a marketer directly (create lives, affiliates, reporting on
+  // their behalf) — same "act as" flow as a leader, but for any marketer.
+  async function manageMarketer(id: number) {
+    setSavingId(id);
+    const res = await fetch("/api/leader/act-as", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ marketer_id: id }),
+    });
+    if (res.ok) { window.location.href = "/marketer"; return; }
+    setSavingId(null);
+    const d = await res.json().catch(() => ({}));
+    await alertDialog({ title: "Tidak berjaya", text: d.error || "Ralat.", variant: "warning" });
+  }
+
   const totalGmv = rows.reduce((s, r) => s + (r.gmv || 0), 0);
   const totalItems = rows.reduce((s, r) => s + (r.items_sold || 0), 0);
   const totalViewers = rows.reduce((s, r) => s + (r.viewers || 0), 0);
@@ -272,6 +287,11 @@ export default function AdminDashboard({
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
                         {savingId === m.id && <Loader2 className="h-4 w-4 animate-spin text-muted-fg" aria-hidden="true" />}
+                        <button onClick={() => manageMarketer(m.id)} disabled={savingId === m.id}
+                          title="Urus marketer ini — buat live, affiliate, reporting bagi pihak mereka"
+                          className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-primary px-2.5 py-1.5 text-xs font-semibold text-primary-fg shadow-lift transition hover:opacity-90 disabled:opacity-50">
+                          <UserRound className="h-3.5 w-3.5" aria-hidden="true" /> Urus
+                        </button>
                         <button onClick={() => removeUser(m.id, m.name)}
                           aria-label={`Delete ${m.name}`} title="Delete account"
                           className="cursor-pointer rounded-lg p-1.5 text-muted-fg transition hover:bg-danger/10 hover:text-danger">

@@ -18,8 +18,8 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(req: Request) {
   const real = await getRealSession();
-  if (!real || real.role !== "leader") {
-    return NextResponse.json({ error: "Leaders only." }, { status: 403 });
+  if (!real || (real.role !== "leader" && real.role !== "admin")) {
+    return NextResponse.json({ error: "Not allowed." }, { status: 403 });
   }
 
   const body = await req.json().catch(() => ({}));
@@ -28,11 +28,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Marketer tidak sah." }, { status: 400 });
   }
 
-  const m = await db
-    .prepare("SELECT id, name FROM users WHERE id = ? AND role = 'marketer' AND leader_id = ?")
-    .get<{ id: number; name: string }>(marketerId, real.id);
+  // A leader may only manage their own team; an admin may manage any marketer.
+  const m =
+    real.role === "admin"
+      ? await db
+          .prepare("SELECT id, name FROM users WHERE id = ? AND role = 'marketer'")
+          .get<{ id: number; name: string }>(marketerId)
+      : await db
+          .prepare("SELECT id, name FROM users WHERE id = ? AND role = 'marketer' AND leader_id = ?")
+          .get<{ id: number; name: string }>(marketerId, real.id);
   if (!m) {
-    return NextResponse.json({ error: "Marketer itu bukan dalam team anda." }, { status: 403 });
+    return NextResponse.json({ error: "Marketer itu tidak boleh diurus." }, { status: 403 });
   }
 
   cookies().set(ACT_AS, String(marketerId), {

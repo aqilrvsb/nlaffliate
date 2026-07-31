@@ -296,11 +296,10 @@ export default function MarketerShell({
     router.refresh();
   }
 
-  // Stop managing a marketer and return to the leader's own dashboard.
+  // Stop managing a marketer and return to the manager's own dashboard.
   async function exitManage() {
     await fetch("/api/leader/act-as", { method: "DELETE" });
-    router.push("/marketer");
-    router.refresh();
+    window.location.href = user.impersonatorRole === "admin" ? "/admin" : "/marketer";
   }
 
   // Enter "manage as" for the marketer currently in the switcher.
@@ -629,7 +628,7 @@ export default function MarketerShell({
             <div className="card flex flex-wrap items-center gap-3 border-indigo-200 bg-indigo-50/70">
               <span className="flex items-center gap-2 text-sm text-indigo-800">
                 <Pencil className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span><b>Mod Urus</b> — anda menguruskan <b>{user.name}</b> sebagai leader. Apa yang anda tambah disimpan bawah marketer ini.</span>
+                <span><b>Mod Urus</b> — anda menguruskan <b>{user.name}</b> sebagai {user.impersonatorRole === "admin" ? "admin" : "leader"}. Apa yang anda tambah disimpan bawah marketer ini.</span>
               </span>
               <button onClick={exitManage}
                 className="ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-indigo-700">

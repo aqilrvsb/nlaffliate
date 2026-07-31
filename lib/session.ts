@@ -17,9 +17,10 @@ export type SessionUser = {
   /** The login identity: MNL-/AFL-/ADMINNL/LMNL-/HQNL. */
   staff_id: string;
   role: "marketer" | "affiliate" | "admin" | "leader" | "director";
-  /** When a leader is managing a marketer, who the real leader is. */
+  /** When a leader or admin is managing a marketer, who is really behind it. */
   impersonatorId?: number;
   impersonatorName?: string;
+  impersonatorRole?: "leader" | "admin";
 };
 
 export async function createSession(user: SessionUser) {
@@ -58,24 +59,29 @@ export async function getRealSession(): Promise<SessionUser | null> {
 /**
  * The effective identity for this request.
  *
- * Normally the logged-in user. But a leader may be *managing* one of their
- * marketers (an `act_as` cookie): if the real user is that marketer's leader,
- * the whole app runs as that marketer — reads AND writes — so every tab and
- * endpoint works with no special-casing. Ownership is re-checked on every call,
- * so a tampered cookie can never reach a marketer the leader doesn't own.
+ * Normally the logged-in user. But a leader — or an admin — may be *managing*
+ * a marketer (an `act_as` cookie): the whole app then runs as that marketer,
+ * reads AND writes, so every tab and endpoint works with no special-casing. A
+ * leader may only reach their own team; an admin may reach any marketer. The
+ * permission is re-checked on every call, so a tampered cookie can never reach
+ * a marketer the caller isn't allowed to manage.
  */
 export async function getSession(): Promise<SessionUser | null> {
   const real = await getRealSession();
   if (!real) return null;
 
   const actAs = cookies().get(ACT_AS)?.value;
-  if (actAs && real.role === "leader" && /^\d+$/.test(actAs)) {
+  const canManage = real.role === "leader" || real.role === "admin";
+  if (actAs && canManage && /^\d+$/.test(actAs)) {
     const mid = Number(actAs);
-    const m = await db
-      .prepare(
-        "SELECT id, name, email, staff_id FROM users WHERE id = ? AND role = 'marketer' AND leader_id = ?"
-      )
-      .get<{ id: number; name: string; email: string | null; staff_id: string | null }>(mid, real.id);
+    const m =
+      real.role === "admin"
+        ? await db
+            .prepare("SELECT id, name, email, staff_id FROM users WHERE id = ? AND role = 'marketer'")
+            .get<{ id: number; name: string; email: string | null; staff_id: string | null }>(mid)
+        : await db
+            .prepare("SELECT id, name, email, staff_id FROM users WHERE id = ? AND role = 'marketer' AND leader_id = ?")
+            .get<{ id: number; name: string; email: string | null; staff_id: string | null }>(mid, real.id);
     if (m) {
       return {
         id: Number(m.id),
@@ -85,9 +91,10 @@ export async function getSession(): Promise<SessionUser | null> {
         role: "marketer",
         impersonatorId: real.id,
         impersonatorName: real.name,
+        impersonatorRole: real.role as "leader" | "admin",
       };
     }
-    // Stale/invalid override — fall through as the real leader.
+    // Stale/invalid override — fall through as the real user.
   }
   return real;
 }

@@ -1803,8 +1803,8 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
                 <Stat Icon={Wallet} label="Budget" value={fmtRMor(l.ads_budget)} />
                 <Stat Icon={Wallet} label="Spend" value={fmtRMor(l.ad_spend)} />
                 <Stat Icon={TrendingUp} label="Gross Revenue" value={fmtRMor(l.gross_revenue)} />
-                <Stat Icon={(l.roi ?? 0) >= 1 ? TrendingUp : TrendingDown}
-                  label="ROI" value={l.roi ?? "—"} />
+                <Stat Icon={(deriveRoi(l.ad_spend, l.gross_revenue, l.roi) ?? 0) >= 1 ? TrendingUp : TrendingDown}
+                  label="ROI" value={deriveRoi(l.ad_spend, l.gross_revenue, l.roi) ?? "—"} />
               </div>
             )}
             {l.post_url && (
@@ -2340,6 +2340,30 @@ const money2 = (n: number | null | undefined) =>
 const intOr = (n: number | null | undefined) =>
   n != null ? fmtNum(n) : "—";
 
+/**
+ * ROI and Cost/Order for a row, derived when the import didn't carry them.
+ *
+ * The TikTok campaign export leaves per-campaign ROI and Cost-per-order blank,
+ * so they arrive null and every campaign row showed "—". Both are pure
+ * functions of columns we DO have (ROI = gross ÷ cost, Cost/Order = cost ÷
+ * orders), so compute them here rather than depend on the sheet. A stored value
+ * still wins, so daily totals keep the figure the import already worked out.
+ */
+const deriveRoi = (
+  cost?: number | null, gross?: number | null, stored?: number | null
+): number | null =>
+  stored != null ? stored
+    : cost != null && cost > 0 && gross != null
+      ? Math.round((gross / cost) * 100) / 100
+      : null;
+const deriveCpo = (
+  cost?: number | null, orders?: number | null, stored?: number | null
+): number | null =>
+  stored != null ? stored
+    : orders != null && orders > 0 && cost != null
+      ? Math.round((cost / orders) * 100) / 100
+      : null;
+
 /** "2026-07-24" (the chosen report date) → "24-07-2026". */
 const fmtDMY = (v: string | null | undefined) => {
   if (!v) return "—";
@@ -2683,9 +2707,9 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
                     <td className="px-4 py-3 text-ink">{fmtDMY(r.report_date)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{money2(r.cost)}</td>
                     <td className="px-4 py-3 text-right">{int(r.sku_orders)}</td>
-                    <td className="px-4 py-3 text-right">{money2(r.cost_per_order)}</td>
+                    <td className="px-4 py-3 text-right">{money2(deriveCpo(r.cost, r.sku_orders, r.cost_per_order))}</td>
                     <td className="px-4 py-3 text-right">{money2(r.gross_revenue)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{deriveRoi(r.cost, r.gross_revenue, r.roi) ?? "—"}</td>
                     <td className="px-4 py-3 text-right">{intOr(r.live_views)}</td>
                     <td className="px-4 py-3">
                       {canEdit && (
@@ -2820,9 +2844,9 @@ function SalesProductTab({ rows: rawAll, cards }: { rows: SalesProduct[]; cards:
                     <td className="px-4 py-3 text-ink">{fmtDMY(r.report_date)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{money2(r.cost)}</td>
                     <td className="px-4 py-3 text-right">{int(r.sku_orders)}</td>
-                    <td className="px-4 py-3 text-right">{money2(r.cost_per_order)}</td>
+                    <td className="px-4 py-3 text-right">{money2(deriveCpo(r.cost, r.sku_orders, r.cost_per_order))}</td>
                     <td className="px-4 py-3 text-right">{money2(r.gross_revenue)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{deriveRoi(r.cost, r.gross_revenue, r.roi) ?? "—"}</td>
                     <td className="px-4 py-3">
                       {canEdit && (
                       <div className="flex items-center gap-1">
@@ -2918,9 +2942,9 @@ function SalesCampaignTab({ rows: all, kind }: { rows: SalesCampaign[]; kind: "l
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{money2(r.cost)}</td>
                     <td className="px-4 py-3 text-right">{int(r.sku_orders)}</td>
-                    <td className="px-4 py-3 text-right">{money2(r.cost_per_order)}</td>
+                    <td className="px-4 py-3 text-right">{money2(deriveCpo(r.cost, r.sku_orders, r.cost_per_order))}</td>
                     <td className="px-4 py-3 text-right">{money2(r.gross_revenue)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{deriveRoi(r.cost, r.gross_revenue, r.roi) ?? "—"}</td>
                     {isLive && <td className="px-4 py-3 text-right">{intOr(r.live_views)}</td>}
                   </tr>
                 ))}
@@ -3096,9 +3120,9 @@ function SalesCardTab({ rows: all }: { rows: SalesCard[] }) {
                     <td className="px-4 py-3 text-ink">{fmtDMY(r.report_date)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{money(r.cost)}</td>
                     <td className="px-4 py-3 text-right">{int(r.sku_orders)}</td>
-                    <td className="px-4 py-3 text-right">{money(r.cost_per_order)}</td>
+                    <td className="px-4 py-3 text-right">{money(deriveCpo(r.cost, r.sku_orders, r.cost_per_order))}</td>
                     <td className="px-4 py-3 text-right">{money(r.gross_revenue)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{deriveRoi(r.cost, r.gross_revenue, r.roi) ?? "—"}</td>
                     <td className="px-4 py-3">
                       {canEdit && (
                       <div className="flex items-center gap-1">
@@ -3352,7 +3376,7 @@ function OverallTab({ overall, salesLive, salesProduct, salesCard, spendTtm }: {
                   <td className="px-4 py-3 text-right font-semibold text-ink">{money(o.gmv)}</td>
                   <td className="px-4 py-3 text-right">{money(o.cost)}</td>
                   <td className="px-4 py-3 text-right">{money(o.gross_revenue)}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-ink">{o.roi ?? "—"}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-ink">{deriveRoi(o.cost, o.gross_revenue, o.roi) ?? "—"}</td>
                   <td className="px-4 py-3 text-right">{int(o.sku_orders)}</td>
                   <td className="px-4 py-3 text-right">{int(o.visitors)}</td>
                   <td className="px-4 py-3 text-right">{int(o.product_impressions)}</td>
@@ -4219,7 +4243,7 @@ function LiveScheduleTab({
                       <td className="px-4 py-3 text-right">{money(s.ads_budget)}</td>
                       <td className="px-4 py-3 text-right">{money(s.ad_spend)}</td>
                       <td className="px-4 py-3 text-right">{money(s.gross_revenue)}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-ink">{s.roi ?? "—"}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-ink">{deriveRoi(s.ad_spend, s.gross_revenue, s.roi) ?? "—"}</td>
                     </>
                   ) : (
                     <td className="px-4 py-3 text-muted-fg">{s.note || "—"}</td>
@@ -5170,7 +5194,7 @@ function UnknownTab({ rows }: { rows: Unknown[] }) {
                 <td className="px-4 py-3">{r.duration || "—"}</td>
                 <td className="px-4 py-3 text-right">{fmtRMor(r.ad_spend)}</td>
                 <td className="px-4 py-3 text-right">{fmtRMor(r.gross_revenue)}</td>
-                <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
+                <td className="px-4 py-3 text-right font-semibold text-ink">{deriveRoi(r.ad_spend, r.gross_revenue, r.roi) ?? "—"}</td>
                 <td className="px-4 py-3">
                   {canEdit && (
                   <div className="flex items-center gap-1.5">

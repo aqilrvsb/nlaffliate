@@ -89,10 +89,16 @@ export async function POST(req: Request) {
     orders += rOrders || 0;
     gross += rGross || 0;
     counted++;
+    // The export leaves per-campaign ROI / Cost-per-order blank, so derive them
+    // from the figures we do have (falling back to any sheet value).
+    const cRoi = rCost && rCost > 0 && rGross != null
+      ? Math.round((rGross / rCost) * 100) / 100 : num(r["ROI"]);
+    const cCpo = rOrders && rOrders > 0 && rCost != null
+      ? Math.round((rCost / rOrders) * 100) / 100 : money(r["Cost per order"]);
     await insertCampaign.run(
       user.id, brandId, reportDate, str(r["Campaign ID"]), name,
       rCost, money(r["Net Cost"]), money(r["Current budget"]), rOrders,
-      money(r["Cost per order"]), rGross, num(r["ROI"])
+      cCpo, rGross, cRoi
     );
   }
   const cpo = orders > 0 ? Math.round((cost / orders) * 100) / 100 : null;

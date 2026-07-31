@@ -586,9 +586,10 @@ function BookingCard({
       fd.append("booking_id", String(b.id));
       fd.append("screenshot", file);
       const res = await fetch("/api/results", { method: "POST", body: fd });
-      const data = await res.json();
+      const text = await res.text();
+      const data = (() => { try { return text ? JSON.parse(text) : {}; } catch { return {}; } })();
       if (!res.ok) {
-        setAiError(data.error || "Upload failed");
+        setAiError(data.error || `Upload gagal (${res.status}). Gambar mungkin terlalu besar atau server sibuk — cuba lagi.`);
         return;
       }
       if (data.aiError) setAiError(data.aiError);

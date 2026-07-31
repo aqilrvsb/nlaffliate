@@ -98,6 +98,9 @@ export async function readImageJson(
 
   const res = await fetch(`${base}/chat/completions`, {
     method: "POST",
+    // Never hold the request open on a slow/unresponsive provider (e.g. out of
+    // credit): fail fast so the caller returns a clean error, not a timeout.
+    signal: AbortSignal.timeout(35_000),
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${key}`,
@@ -131,6 +134,9 @@ export async function readAnalyticsTable(
 
   const res = await fetch(`${base}/chat/completions`, {
     method: "POST",
+    // Never hold the request open on a slow/unresponsive provider (e.g. out of
+    // credit): fail fast so the caller returns a clean error, not a timeout.
+    signal: AbortSignal.timeout(35_000),
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${key}`,
@@ -194,6 +200,9 @@ export async function readLiveScreenshot(
 
   const res = await fetch(`${base}/chat/completions`, {
     method: "POST",
+    // Never hold the request open on a slow/unresponsive provider (e.g. out of
+    // credit): fail fast so the caller returns a clean error, not a timeout.
+    signal: AbortSignal.timeout(35_000),
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${key}`,

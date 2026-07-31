@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { moneyScalerFromForm } from "@/lib/currency";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -40,6 +41,11 @@ export async function POST(req: Request) {
   if (!brandRaw || !Number.isFinite(brandId))
     return NextResponse.json({ error: "Pick a brand." }, { status: 400 });
 
+  // IDR uploads are converted to MYR before storing; MYR is a no-op.
+  const sc = moneyScalerFromForm(form.get("currency"), form.get("rate"));
+  if (!sc.ok) return NextResponse.json({ error: sc.error }, { status: 400 });
+  const money = (v: any) => sc.scaler.scale(num(v));
+
   const brand = await db
     .prepare("SELECT id FROM brands WHERE id = ? AND marketer_id = ?")
     .get(brandId, user.id);
@@ -76,20 +82,20 @@ export async function POST(req: Request) {
     // First column is Campaign name; null or "-" is the total/spacer row.
     const name = str(r["Campaign name"]);
     if (!name || name === "-") { skipped++; continue; }
-    const rCost = num(r["Cost"]), rGross = num(r["Gross revenue"]), rOrders = num(r["SKU orders"]);
+    const rCost = money(r["Cost"]), rGross = money(r["Gross revenue"]), rOrders = num(r["SKU orders"]);
     // Skip dead campaigns: no cost and no revenue.
     if ((rCost || 0) === 0 && (rGross || 0) === 0) { skipped++; continue; }
     cost += rCost || 0;
-    netCost += num(r["Net Cost"]) || 0;
+    netCost += money(r["Net Cost"]) || 0;
     gross += rGross || 0;
     orders += rOrders || 0;
     views += num(r["LIVE views"]) || 0;
-    budget += num(r["Current budget"]) || 0;
+    budget += money(r["Current budget"]) || 0;
     counted++;
     await insertCampaign.run(
       user.id, brandId, reportDate, str(r["Campaign ID"]), name,
-      rCost, num(r["Net Cost"]), rGross, num(r["ROI"]), rOrders,
-      num(r["Cost per order"]), num(r["LIVE views"]), num(r["Current budget"])
+      rCost, money(r["Net Cost"]), rGross, num(r["ROI"]), rOrders,
+      money(r["Cost per order"]), num(r["LIVE views"]), money(r["Current budget"])
     );
   }
   const cpo = orders > 0 ? Math.round((cost / orders) * 100) / 100 : null;

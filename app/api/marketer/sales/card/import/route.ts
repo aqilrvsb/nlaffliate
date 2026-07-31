@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { moneyScalerFromForm } from "@/lib/currency";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -39,6 +40,11 @@ export async function POST(req: Request) {
     .get(brandId, user.id);
   if (!brand) return NextResponse.json({ error: "That brand is not yours." }, { status: 403 });
 
+  // IDR uploads are converted to MYR before storing; MYR is a no-op.
+  const sc = moneyScalerFromForm(form.get("currency"), form.get("rate"));
+  if (!sc.ok) return NextResponse.json({ error: sc.error }, { status: 400 });
+  const money = (v: any) => sc.scaler.scale(num(v)) || 0;
+
   let rows: any[];
   try {
     const buf = Buffer.from(await file.arrayBuffer());
@@ -55,7 +61,7 @@ export async function POST(req: Request) {
   for (const r of rows) {
     const ctype = str(r["Creative type"]);
     if (!ctype || !/product\s*card/i.test(ctype)) { skipped++; continue; }
-    const rCost = num(r["Cost"]) || 0, rGross = num(r["Gross revenue"]) || 0;
+    const rCost = money(r["Cost"]), rGross = money(r["Gross revenue"]);
     if (rCost === 0 && rGross === 0) { skipped++; continue; }
     cost += rCost;
     orders += num(r["SKU orders"]) || 0;

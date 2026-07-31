@@ -40,6 +40,7 @@ import {
   fmtDate, fmtTime, fmtTimeRange, sumDurations,
   durationHours, commissionFor, durationToSeconds, fmtRM, fmtNum, fmtRMor,
 } from "@/lib/format";
+import { DEFAULT_IDR_RATE } from "@/lib/currency";
 import { resolveRange } from "@/lib/daterange";
 import { useNavigate } from "@/lib/useNavigate";
 import { useSearchParams } from "next/navigation";
@@ -2409,6 +2410,10 @@ function SalesImport({
   const [file, setFile] = useState<File | null>(null);
   const [date, setDate] = useState("");
   const [brand, setBrand] = useState("");
+  // Source currency of the sheet. IDR values are converted to MYR on the server
+  // using `rate` before saving; MYR imports as-is.
+  const [currency, setCurrency] = useState<"MYR" | "IDR">("MYR");
+  const [rate, setRate] = useState(String(DEFAULT_IDR_RATE));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
@@ -2417,11 +2422,15 @@ function SalesImport({
     if (!file) return setError("Choose an .xlsx file.");
     if (!brand) return setError("Pick a brand.");
     if (!date) return setError("Pick the report date.");
+    if (currency === "IDR" && !(Number(rate) > 0))
+      return setError("Masukkan kadar tukaran IDR→MYR yang sah.");
     setBusy(true); setError(""); setMsg("");
     const fd = new FormData();
     fd.append("file", file);
     fd.append("report_date", date);
     fd.append("brand_id", brand);
+    fd.append("currency", currency);
+    if (currency === "IDR") fd.append("rate", rate);
     const res = await fetch(endpoint, { method: "POST", body: fd });
     const data = await res.json();
     setBusy(false);
@@ -2470,6 +2479,26 @@ function SalesImport({
           <input type="date" className="input cursor-pointer !py-2 text-sm"
             value={date} onChange={(e) => setDate(e.target.value)} />
         </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg">Currency</label>
+          <select className="input cursor-pointer !py-2 text-sm"
+            value={currency} onChange={(e) => setCurrency(e.target.value as "MYR" | "IDR")}>
+            <option value="MYR">MYR (Ringgit)</option>
+            <option value="IDR">IDR (Rupiah)</option>
+          </select>
+        </div>
+        {currency === "IDR" && (
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg">
+              Kadar IDR→MYR
+            </label>
+            <input type="number" step="0.00001" min="0" inputMode="decimal"
+              className="input !py-2 text-sm !w-32"
+              value={rate} onChange={(e) => setRate(e.target.value)}
+              placeholder={String(DEFAULT_IDR_RATE)} />
+            <p className="mt-0.5 text-[10px] text-muted-fg">1 IDR = RM{Number(rate) > 0 ? rate : DEFAULT_IDR_RATE}</p>
+          </div>
+        )}
         <div>
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg">File</label>
           <label className="btn-ghost cursor-pointer !py-2">

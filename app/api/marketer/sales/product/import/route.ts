@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { moneyScalerFromForm } from "@/lib/currency";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -45,6 +46,11 @@ export async function POST(req: Request) {
   if (!brand)
     return NextResponse.json({ error: "That brand is not yours." }, { status: 403 });
 
+  // IDR uploads are converted to MYR before storing; MYR is a no-op.
+  const sc = moneyScalerFromForm(form.get("currency"), form.get("rate"));
+  if (!sc.ok) return NextResponse.json({ error: sc.error }, { status: 400 });
+  const money = (v: any) => sc.scaler.scale(num(v));
+
   let rows: any[];
   try {
     const buf = Buffer.from(await file.arrayBuffer());
@@ -74,19 +80,19 @@ export async function POST(req: Request) {
   for (const r of rows) {
     const name = str(r["Campaign name"]);
     if (!name || name === "-") { skipped++; continue; }
-    const rCost = num(r["Cost"]), rGross = num(r["Gross revenue"]), rOrders = num(r["SKU orders"]);
+    const rCost = money(r["Cost"]), rGross = money(r["Gross revenue"]), rOrders = num(r["SKU orders"]);
     // Skip dead campaigns: no cost and no revenue.
     if ((rCost || 0) === 0 && (rGross || 0) === 0) { skipped++; continue; }
     cost += rCost || 0;
-    netCost += num(r["Net Cost"]) || 0;
-    budget += num(r["Current budget"]) || 0;
+    netCost += money(r["Net Cost"]) || 0;
+    budget += money(r["Current budget"]) || 0;
     orders += rOrders || 0;
     gross += rGross || 0;
     counted++;
     await insertCampaign.run(
       user.id, brandId, reportDate, str(r["Campaign ID"]), name,
-      rCost, num(r["Net Cost"]), num(r["Current budget"]), rOrders,
-      num(r["Cost per order"]), rGross, num(r["ROI"])
+      rCost, money(r["Net Cost"]), money(r["Current budget"]), rOrders,
+      money(r["Cost per order"]), rGross, num(r["ROI"])
     );
   }
   const cpo = orders > 0 ? Math.round((cost / orders) * 100) / 100 : null;

@@ -4,6 +4,7 @@ import db from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { nextStaffId } from "@/lib/staff";
 import { normalisePhone, sendWhatsApp, accountCreatedMessage, notifyAdmins, newRegistrationMessage } from "@/lib/whatsapp";
+import { phoneClash, phoneClashError } from "@/lib/accounts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +30,12 @@ export async function POST(req: Request) {
   if (!name || !phone) {
     return NextResponse.json({ error: "Nama dan No WhatsApp diperlukan." }, { status: 400 });
   }
+
+  // One phone = one account: don't register an affiliate on a number that
+  // already belongs to someone (see lib/accounts).
+  const clash = await phoneClash(phone);
+  if (clash)
+    return NextResponse.json({ error: phoneClashError(clash) }, { status: 409 });
 
   // Staff ID and first password are generated, never chosen. The sequence
   // keeps the ID collision-free even under concurrent creation.

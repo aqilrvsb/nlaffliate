@@ -4,6 +4,7 @@ import db from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { nextStaffId } from "@/lib/staff";
 import { sendWhatsApp, accountCreatedMessage, normalisePhone } from "@/lib/whatsapp";
+import { phoneClash, phoneClashError } from "@/lib/accounts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,11 @@ export async function POST(req: Request) {
   if (!name || !phone) {
     return NextResponse.json({ error: "Nama dan No WhatsApp diperlukan." }, { status: 400 });
   }
+
+  // One phone = one account (see lib/accounts).
+  const clash = await phoneClash(phone);
+  if (clash)
+    return NextResponse.json({ error: phoneClashError(clash) }, { status: 409 });
 
   const staffId = await nextStaffId("leader");
   const hash = bcrypt.hashSync(staffId, 10);

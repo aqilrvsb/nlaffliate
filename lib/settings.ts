@@ -64,7 +64,13 @@ export async function getGrsaiConfig() {
     process.env.GRSAI_MODEL ||
     preset.defaultModel;
 
-  return { provider, key, base, model };
+  // A cheaper/hardier second model to retry with if the primary one errors
+  // (e.g. rate-limited or briefly down). Defaults to Nano on OpenRouter.
+  const fallbackModel =
+    (await getSetting("grsai_fallback_model")) ||
+    (provider === "openrouter" ? "openai/gpt-4.1-nano" : "");
+
+  return { provider, key, base, model, fallbackModel };
 }
 
 /**

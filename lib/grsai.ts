@@ -185,7 +185,7 @@ export async function readLiveScreenshot(
   // Admin-entered key/model (from the DB) take precedence over env.
   // GRSAI chat endpoint is OpenAI-compatible and MUST include /v1
   // (https://grsaiapi.com/v1/chat/completions) — verified against HCKCREA P4.
-  const { provider, key, base, model } = await getGrsaiConfig();
+  const { provider, key, base, model, fallbackModel } = await getGrsaiConfig();
 
   if (!key) {
     return {
@@ -194,51 +194,52 @@ export async function readLiveScreenshot(
       viewers: null,
       items_sold: null,
       duration_live: null,
-      raw: "GRSAI_API_KEY not set — enter values manually.",
+      raw: "AI key not set — enter values manually.",
     };
   }
 
-  const res = await fetch(`${base}/chat/completions`, {
-    method: "POST",
-    // Never hold the request open on a slow/unresponsive provider (e.g. out of
-    // credit): fail fast so the caller returns a clean error, not a timeout.
-    signal: AbortSignal.timeout(35_000),
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${key}`,
-      ...providerHeaders(provider),
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0,
-      max_tokens: 1000,
-      stream: false,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: "Extract the LIVE stats from this screenshot as JSON.",
-            },
-            {
-              type: "image_url",
-              image_url: { url: imageBase64DataUrl },
-            },
-          ],
-        },
-      ],
-    }),
-  });
+  // One read on a given model. Fails fast (35s) so a wedged provider can never
+  // hang the whole request to the platform's timeout.
+  const call = async (m: string): Promise<string> => {
+    const res = await fetch(`${base}/chat/completions`, {
+      method: "POST",
+      signal: AbortSignal.timeout(35_000),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+        ...providerHeaders(provider),
+      },
+      body: JSON.stringify({
+        model: m,
+        temperature: 0,
+        max_tokens: 1000,
+        stream: false,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Extract the LIVE stats from this screenshot as JSON." },
+              { type: "image_url", image_url: { url: imageBase64DataUrl } },
+            ],
+          },
+        ],
+      }),
+    });
+    if (!res.ok) throw new Error(`AI ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    const data = await res.json();
+    return data?.choices?.[0]?.message?.content ?? "";
+  };
 
-  if (!res.ok) {
-    const t = await res.text();
-    throw new Error(`GRSAI ${res.status}: ${t.slice(0, 300)}`);
+  // Primary model (Mini), then fall back to the cheaper/hardier one (Nano) if
+  // it errored — a transient failure shouldn't force a manual entry.
+  let content: string;
+  try {
+    content = await call(model);
+  } catch (e) {
+    if (!fallbackModel || fallbackModel === model) throw e;
+    content = await call(fallbackModel);
   }
-
-  const data = await res.json();
-  const content: string = data?.choices?.[0]?.message?.content ?? "";
   const parsed = extractJson(content);
 
   return {

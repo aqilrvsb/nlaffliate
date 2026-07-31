@@ -18,6 +18,7 @@ export async function GET() {
     device_set: !!device,
     device_hint: device ? `****${device.slice(-6)}` : "",
     source: saved ? "admin" : device ? "env" : "none",
+    admin_notify: (await getSetting("admin_notify")) || "",
   });
 }
 
@@ -42,6 +43,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ status });
   }
 
-  await setSetting("whacenter_device", String(body.device ?? "").trim());
+  // Save the device (blank keeps the existing one) and/or the admin notify list.
+  if (typeof body.device === "string" && body.device.trim()) {
+    await setSetting("whacenter_device", body.device.trim());
+  }
+  if (typeof body.admin_notify === "string") {
+    await setSetting("admin_notify", body.admin_notify.trim());
+  }
   return NextResponse.json({ ok: true });
 }

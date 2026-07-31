@@ -677,6 +677,7 @@ function MarketerAffiliatesModal({
 function WhatsAppCard() {
   const [cfg, setCfg] = useState<any>(null);
   const [device, setDevice] = useState("");
+  const [adminNotify, setAdminNotify] = useState("");
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -685,7 +686,9 @@ function WhatsAppCard() {
   const load = useCallback(async () => {
     try {
       const r = await fetch("/api/admin/whatsapp");
-      setCfg(r.ok ? await r.json() : {});
+      const d = r.ok ? await r.json() : {};
+      setCfg(d);
+      setAdminNotify(d.admin_notify || "");
     } catch { setCfg({}); }
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -694,7 +697,7 @@ function WhatsAppCard() {
     setBusy(true); setSaved(false); setResult(null);
     await fetch("/api/admin/whatsapp", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ device }),
+      body: JSON.stringify({ device, admin_notify: adminNotify }),
     });
     setDevice(""); setBusy(false); setSaved(true); load();
   }
@@ -744,6 +747,15 @@ function WhatsAppCard() {
           <input id="wa-test" className="input" type="tel" inputMode="tel"
             placeholder="0123456789" value={phone}
             onChange={(e) => setPhone(e.target.value)} />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="label" htmlFor="wa-admin-notify">Nombor admin untuk notifikasi</label>
+          <input id="wa-admin-notify" className="input" autoComplete="off"
+            placeholder="601114721068, 60125485449"
+            value={adminNotify} onChange={(e) => setAdminNotify(e.target.value)} />
+          <p className="mt-1.5 text-[11px] text-muted-fg">
+            Admin dapat notifikasi bila ada affiliate/marketer baharu daftar. Boleh masukkan lebih satu nombor (asingkan dengan koma).
+          </p>
         </div>
       </div>
 

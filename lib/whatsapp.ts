@@ -136,6 +136,50 @@ export function accountCreatedMessage(opts: {
   ]);
 }
 
+/* ── Admin alerts ──────────────────────────────────────── */
+
+/**
+ * The admin numbers to alert. Stored as a comma/space separated list in the
+ * `admin_notify` setting so HQ can watch more than one phone.
+ */
+export async function adminNotifyNumbers(): Promise<string[]> {
+  const raw = (await getSetting("admin_notify")) || "";
+  const seen = new Set<string>();
+  for (const part of raw.split(/[,;\s]+/)) {
+    const n = normalisePhone(part);
+    if (n) seen.add(n);
+  }
+  return [...seen];
+}
+
+/** Send an alert to every configured admin number. Best-effort, in parallel. */
+export async function notifyAdmins(message: string): Promise<void> {
+  const nums = await adminNotifyNumbers();
+  if (nums.length === 0) return;
+  await Promise.allSettled(nums.map((n) => sendWhatsApp(n, message)));
+}
+
+/** Alert HQ that a new account exists, and how it was created. */
+export function newRegistrationMessage(opts: {
+  role: "marketer" | "affiliate";
+  name: string;
+  staffId: string;
+  phone?: string | null;
+  via: string; // e.g. "daftar sendiri di website", "didaftar oleh MarketerA"
+}) {
+  const roleLabel = opts.role === "marketer" ? "Marketer" : "Affiliate";
+  return compose([
+    `Pendaftaran ${roleLabel} Baharu`,
+    "",
+    `Nama: ${opts.name}`,
+    `ID Staff: ${opts.staffId}`,
+    `Phone: ${opts.phone || "-"}`,
+    `Cara: ${opts.via}`,
+    "",
+    "Sila semak di Admin Console.",
+  ]);
+}
+
 /* ── Marketer alerts ───────────────────────────────────── */
 
 /**

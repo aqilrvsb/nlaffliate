@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import db from "@/lib/db";
 import { nextStaffId } from "@/lib/staff";
-import { sendWhatsApp, accountCreatedMessage, normalisePhone } from "@/lib/whatsapp";
+import { sendWhatsApp, accountCreatedMessage, normalisePhone, notifyAdmins, newRegistrationMessage } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -57,6 +57,12 @@ export async function POST(req: Request) {
   // Best-effort: a failed message must not undo a created account, and the
   // first password is the Staff ID itself so nobody is locked out.
   const wa = await sendWhatsApp(phone, accountCreatedMessage({ name, staffId, password: staffId }));
+
+  // Alert HQ that a new marketer/affiliate signed up from the website.
+  await notifyAdmins(newRegistrationMessage({
+    role: role as "marketer" | "affiliate",
+    name, staffId, phone, via: "daftar sendiri di website",
+  }));
 
   return NextResponse.json({
     ok: true,

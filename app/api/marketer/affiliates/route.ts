@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { nextStaffId } from "@/lib/staff";
-import { normalisePhone, sendWhatsApp, accountCreatedMessage } from "@/lib/whatsapp";
+import { normalisePhone, sendWhatsApp, accountCreatedMessage, notifyAdmins, newRegistrationMessage } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,6 +47,11 @@ export async function POST(req: Request) {
   // Best-effort: a failed message must not undo a created account. The first
   // password is the Staff ID itself, so nobody is locked out either way.
   const wa = await sendWhatsApp(phone, accountCreatedMessage({ name, staffId, password: staffId }));
+
+  // Alert HQ that this marketer just registered a new affiliate.
+  await notifyAdmins(newRegistrationMessage({
+    role: "affiliate", name, staffId, phone, via: `didaftar oleh ${user.name}`,
+  }));
 
   return NextResponse.json({
     ok: true,

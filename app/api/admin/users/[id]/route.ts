@@ -1,9 +1,55 @@
 import { NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/**
+ * Admin edits an account's name and/or resets its password.
+ *
+ * Staff ID stays immutable (it's the login identity); this only touches the
+ * display name and the password hash. Either field is optional — a blank
+ * password means "leave it as is", so the form can save a rename alone.
+ */
+export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  const user = await getSession();
+  if (!user || user.role !== "admin")
+    return NextResponse.json({ error: "Admin only." }, { status: 403 });
+
+  const id = Number(params.id);
+  if (!Number.isFinite(id))
+    return NextResponse.json({ error: "Bad id." }, { status: 400 });
+
+  const target = await db
+    .prepare("SELECT id, staff_id FROM users WHERE id = ?")
+    .get<{ id: number; staff_id: string | null }>(id);
+  if (!target)
+    return NextResponse.json({ error: "Account not found." }, { status: 404 });
+
+  const body = await req.json().catch(() => ({}));
+  const name = body.name === undefined ? undefined : String(body.name).trim();
+  const password = body.password === undefined ? undefined : String(body.password);
+
+  if (name !== undefined && !name)
+    return NextResponse.json({ error: "Nama tidak boleh kosong." }, { status: 400 });
+  if (password !== undefined && password && password.length < 4)
+    return NextResponse.json({ error: "Password sekurang-kurangnya 4 aksara." }, { status: 400 });
+
+  const sets: string[] = [];
+  const args: any[] = [];
+  if (name !== undefined) { sets.push("name = ?"); args.push(name); }
+  if (password) { sets.push("password_hash = ?"); args.push(bcrypt.hashSync(password, 10)); }
+
+  if (sets.length === 0)
+    return NextResponse.json({ error: "Tiada perubahan." }, { status: 400 });
+
+  args.push(id);
+  await db.prepare(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`).run(...args);
+
+  return NextResponse.json({ ok: true, name, password_changed: !!password });
+}
 
 /**
  * Delete an affiliate or marketer account.

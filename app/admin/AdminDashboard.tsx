@@ -6,7 +6,7 @@ import {
   TrendingUp, Users, ShoppingBag, UserRound, Bot, Check, ExternalLink,
   Loader2, KeyRound, Clock, AlertTriangle, CalendarDays, Timer,
   LayoutDashboard, Package, Boxes, Link2, Trash2, Plus, AlertCircle, BarChart3, MessageCircle,
-  Tag, Search, UserCheck, UserX, Menu, LogOut, Settings, X, Radio, Crown,
+  Tag, Search, UserCheck, UserX, Menu, LogOut, Settings, X, Radio, Crown, Pencil,
 } from "lucide-react";
 import Link from "next/link";
 import type { SessionUser } from "@/lib/session";
@@ -69,6 +69,8 @@ export default function AdminDashboard({
   const [addLeader, setAddLeader] = useState(false);
   // Which leader's marketer list is open in the modal.
   const [leaderListFor, setLeaderListFor] = useState<Leader | null>(null);
+  // Which leader is being edited (name / password).
+  const [editLeader, setEditLeader] = useState<Leader | null>(null);
   const [navOpen, setNavOpen] = useState(false);
 
   function goTab(key: string) {
@@ -452,6 +454,11 @@ export default function AdminDashboard({
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
+                        <button onClick={() => setEditLeader(l)}
+                          aria-label={`Edit ${l.name}`} title="Edit nama / reset password"
+                          className="cursor-pointer rounded-lg p-1.5 text-muted-fg transition hover:bg-accent/10 hover:text-accent">
+                          <Pencil className="h-4 w-4" aria-hidden="true" />
+                        </button>
                         <button onClick={() => removeUser(l.id, l.name)}
                           aria-label={`Delete ${l.name}`} title="Delete leader account"
                           className="cursor-pointer rounded-lg p-1.5 text-muted-fg transition hover:bg-danger/10 hover:text-danger">
@@ -671,6 +678,9 @@ export default function AdminDashboard({
         marketers={marketers.filter((m) => leaderListFor && m.leader_id === leaderListFor.id)}
         affiliates={affiliates}
         onClose={() => setLeaderListFor(null)} />
+
+      <EditLeaderModal leader={editLeader}
+        onClose={() => setEditLeader(null)} onSaved={() => router.refresh()} />
         </div>
       </main>
     </div>
@@ -892,6 +902,78 @@ function LeaderMarketersModal({
           </table>
         </div>
       )}
+    </Modal>
+  );
+}
+
+/**
+ * Admin edits a leader: rename and/or reset the password. Staff ID is the login
+ * identity and stays fixed. A blank password field leaves the password as is,
+ * so a rename can be saved on its own.
+ */
+function EditLeaderModal({
+  leader, onClose, onSaved,
+}: { leader: Leader | null; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!leader) return;
+    setName(leader.name); setPassword(""); setError("");
+  }, [leader]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!leader) return;
+    setSaving(true); setError("");
+    const res = await fetch(`/api/admin/users/${leader.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, ...(password ? { password } : {}) }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setSaving(false);
+    if (!res.ok) return setError(data.error || "Gagal simpan.");
+    onClose(); onSaved();
+  }
+
+  return (
+    <Modal open={!!leader} onClose={onClose}
+      title={leader ? `Edit Leader — ${leader.staff_id ?? leader.name}` : "Edit Leader"}>
+      <form onSubmit={submit} className="space-y-3">
+        <div>
+          <label className="label" htmlFor="ldr-name">Nama</label>
+          <input id="ldr-name" className="input" value={name} autoFocus
+            onChange={(e) => setName(e.target.value)} required placeholder="Nama leader" />
+        </div>
+        <div>
+          <label className="label" htmlFor="ldr-pass">Password baharu <span className="font-normal text-muted-fg">(biar kosong untuk kekalkan)</span></label>
+          <div className="relative">
+            <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-fg" aria-hidden="true" />
+            <input id="ldr-pass" className="input pl-9" type="text" autoComplete="off"
+              value={password} onChange={(e) => setPassword(e.target.value)}
+              placeholder="Kosong = tak tukar" />
+          </div>
+          <p className="mt-1 text-[11px] text-muted-fg">ID Staff ({leader?.staff_id}) kekal — tidak boleh ditukar.</p>
+        </div>
+
+        {error && (
+          <p className="flex items-center gap-1.5 text-sm text-danger">
+            <AlertCircle className="h-4 w-4" aria-hidden="true" />{error}
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn" disabled={saving}>
+            {saving
+              ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Saving…</>
+              : <><Check className="h-4 w-4" aria-hidden="true" />Save</>}
+          </button>
+        </div>
+      </form>
     </Modal>
   );
 }

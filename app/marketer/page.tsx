@@ -90,6 +90,12 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
   const marketers = isDirector ? allMarketers : team;
   const overseer: "leader" | "director" | "" = isDirector ? "director" : isLeader ? "leader" : "";
 
+  // The pending pool: affiliates nobody manages yet. Shown to every marketer so
+  // they can grab one as their own (first come, first served).
+  const pendingAffiliates = (await db
+    .prepare("SELECT id, name, staff_id, phone FROM users WHERE role = 'affiliate' AND marketer_id IS NULL ORDER BY name")
+    .all()) as any[];
+
   const plain = <T,>(rows: T[]): T[] => rows.map((r) => ({ ...r }));
 
   // All six reads are independent, so issue them together rather than paying
@@ -328,6 +334,7 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
       spendTtm={plain(spendTtm)} reportingSheet={plain(reportingSheet)}
       salesLiveCampaign={plain(salesLiveCampaign)} salesProductCampaign={plain(salesProductCampaign)}
       marketers={plain(marketers)} leaders={plain(leaders)} overseer={overseer}
+      pendingAffiliates={plain(pendingAffiliates)}
       viewValue={viewValue} canEdit={canEdit} />
   );
 }

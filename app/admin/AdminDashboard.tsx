@@ -6,8 +6,10 @@ import {
   TrendingUp, Users, ShoppingBag, UserRound, Bot, Check, ExternalLink,
   Loader2, KeyRound, Clock, AlertTriangle, CalendarDays, Timer,
   LayoutDashboard, Package, Boxes, Link2, Trash2, Plus, AlertCircle, BarChart3, MessageCircle,
-  Tag, Search, UserCheck, UserX,
+  Tag, Search, UserCheck, UserX, Menu, LogOut, Settings, X, Radio,
 } from "lucide-react";
+import Link from "next/link";
+import type { SessionUser } from "@/lib/session";
 import Modal from "@/components/Modal";
 import StaffCreateModal from "./StaffCreateModal";
 import {
@@ -15,7 +17,6 @@ import {
   type LinkBrand,
 } from "@/components/BrandCommission";
 import { handleFromUrl } from "@/lib/tiktok";
-import TabBar from "@/components/TabBar";
 import ProductsTab from "./ProductsTab";
 import AdminBrandsTab from "./BrandsTab";
 import SamplesTab from "./SamplesTab";
@@ -42,9 +43,20 @@ type Row = {
   duration_live: string | null; screenshot_path: string | null;
 };
 
+const ADMIN_TABS = [
+  { key: "overview",  label: "Overview",           icon: LayoutDashboard },
+  { key: "marketer",  label: "List Marketer",      icon: UserRound },
+  { key: "affiliate", label: "List Affiliate",     icon: Users },
+  { key: "brand",     label: "Brand",              icon: Tag },
+  { key: "product",   label: "Product",            icon: Package },
+  { key: "reporting", label: "Reporting Affiliate", icon: BarChart3 },
+  { key: "sample",    label: "Sample",             icon: Boxes },
+] as const;
+
 export default function AdminDashboard({
-  marketers, affiliates, rows, links, leaders = [],
+  user, marketers, affiliates, rows, links, leaders = [],
 }: {
+  user?: SessionUser;
   marketers: Marketer[]; affiliates: Affiliate[]; rows: Row[]; links: AdminLink[];
   leaders?: Leader[];
 }) {
@@ -53,6 +65,16 @@ export default function AdminDashboard({
   const [linksFor, setLinksFor] = useState<Affiliate | null>(null);
   const [deleteErr, setDeleteErr] = useState("");
   const [addMarketer, setAddMarketer] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+
+  function goTab(key: string) {
+    router.push(key === "overview" ? "/admin" : `/admin?tab=${key}`);
+    setNavOpen(false);
+  }
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/login";
+  }
   // Affiliate table filters.
   const [affSearch, setAffSearch] = useState("");
   const [affStatus, setAffStatus] = useState<"all" | "done" | "no">("all");
@@ -171,24 +193,76 @@ export default function AdminDashboard({
 
   const tab = params.get("tab") || "overview";
 
-  return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-ink">Admin Console</h1>
-        <p className="text-sm text-muted-fg">
-          Assign affiliates, manage products, and fulfil sample requests.
-        </p>
-      </div>
+  const activeLabel = ADMIN_TABS.find((t) => t.key === tab)?.label || "Overview";
 
-      <TabBar active={tab} tabs={[
-        { key: "overview", label: "Overview", icon: LayoutDashboard },
-        { key: "marketer", label: "List Marketer", icon: UserRound },
-        { key: "affiliate", label: "List Affiliate", icon: Users },
-        { key: "brand",    label: "Brand",    icon: Tag },
-        { key: "product",  label: "Product",  icon: Package },
-        { key: "reporting", label: "Reporting Affiliate", icon: BarChart3 },
-        { key: "sample",   label: "Sample",   icon: Boxes },
-      ]} />
+  return (
+    <div className="flex min-h-screen">
+      {/* Sidebar */}
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 shrink-0 transform border-r border-line bg-white/80 backdrop-blur transition-transform duration-200 md:static md:translate-x-0 ${navOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="flex h-full flex-col p-4">
+          <div className="mb-4 flex items-center gap-2.5 px-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-fg shadow-lift">
+              <Radio className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <span className="truncate text-base font-extrabold tracking-tight text-ink">NL Affiliate Army</span>
+          </div>
+          <span className="mb-2 px-2 text-[11px] font-bold uppercase tracking-widest text-muted-fg">Admin</span>
+
+          <nav className="flex flex-1 flex-col gap-1">
+            {ADMIN_TABS.map((t) => {
+              const Icon = t.icon;
+              const on = t.key === tab;
+              return (
+                <button key={t.key} onClick={() => goTab(t.key)}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
+                    on ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
+                  }`}>
+                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  {t.label}
+                </button>
+              );
+            })}
+          </nav>
+
+          {user && (
+            <div className="border-t border-line pt-3">
+              <Link href="/profile"
+                className="mb-2 flex cursor-pointer items-center gap-2 rounded-xl px-2 py-1.5 transition-colors duration-200 hover:bg-primary/10"
+                title="Profile & settings">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary text-sm font-bold text-white">
+                  {user.name.charAt(0).toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-ink">{user.name}</p>
+                  <p className="truncate text-xs font-mono text-muted-fg">{user.staff_id}</p>
+                </div>
+                <Settings className="h-3.5 w-3.5 shrink-0 text-muted-fg" aria-hidden="true" />
+              </Link>
+              <button onClick={logout} className="btn-ghost w-full !py-2">
+                <LogOut className="h-4 w-4" aria-hidden="true" />Log out
+              </button>
+            </div>
+          )}
+        </div>
+      </aside>
+
+      {navOpen && (
+        <div className="fixed inset-0 z-30 bg-ink/30 backdrop-blur-sm md:hidden" onClick={() => setNavOpen(false)} aria-hidden="true" />
+      )}
+
+      <main className="min-w-0 flex-1">
+        <div className="glass sticky top-0 z-20 flex items-center gap-3 rounded-none border-x-0 border-t-0 px-4 py-3">
+          <button onClick={() => setNavOpen(true)}
+            className="cursor-pointer rounded-lg p-2 text-ink hover:bg-primary/10 md:hidden" aria-label="Menu">
+            <Menu className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <div>
+            <h1 className="text-lg font-extrabold tracking-tight text-ink">{activeLabel}</h1>
+            <p className="hidden text-xs text-muted-fg sm:block">Assign affiliates, manage products, and fulfil sample requests.</p>
+          </div>
+        </div>
+
+        <div className="mx-auto max-w-6xl space-y-8 p-4 md:p-8">
 
       {tab === "brand" && <AdminBrandsTab />}
       {tab === "product" && <ProductsTab />}
@@ -506,6 +580,8 @@ export default function AdminDashboard({
       <MarketerAffiliatesModal marketer={affListFor}
         affiliates={affiliates.filter((a) => affListFor && a.marketer_id === affListFor.id)}
         onClose={() => setAffListFor(null)} />
+        </div>
+      </main>
     </div>
   );
 }

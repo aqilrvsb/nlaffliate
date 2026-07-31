@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
-import Header from "@/components/Header";
 import db from "@/lib/db";
 import AdminDashboard from "./AdminDashboard";
 import { resolveRange } from "@/lib/daterange";
@@ -119,12 +118,7 @@ export default async function AdminPage({
     ).all() as any[]);
 
   return (
-    <div className="min-h-screen">
-      <Header user={user} />
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <AdminDashboard marketers={marketers} affiliates={affiliates}
-          rows={rows} links={links} leaders={leaders} />
-      </main>
-    </div>
+    <AdminDashboard user={user} marketers={marketers} affiliates={affiliates}
+      rows={rows} links={links} leaders={leaders} />
   );
 }

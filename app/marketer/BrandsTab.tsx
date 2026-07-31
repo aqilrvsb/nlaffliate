@@ -6,9 +6,12 @@ import {
   Link2, X,
 } from "lucide-react";
 // Tag doubles as the brand-filter icon below.
+import { useRouter, useSearchParams } from "next/navigation";
+import { User, Users } from "lucide-react";
 import Modal from "@/components/Modal";
 import { confirmDialog } from "@/lib/swal";
 import { useCanEdit } from "./edit-context";
+import { useMarketerScope } from "./team-context";
 
 export type BrandLink = { id: number; name: string; url: string; link_type: "self" | "affiliate" };
 export type Brand = {
@@ -352,6 +355,7 @@ function BrandModal({
 export function BrandFilterCard({
   value, onChange, id,
 }: { value: string; onChange: (v: string) => void; id: string }) {
+  const { teamAvailable, teamMode } = useMarketerScope();
   return (
     <div className="card flex flex-wrap items-end gap-3">
       <div className="min-w-[220px]">
@@ -359,25 +363,74 @@ export function BrandFilterCard({
           <Tag className="mr-1 inline h-3 w-3" aria-hidden="true" />
           Brand
         </label>
+        {/* In "All Team" mode brands are keyed to the catalogue so the same
+            brand across marketers is one option (and matches the aggregated
+            rows, which the server re-keyed to catalogue). */}
         <BrandSelect id={id} value={value} onChange={onChange} allowAll
-          className="!py-2 text-sm" />
+          groupByCatalogue={teamMode} className="!py-2 text-sm" />
       </div>
+      {/* A plain marketer can view just themselves, or the whole team working
+          the selected brand (aggregate, read-only). Not shown to leaders/
+          directors (they have their own switcher) or a marketer with no
+          brand-mates. */}
+      {teamAvailable && <TeamScopeToggle />}
       <p className="pb-2 text-xs text-muted-fg">
-        {value ? "Menunjukkan satu brand sahaja." : "Menunjukkan semua brand."}
+        {teamMode
+          ? "Menunjukkan semua marketer di bawah brand ini (jumlah pasukan)."
+          : value ? "Menunjukkan satu brand sahaja." : "Menunjukkan semua brand."}
       </p>
     </div>
   );
 }
 
-/** Dropdown of the marketer's brands. `allowAll` adds an "All Brands" option. */
+/** Himself ⇄ All-Team toggle. Flips the `team` search param (server re-scopes). */
+function TeamScopeToggle() {
+  const { teamMode } = useMarketerScope();
+  const router = useRouter();
+  const params = useSearchParams();
+
+  function set(on: boolean) {
+    const next = new URLSearchParams(params.toString());
+    if (on) next.set("team", "1"); else next.delete("team");
+    router.push(`/marketer?${next.toString()}`);
+  }
+
+  return (
+    <div>
+      <label className="label">Paparan</label>
+      <div className="inline-flex rounded-xl border border-line bg-white/70 p-0.5">
+        <button type="button" onClick={() => set(false)}
+          className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+            !teamMode ? "bg-primary text-primary-fg shadow-sm" : "text-muted-fg hover:text-ink"
+          }`}>
+          <User className="h-3.5 w-3.5" aria-hidden="true" /> Saya
+        </button>
+        <button type="button" onClick={() => set(true)}
+          className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+            teamMode ? "bg-primary text-primary-fg shadow-sm" : "text-muted-fg hover:text-ink"
+          }`}>
+          <Users className="h-3.5 w-3.5" aria-hidden="true" /> All Team
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Dropdown of the marketer's brands. `allowAll` adds an "All Brands" option.
+ * With `groupByCatalogue`, each brand is keyed to its shared catalogue brand
+ * (so team-mode rows, which the server re-keyed to the catalogue, still match)
+ * and duplicate catalogue brands collapse to one option.
+ */
 export function BrandSelect({
-  value, onChange, allowAll, id, className = "",
+  value, onChange, allowAll, id, className = "", groupByCatalogue = false,
 }: {
   value: string;
   onChange: (v: string) => void;
   allowAll?: boolean;
   id?: string;
   className?: string;
+  groupByCatalogue?: boolean;
 }) {
   const [brands, setBrands] = useState<Brand[]>([]);
 
@@ -388,6 +441,17 @@ export function BrandSelect({
       .catch(() => setBrands([]));
   }, []);
 
+  // key() is the option value: the catalogue brand id in team mode, else the
+  // marketer's own copy id. Dedupe on it so a brand appears once.
+  const key = (b: Brand) => (groupByCatalogue ? (b.catalogue_id ?? b.id) : b.id);
+  const seen = new Set<number>();
+  const options = brands.filter((b) => {
+    const k = key(b);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+
   return (
     <select id={id} className={`input cursor-pointer ${className}`}
       value={value} onChange={(e) => onChange(e.target.value)}>
@@ -396,8 +460,8 @@ export function BrandSelect({
       ) : (
         <option value="">— Pilih brand —</option>
       )}
-      {brands.map((b) => (
-        <option key={b.id} value={b.id}>{b.name}</option>
+      {options.map((b) => (
+        <option key={key(b)} value={key(b)}>{b.name}</option>
       ))}
     </select>
   );

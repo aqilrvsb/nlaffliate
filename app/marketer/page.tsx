@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 
-export default async function MarketerPage({ searchParams }: { searchParams: { m?: string } }) {
+export default async function MarketerPage({ searchParams }: { searchParams: { m?: string; team?: string } }) {
   const user = await getSession();
   if (!user) redirect("/login");
   if (user.role !== "marketer" && user.role !== "leader" && user.role !== "director" && user.role !== "admin") redirect("/");
@@ -49,12 +49,21 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
     : [];
 
   const rawM = searchParams?.m || "";
+  const rawTeam = searchParams?.team === "1";
 
   // Resolve the view: `mid` = a single person, or `aggIds` = an aggregate set.
   let mid: number | null = null;
   let aggIds: number[] = [];
   let canEdit: boolean;
   let viewValue: string; // the switcher's current <option> value
+
+  // A plain marketer can flip any brand tab to "All Team": the aggregate of
+  // every marketer working the same brand (themselves included), read-only.
+  // The team is defined by shared brands, not a leader — two marketers on the
+  // same catalogue brand are teammates. Only offered when they actually share a
+  // brand with someone (a lone marketer's "team" is just themselves).
+  let teamMode = false;
+  let teamAvailable = false;
 
   if (isDirector) {
     canEdit = false; // oversight only
@@ -79,7 +88,23 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
     else if (pickedId != null) { mid = pickedId; viewValue = String(pickedId); canEdit = false; }
     else { mid = user.id; viewValue = ""; canEdit = true; } // "Saya"
   } else {
-    mid = user.id; viewValue = ""; canEdit = true; // plain marketer
+    // Plain marketer: their brand-mates (everyone sharing a catalogue brand
+    // with them, themselves included). A single small query — one row per mate.
+    const mates = (await db
+      .prepare(
+        `SELECT DISTINCT b2.marketer_id AS id
+           FROM brands b1
+           JOIN brands b2 ON COALESCE(b2.catalogue_id, b2.id) = COALESCE(b1.catalogue_id, b1.id)
+          WHERE b1.marketer_id = ? AND b2.marketer_id IS NOT NULL`
+      )
+      .all(user.id)) as any[];
+    const mateIds = mates.map((m) => Number(m.id));
+    teamAvailable = mateIds.length > 1;
+    if (rawTeam && teamAvailable) {
+      aggIds = mateIds; viewValue = ""; canEdit = false; teamMode = true; // All Team
+    } else {
+      mid = user.id; viewValue = ""; canEdit = true; // Saya
+    }
   }
 
   // Marketer filter as literal SQL — every id is a validated integer, so a
@@ -88,6 +113,20 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
     if (mid != null) return `${col} = ${mid}`;
     return aggIds.length ? `${col} IN (${aggIds.join(",")})` : "FALSE";
   };
+
+  /**
+   * In team mode, collapse each marketer's own copy of a shared brand onto the
+   * single catalogue brand, so the client's brand filter (which matches on
+   * brand_id) groups the whole team's rows for that brand instead of only the
+   * viewer's copy. `bAlias` is the joined `brands` row; `catAlias` its
+   * catalogue join. Outside team mode these are no-ops, so the SQL is unchanged.
+   */
+  const kBrandId = (col: string, bAlias = "b") =>
+    teamMode ? `COALESCE(${bAlias}.catalogue_id, ${bAlias}.id)` : col;
+  const kBrandName = (nameCol: string, catAlias = "cb") =>
+    teamMode ? `COALESCE(${catAlias}.name, ${nameCol})` : nameCol;
+  const kCatJoin = (bAlias = "b", catAlias = "cb") =>
+    teamMode ? `LEFT JOIN brands ${catAlias} ON ${catAlias}.id = ${bAlias}.catalogue_id` : "";
 
   // The switcher roster: a leader sees their team; a director sees all
   // marketers (leaders come through a separate `leaders` prop).
@@ -168,13 +207,14 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
                   b.live_date, b.start_time, b.end_time, b.note, b.status, b.post_url,
                   b.ads_budget, b.affiliate_can_edit,
                   b.ad_spend, b.gross_revenue, b.roi,
-                  b.brand_id, br.name AS brand_name, b.source,
+                  ${kBrandId("b.brand_id", "br")} AS brand_id, ${kBrandName("br.name", "brc")} AS brand_name, b.source,
                   r.live_title, r.gmv, r.viewers, r.items_sold, r.duration_live, r.screenshot_path
              FROM bookings b
              JOIN users u ON u.id = b.user_id
              JOIN tiktok_profiles p ON p.id = b.profile_id
              LEFT JOIN brands pb ON pb.id = p.brand_id
              LEFT JOIN brands br ON br.id = b.brand_id
+             ${kCatJoin("br", "brc")}
              LEFT JOIN live_results r ON r.booking_id = b.id
             WHERE ${mCond("u.marketer_id")}
             ORDER BY b.live_date DESC, b.start_time DESC`
@@ -188,22 +228,24 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
 
       db.prepare(
           `SELECT s.id, to_char(s.report_date, 'YYYY-MM-DD') AS report_date,
-                  s.brand_id, b.name AS brand_name,
+                  ${kBrandId("s.brand_id")} AS brand_id, ${kBrandName("b.name")} AS brand_name,
                   s.cost, s.net_cost, s.gross_revenue, s.roi, s.sku_orders,
                   s.cost_per_order, s.live_views, s.current_budget
              FROM sales_live s
              LEFT JOIN brands b ON b.id = s.brand_id
+             ${kCatJoin()}
             WHERE ${mCond("s.marketer_id")}
             ORDER BY s.report_date DESC, s.gross_revenue DESC NULLS LAST`
         ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT s.id, to_char(s.report_date, 'YYYY-MM-DD') AS report_date,
-                  s.brand_id, b.name AS brand_name,
+                  ${kBrandId("s.brand_id")} AS brand_id, ${kBrandName("b.name")} AS brand_name,
                   s.cost, s.net_cost, s.current_budget, s.sku_orders, s.cost_per_order,
                   s.gross_revenue, s.roi
              FROM sales_product s
              LEFT JOIN brands b ON b.id = s.brand_id
+             ${kCatJoin()}
             WHERE ${mCond("s.marketer_id")}
             ORDER BY s.report_date DESC, s.gross_revenue DESC NULLS LAST`
         ).all() as Promise<any[]>,
@@ -215,7 +257,7 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
         ).all() as Promise<any[]>,
 
       db.prepare(
-          `SELECT o.id, o.report_date, o.brand_id, b.name AS brand_name,
+          `SELECT o.id, o.report_date, ${kBrandId("o.brand_id")} AS brand_id, ${kBrandName("b.name")} AS brand_name,
                   o.cost, o.sku_orders, o.cost_per_order, o.gross_revenue, o.roi,
                   o.gmv, o.visitors, o.product_impressions, o.product_clicks,
                   o.img1_path, o.img2_path,
@@ -223,18 +265,20 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
                   o.gmv_video, o.gmv_video_creator, o.gmv_video_seller, o.gmv_product_cards
              FROM overall_reports o
              LEFT JOIN brands b ON b.id = o.brand_id
+             ${kCatJoin()}
             WHERE ${mCond("o.marketer_id")}
             ORDER BY o.report_date DESC`
         ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT c.id, to_char(c.report_date, 'YYYY-MM-DD') AS report_date,
-                  c.brand_id, b.name AS brand_name,
+                  ${kBrandId("c.brand_id")} AS brand_id, ${kBrandName("b.name")} AS brand_name,
                   c.post_gross_revenue, c.post_with_links, c.post_authorized, c.post_creators_mass_auth,
                   c.creative_gross_revenue, c.creative_authorized, c.creative_total_creators,
                   c.creative_creators_mass_auth, c.img1_path, c.img2_path
              FROM creator_reports c
              LEFT JOIN brands b ON b.id = c.brand_id
+             ${kCatJoin()}
             WHERE ${mCond("c.marketer_id")}
             ORDER BY c.report_date DESC`
         ).all() as Promise<any[]>,
@@ -245,76 +289,83 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
         ).all() as Promise<any[]>,
 
       db.prepare(
-          `SELECT s.id, s.live_user_id, s.brand_id, s.live_date, s.start_time, s.end_time,
+          `SELECT s.id, s.live_user_id, ${kBrandId("s.brand_id")} AS brand_id, s.live_date, s.start_time, s.end_time,
                   s.status, s.note, s.ads_budget, s.ad_spend, s.gross_revenue, s.roi, s.gmv, s.viewers,
                   s.items_sold, s.duration_live, s.attachment_path,
                   lu.name AS live_user_name, lu.user_type,
-                  b.name AS brand_name
+                  ${kBrandName("b.name")} AS brand_name
              FROM live_sessions s
              JOIN live_users lu ON lu.id = s.live_user_id
              LEFT JOIN brands b ON b.id = s.brand_id
+             ${kCatJoin()}
             WHERE ${mCond("s.marketer_id")}
             ORDER BY s.live_date DESC, s.start_time DESC`
         ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT q.id, to_char(q.report_date, 'YYYY-MM-DD') AS report_date,
-                  q.brand_id, b.name AS brand_name, q.product_id, q.product_name,
+                  ${kBrandId("q.brand_id")} AS brand_id, ${kBrandName("b.name")} AS brand_name, q.product_id, q.product_name,
                   q.inque, q.learning, q.delivering,
                   q.exploring, q.explored, q.outstanding, q.performing
              FROM data_quality q
              LEFT JOIN brands b ON b.id = q.brand_id
+             ${kCatJoin()}
             WHERE ${mCond("q.marketer_id")}
             ORDER BY q.report_date DESC, q.id DESC`
         ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT c.id, to_char(c.report_date, 'YYYY-MM-DD') AS report_date,
-                  c.brand_id, b.name AS brand_name,
+                  ${kBrandId("c.brand_id")} AS brand_id, ${kBrandName("b.name")} AS brand_name,
                   c.cost, c.sku_orders, c.cost_per_order, c.gross_revenue, c.roi
              FROM sales_card c
              LEFT JOIN brands b ON b.id = c.brand_id
+             ${kCatJoin()}
             WHERE ${mCond("c.marketer_id")}
             ORDER BY c.report_date DESC, c.id DESC`
         ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT t.id, to_char(t.report_date, 'YYYY-MM-DD') AS report_date,
-                  t.brand_id, b.name AS brand_name, t.ttm_cost, t.ttm_gross_revenue
+                  ${kBrandId("t.brand_id")} AS brand_id, ${kBrandName("b.name")} AS brand_name, t.ttm_cost, t.ttm_gross_revenue
              FROM spend_ttm t
              LEFT JOIN brands b ON b.id = t.brand_id
+             ${kCatJoin()}
             WHERE ${mCond("t.marketer_id")}
             ORDER BY t.report_date DESC, t.id DESC`
         ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT r.id, to_char(r.report_date, 'YYYY-MM-DD') AS report_date,
-                  r.brand_id, b.name AS brand_name, r.ord, r.sesi, r.masa,
+                  ${kBrandId("r.brand_id")} AS brand_id, ${kBrandName("b.name")} AS brand_name, r.ord, r.sesi, r.masa,
                   r.c_viewers, r.r_target, r.g_revenue, r.cost, r.v_boost, r.cv_boost, r.d_time
              FROM reporting_sheet r
              LEFT JOIN brands b ON b.id = r.brand_id
+             ${kCatJoin()}
             WHERE ${mCond("r.marketer_id")}
             ORDER BY r.report_date DESC, r.ord`
         ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT c.id, to_char(c.report_date, 'YYYY-MM-DD') AS report_date,
-                  c.brand_id, b.name AS brand_name, c.campaign_id, c.campaign_name,
+                  ${kBrandId("c.brand_id")} AS brand_id, ${kBrandName("b.name")} AS brand_name, c.campaign_id, c.campaign_name,
                   c.cost, c.net_cost, c.gross_revenue, c.roi, c.sku_orders,
                   c.cost_per_order, c.live_views, c.current_budget
              FROM sales_live_campaign c
              LEFT JOIN brands b ON b.id = c.brand_id
+             ${kCatJoin()}
             WHERE ${mCond("c.marketer_id")}
             ORDER BY c.report_date DESC, c.gross_revenue DESC NULLS LAST`
         ).all() as Promise<any[]>,
 
       db.prepare(
           `SELECT c.id, to_char(c.report_date, 'YYYY-MM-DD') AS report_date,
-                  c.brand_id, b.name AS brand_name, c.campaign_id, c.campaign_name,
+                  ${kBrandId("c.brand_id")} AS brand_id, ${kBrandName("b.name")} AS brand_name, c.campaign_id, c.campaign_name,
                   c.cost, c.net_cost, c.current_budget, c.sku_orders,
                   c.cost_per_order, c.gross_revenue, c.roi
              FROM sales_product_campaign c
              LEFT JOIN brands b ON b.id = c.brand_id
+             ${kCatJoin()}
             WHERE ${mCond("c.marketer_id")}
             ORDER BY c.report_date DESC, c.gross_revenue DESC NULLS LAST`
         ).all() as Promise<any[]>,
@@ -339,6 +390,7 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
       salesLiveCampaign={plain(salesLiveCampaign)} salesProductCampaign={plain(salesProductCampaign)}
       marketers={plain(marketers)} leaders={plain(leaders)} overseer={overseer}
       pendingAffiliates={plain(pendingAffiliates)}
-      viewValue={viewValue} canEdit={canEdit} />
+      viewValue={viewValue} canEdit={canEdit}
+      teamAvailable={teamAvailable} teamMode={teamMode} />
   );
 }

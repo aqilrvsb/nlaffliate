@@ -32,6 +32,7 @@ import ProductsTab from "@/app/admin/ProductsTab";
 import PillarCreate from "./PillarCreate";
 import PillarReport from "./PillarReport";
 import { EditContext, useCanEdit } from "./edit-context";
+import { MarketerScopeContext } from "./team-context";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import Pagination from "@/components/Pagination";
 import ImageModal from "@/components/ImageModal";
@@ -231,6 +232,7 @@ export default function MarketerShell({
   liveUsers, liveSessions, dataQuality, salesCard, spendTtm, reportingSheet,
   salesLiveCampaign, salesProductCampaign, marketers = [], leaders = [],
   pendingAffiliates = [], overseer = "", viewValue = "", canEdit = true,
+  teamAvailable = false, teamMode = false,
 }: {
   user: SessionUser; affiliates: Affiliate[]; lives: Live[];
   unknowns: Unknown[]; salesLive: SalesLive[]; salesProduct: SalesProduct[];
@@ -249,6 +251,9 @@ export default function MarketerShell({
   viewValue?: string;
   /** False when monitoring someone else — the workspace is read-only. */
   canEdit?: boolean;
+  /** Plain-marketer "All Team" scope: whether it's offered, and whether it's on. */
+  teamAvailable?: boolean;
+  teamMode?: boolean;
 }) {
   const router = useRouter();
   const { navigate, prefetch, pending: navPending } = useNavigate();
@@ -342,6 +347,7 @@ export default function MarketerShell({
   const salesProductAdj = adjustProductByCard(salesProduct, salesCard);
 
   return (
+    <MarketerScopeContext.Provider value={{ teamAvailable, teamMode }}>
     <div className="flex min-h-screen">
       {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-40 w-64 shrink-0 transform border-r border-line bg-white/80 backdrop-blur transition-transform duration-200 md:static md:translate-x-0 ${
@@ -769,6 +775,7 @@ export default function MarketerShell({
         </EditContext.Provider>
       </main>
     </div>
+    </MarketerScopeContext.Provider>
   );
 }
 

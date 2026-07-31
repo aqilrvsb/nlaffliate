@@ -7,18 +7,26 @@ import Modal from "@/components/Modal";
 import { alertDialog } from "@/lib/swal";
 
 /**
- * Admin provisions a marketer.
+ * Admin provisions a marketer or a leader marketer.
  *
- * No email, no chosen password — the Staff ID (MNL-###) and its matching first
- * password are generated server-side and handed over by WhatsApp. Admin sees
- * them on screen too, so a failed message never leaves the account unusable.
+ * No email, no chosen password — the Staff ID (MNL-### / LMNL-###) and its
+ * matching first password are generated server-side and handed over by
+ * WhatsApp. Admin sees them on screen too, so a failed message never leaves the
+ * account unusable.
+ *
+ * Leaders aren't self-service, so they go through an admin-only endpoint;
+ * marketers reuse the public register route.
  */
 export default function StaffCreateModal({
-  open, onClose,
+  open, onClose, role = "marketer",
 }: {
-  open: boolean; onClose: () => void;
+  open: boolean; onClose: () => void; role?: "marketer" | "leader";
 }) {
   const router = useRouter();
+  const isLeader = role === "leader";
+  const label = isLeader ? "Leader Marketer" : "Marketer";
+  const idHint = isLeader ? "LMNL-###" : "MNL-###";
+
   const [f, setF] = useState({ name: "", phone: "", address: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -35,20 +43,20 @@ export default function StaffCreateModal({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true); setError("");
-    const res = await fetch("/api/auth/register", {
+    const res = await fetch(isLeader ? "/api/admin/create-leader" : "/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...f, role: "marketer" }),
+      body: JSON.stringify(isLeader ? f : { ...f, role: "marketer" }),
     });
     const data = await res.json();
     setSaving(false);
     if (!res.ok) return setError(data.error || "Gagal.");
 
     const sent = data.notified
-      ? "Butiran login (ID Staff + password) telah dihantar kepada marketer melalui WhatsApp."
-      : `WhatsApp TIDAK dihantar${data.notify_note ? `: ${data.notify_note}` : ""}. Sila beri ID Staff kepada marketer secara manual (password = ID Staff).`;
+      ? `Butiran login (ID Staff + password) telah dihantar kepada ${label.toLowerCase()} melalui WhatsApp.`
+      : `WhatsApp TIDAK dihantar${data.notify_note ? `: ${data.notify_note}` : ""}. Sila beri ID Staff kepada ${label.toLowerCase()} secara manual (password = ID Staff).`;
     await alertDialog({
-      title: "Marketer dibuka",
+      title: `${label} dibuka`,
       text: `ID Staff: ${data.staff_id}\n\n${sent}`,
       variant: data.notified ? "success" : "warning",
     });
@@ -57,7 +65,7 @@ export default function StaffCreateModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Add Marketer">
+    <Modal open={open} onClose={onClose} title={`Add ${label}`}>
       <form onSubmit={submit} className="space-y-3">
         <div>
           <label className="label" htmlFor="mk-name">Full name</label>
@@ -78,8 +86,8 @@ export default function StaffCreateModal({
         </div>
 
         <p className="rounded-xl bg-primary/5 px-3 py-2 text-xs text-muted-fg">
-          ID Staff (MNL-###) dan password dijana automatik dan dihantar melalui
-          WhatsApp. Marketer boleh login serta-merta dan tukar password kemudian.
+          ID Staff ({idHint}) dan password dijana automatik dan dihantar melalui
+          WhatsApp. {label} boleh login serta-merta dan tukar password kemudian.
         </p>
 
         {error && (

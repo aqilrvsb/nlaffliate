@@ -6,7 +6,7 @@ import {
   TrendingUp, Users, ShoppingBag, UserRound, Bot, Check, ExternalLink,
   Loader2, KeyRound, Clock, AlertTriangle, CalendarDays, Timer,
   LayoutDashboard, Package, Boxes, Link2, Trash2, Plus, AlertCircle, BarChart3, MessageCircle,
-  Tag, Search, UserCheck, UserX, Menu, LogOut, Settings, X, Radio,
+  Tag, Search, UserCheck, UserX, Menu, LogOut, Settings, X, Radio, Crown,
 } from "lucide-react";
 import Link from "next/link";
 import type { SessionUser } from "@/lib/session";
@@ -46,6 +46,7 @@ type Row = {
 const ADMIN_TABS = [
   { key: "overview",  label: "Overview",           icon: LayoutDashboard },
   { key: "marketer",  label: "List Marketer",      icon: UserRound },
+  { key: "leader",    label: "List Leader",        icon: Crown },
   { key: "affiliate", label: "List Affiliate",     icon: Users },
   { key: "brand",     label: "Brand",              icon: Tag },
   { key: "product",   label: "Product",            icon: Package },
@@ -65,6 +66,9 @@ export default function AdminDashboard({
   const [linksFor, setLinksFor] = useState<Affiliate | null>(null);
   const [deleteErr, setDeleteErr] = useState("");
   const [addMarketer, setAddMarketer] = useState(false);
+  const [addLeader, setAddLeader] = useState(false);
+  // Which leader's marketer list is open in the modal.
+  const [leaderListFor, setLeaderListFor] = useState<Leader | null>(null);
   const [navOpen, setNavOpen] = useState(false);
 
   function goTab(key: string) {
@@ -393,6 +397,81 @@ export default function AdminDashboard({
       </>
       )}
 
+      {tab === "leader" && (
+      <>
+      <StaffCreateModal open={addLeader} onClose={() => setAddLeader(false)} role="leader" />
+      <section>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="section-title">List Leader</h2>
+            <p className="text-sm text-muted-fg">Leader marketer &amp; bilangan marketer jagaan. Tugaskan marketer di tab List Marketer.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {deleteErr && (
+              <span className="flex items-center gap-1.5 text-sm text-danger">
+                <AlertCircle className="h-4 w-4" aria-hidden="true" />{deleteErr}
+              </span>
+            )}
+            <button className="btn !py-2" onClick={() => setAddLeader(true)}>
+              <Plus className="h-4 w-4" aria-hidden="true" />Add Leader
+            </button>
+          </div>
+        </div>
+        <div className="glass overflow-x-auto rounded-2xl">
+          <table className="w-full min-w-[560px] text-sm">
+            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+              <tr>
+                <th className="px-4 py-3 font-semibold">No</th>
+                <th className="px-4 py-3 font-semibold">Leader</th>
+                <th className="px-4 py-3 font-semibold">ID Staff</th>
+                <th className="px-4 py-3 text-center font-semibold">Marketers</th>
+                <th className="px-4 py-3 text-right font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leaders.map((l, i) => {
+                const team = marketers.filter((m) => m.leader_id === l.id).length;
+                return (
+                  <tr key={l.id} className="border-b border-line/60 last:border-0 hover:bg-primary/[0.03]">
+                    <td className="px-4 py-3 text-muted-fg">{i + 1}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-orange-500 text-xs font-bold text-white">
+                          {l.name.charAt(0).toUpperCase()}
+                        </span>
+                        <span className="font-semibold text-ink">{l.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-muted-fg">{l.staff_id}</td>
+                    <td className="px-4 py-3 text-center">
+                      <button onClick={() => setLeaderListFor(l)} disabled={team === 0}
+                        title={team === 0 ? "Tiada marketer" : "Lihat senarai marketer"}
+                        className="inline-flex min-w-[2.5rem] cursor-pointer items-center justify-center rounded-lg bg-primary/10 px-2.5 py-1 text-sm font-bold text-primary tabular-nums transition hover:bg-primary/20 disabled:cursor-default disabled:bg-transparent disabled:text-muted-fg disabled:hover:bg-transparent">
+                        {team}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <button onClick={() => removeUser(l.id, l.name)}
+                          aria-label={`Delete ${l.name}`} title="Delete leader account"
+                          className="cursor-pointer rounded-lg p-1.5 text-muted-fg transition hover:bg-danger/10 hover:text-danger">
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {leaders.length === 0 && (
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-muted-fg">No leaders registered yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      </>
+      )}
+
       {tab === "affiliate" && (
       <section>
         <h2 className="section-title mb-3">List Affiliate</h2>
@@ -587,6 +666,11 @@ export default function AdminDashboard({
       <MarketerAffiliatesModal marketer={affListFor}
         affiliates={affiliates.filter((a) => affListFor && a.marketer_id === affListFor.id)}
         onClose={() => setAffListFor(null)} />
+
+      <LeaderMarketersModal leader={leaderListFor}
+        marketers={marketers.filter((m) => leaderListFor && m.leader_id === leaderListFor.id)}
+        affiliates={affiliates}
+        onClose={() => setLeaderListFor(null)} />
         </div>
       </main>
     </div>
@@ -760,6 +844,48 @@ function MarketerAffiliatesModal({
                   <td className="py-2 pr-3 font-mono text-muted-fg">{a.staff_id || "—"}</td>
                   <td className="py-2 pr-3 text-muted-fg">{a.phone || "—"}</td>
                   <td className="py-2 pr-3 text-center tabular-nums">{a.done}/{a.lives}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+/** Read-only list of the marketers under one leader, opened from the count. */
+function LeaderMarketersModal({
+  leader, marketers, affiliates, onClose,
+}: { leader: Leader | null; marketers: Marketer[]; affiliates: Affiliate[]; onClose: () => void }) {
+  return (
+    <Modal open={!!leader} onClose={onClose}
+      title={leader ? `Marketer — ${leader.name}` : "Marketer"}
+      subtitle={leader ? `${marketers.length} marketer di bawah ${leader.staff_id ?? leader.name}` : undefined}>
+      {marketers.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-line py-6 text-center text-sm text-muted-fg">
+          Tiada marketer di bawah leader ini.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[420px] text-sm">
+            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+              <tr>
+                <th className="py-2 pr-3 font-semibold">No</th>
+                <th className="py-2 pr-3 font-semibold">Nama</th>
+                <th className="py-2 pr-3 font-semibold">ID Staff</th>
+                <th className="py-2 pr-3 text-center font-semibold">Affiliates</th>
+              </tr>
+            </thead>
+            <tbody>
+              {marketers.map((m, i) => (
+                <tr key={m.id} className="border-b border-line/60 last:border-0">
+                  <td className="py-2 pr-3 text-muted-fg">{i + 1}</td>
+                  <td className="py-2 pr-3 font-medium text-ink">{m.name}</td>
+                  <td className="py-2 pr-3 font-mono text-muted-fg">{m.staff_id || "—"}</td>
+                  <td className="py-2 pr-3 text-center tabular-nums">
+                    {affiliates.filter((a) => a.marketer_id === m.id).length}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -593,6 +593,15 @@ export default function MarketerShell({
               </div>
               <Settings className="h-3.5 w-3.5 shrink-0 text-muted-fg" aria-hidden="true" />
             </Link>
+            {/* Admin runs the marketer console to cover an absent marketer;
+                give them a one-click way back to their own dashboard. Shown
+                whether they came here directly or via "manage as". */}
+            {(user.role === "admin" || user.impersonatorRole === "admin") && (
+              <Link href="/admin"
+                className="mb-2 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-semibold text-primary transition-colors duration-200 hover:bg-primary/10">
+                <LayoutDashboard className="h-4 w-4 shrink-0" aria-hidden="true" />Admin Dashboard
+              </Link>
+            )}
             <button onClick={logout} className="btn-ghost w-full !py-2">
               <LogOut className="h-4 w-4" aria-hidden="true" />Log out
             </button>

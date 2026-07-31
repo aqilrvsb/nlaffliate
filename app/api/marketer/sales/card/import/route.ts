@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { moneyScalerFromForm } from "@/lib/currency";
+import { recomputeSalesCard } from "@/lib/salesCard";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -16,8 +17,11 @@ const str = (v: any) => (v != null && String(v).trim() !== "" ? String(v).trim()
 
 /**
  * Import a TikTok "creative data for product campaigns" xlsx, but keep ONLY the
- * rows where Creative type = "Product card". They are summed into a single
- * daily Card total for the brand + date. Re-importing replaces that day.
+ * rows where Creative type = "Product card". They are summed into ONE upload
+ * batch (sales_card_upload); the day's Card total is the sum of all its
+ * batches. So many files can be uploaded for the same brand + date and they
+ * ACCUMULATE — a wrongly-uploaded file is removed from the Excel Product Card
+ * tab to re-tally.
  */
 export async function POST(req: Request) {
   const user = await getSession();
@@ -68,17 +72,23 @@ export async function POST(req: Request) {
     gross += rGross;
     counted++;
   }
-  const cpo = orders > 0 ? Math.round((cost / orders) * 100) / 100 : null;
-  const roi = cost > 0 ? Math.round((gross / cost) * 100) / 100 : null;
+  if (counted === 0)
+    return NextResponse.json(
+      { error: "Tiada baris 'Product card' dalam fail ini." },
+      { status: 400 }
+    );
 
+  // Log this upload as a batch, then rebuild the day's total from all batches.
   await db.prepare(
-      "DELETE FROM sales_card WHERE marketer_id = ? AND brand_id = ? AND report_date = ?"
-    ).run(user.id, brandId, reportDate);
-
-  await db.prepare(
-      `INSERT INTO sales_card (marketer_id, brand_id, report_date, cost, sku_orders, cost_per_order, gross_revenue, roi)
+      `INSERT INTO sales_card_upload
+         (marketer_id, brand_id, report_date, cost, sku_orders, gross_revenue, filename, rows_counted)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(user.id, brandId, reportDate, cost, orders, cpo, gross, roi);
+    ).run(user.id, brandId, reportDate, cost, orders, gross, file.name || null, counted);
 
-  return NextResponse.json({ ok: true, imported: counted, skipped, total: rows.length, report_date: reportDate });
+  const { batches } = await recomputeSalesCard(user.id, brandId, reportDate);
+
+  return NextResponse.json({
+    ok: true, imported: counted, skipped, total: rows.length,
+    report_date: reportDate, batches,
+  });
 }

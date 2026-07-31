@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -196,6 +196,7 @@ const SALES_CHILDREN = [
   { key: "sales-product", label: "Product", icon: PackageSearch },
   { key: "sales-product-campaign", label: "Product · Campaign", icon: List },
   { key: "sales-card", label: "Product Card", icon: CreditCard },
+  { key: "sales-card-excel", label: "Product Card · Excel", icon: FileSpreadsheet },
 ] as const;
 
 const TAB_LABELS: Record<string, string> = {
@@ -216,6 +217,7 @@ const TAB_LABELS: Record<string, string> = {
   "sales-product": "Sales · Product",
   "sales-product-campaign": "Sales · Product Campaign",
   "sales-card": "Sales · Product Card",
+  "sales-card-excel": "Excel — Product Card",
   overall: "Overall",
   creator: "Creator Quantity",
   "live-users": "List Live User",
@@ -749,6 +751,7 @@ export default function MarketerShell({
           {active === "sales-live-campaign" && <SalesCampaignTab rows={salesLiveCampaign} kind="live" />}
           {active === "sales-product-campaign" && <SalesCampaignTab rows={salesProductCampaign} kind="product" />}
           {active === "sales-card" && <SalesCardTab rows={salesCard} />}
+          {active === "sales-card-excel" && <CardUploadsTab />}
           {/* Brand & Product: view-only for marketer/leader — admin creates and
               assigns them. Forcing canEdit=false hides every add/edit/delete. */}
           {active === "brand" && (
@@ -3080,7 +3083,7 @@ function SalesCardTab({ rows: all }: { rows: SalesCard[] }) {
         title="Import Creative Data — Product Card sahaja"
         endpoint="/api/marketer/sales/card/import"
         columns={["Creative type", "Cost", "SKU orders", "Cost per order", "Gross revenue"]}
-        note={<>TikTok Ads → <b>creative data for product campaigns</b>. Hanya baris <b>Creative type = Product card</b> diambil dan dijumlahkan jadi satu total harian ikut brand + tarikh.</>}
+        note={<>TikTok Ads → <b>creative data for product campaigns</b>. Hanya baris <b>Creative type = Product card</b> diambil. Setiap upload <b>ditambah</b> (bukan ganti) — boleh upload banyak fail untuk hari yang sama. Urus &amp; buang fail di tab <b>Product Card · Excel</b>.</>}
         sampleHref="/examples/creative-product-campaigns-sample.xlsx"
         brandInputId="card-brand"
         resultLabel={(d) => `Product card: ${d.imported} baris · 1 baris harian`}
@@ -3252,6 +3255,125 @@ function OverallImport() {
       </p>
       {msg && <span className="text-xs font-medium text-emerald-600">{msg}</span>}
       {error && <span className="text-xs text-danger">{error}</span>}
+    </div>
+  );
+}
+
+type CardUpload = {
+  id: number; report_date: string; brand_id: number | null; brand_name: string | null;
+  cost: number; sku_orders: number; gross_revenue: number;
+  filename: string | null; rows_counted: number; created_at: string;
+};
+
+/**
+ * Excel — Product Card: every uploaded file, grouped by day, so a marketer can
+ * see how many Excels went into each day's Product Card total and remove a
+ * wrong one (which re-tallies that day). Uploads accumulate — the daily total
+ * is the sum of these batches.
+ */
+function CardUploadsTab() {
+  const [uploads, setUploads] = useState<CardUpload[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<number | null>(null);
+  const canEdit = useCanEdit();
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch("/api/marketer/sales/card/uploads");
+      const d = r.ok ? await r.json() : { uploads: [] };
+      setUploads(d.uploads || []);
+    } catch { setUploads([]); } finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  async function remove(u: CardUpload) {
+    const go = await confirmDialog({
+      title: "Buang upload ini?",
+      text: `${u.filename || "fail"} — ${u.brand_name ?? "—"} · ${fmtDMY(u.report_date)}.\nJumlah Product Card hari itu akan dikira semula.`,
+      danger: true, confirmText: "Buang",
+    });
+    if (!go) return;
+    setBusy(u.id);
+    const res = await fetch(`/api/marketer/sales/card/uploads/${u.id}`, { method: "DELETE" });
+    setBusy(null);
+    if (res.ok) load();
+  }
+
+  // Group by day so each date shows its file count.
+  const byDate = new Map<string, CardUpload[]>();
+  for (const u of uploads) {
+    const k = `${u.report_date}`;
+    (byDate.get(k) ?? byDate.set(k, []).get(k)!).push(u);
+  }
+  const days = [...byDate.entries()];
+
+  if (loading)
+    return <p className="flex items-center gap-2 text-sm text-muted-fg"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Loading…</p>;
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="section-title">Excel — Product Card</h2>
+        <p className="text-sm text-muted-fg">
+          Setiap fail yang di-upload untuk Product Card. Satu hari boleh ada banyak fail — jumlahnya bertambah. Buang fail yang tersilap untuk kira semula.
+        </p>
+      </div>
+
+      {uploads.length === 0 ? (
+        <p className="card text-center text-sm text-muted-fg">Belum ada upload. Import fail di tab <b>Product Card</b>.</p>
+      ) : (
+        days.map(([date, list]) => {
+          const tCost = list.reduce((s, u) => s + (u.cost || 0), 0);
+          const tGross = list.reduce((s, u) => s + (u.gross_revenue || 0), 0);
+          return (
+            <div key={date} className="glass overflow-hidden rounded-2xl">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-primary/5 px-4 py-2.5">
+                <p className="font-bold text-ink">{fmtDMY(date)}</p>
+                <p className="text-xs text-muted-fg">
+                  <b className="text-primary">{list.length}</b> fail · Cost {fmtRM(tCost)} · Gross {fmtRM(tGross)}
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-sm">
+                  <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+                    <tr>
+                      <th className="px-4 py-2 font-semibold">Brand</th>
+                      <th className="px-4 py-2 font-semibold">Fail</th>
+                      <th className="px-4 py-2 text-right font-semibold">Cost</th>
+                      <th className="px-4 py-2 text-right font-semibold">SKU</th>
+                      <th className="px-4 py-2 text-right font-semibold">Gross</th>
+                      <th className="px-4 py-2 text-right font-semibold">Baris</th>
+                      <th className="px-4 py-2 text-right font-semibold">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {list.map((u) => (
+                      <tr key={u.id} className="border-b border-line/60 last:border-0">
+                        <td className="px-4 py-2">{u.brand_name ? <span className="chip bg-primary/10 text-primary">{u.brand_name}</span> : "—"}</td>
+                        <td className="max-w-[240px] truncate px-4 py-2 text-muted-fg" title={u.filename || ""}>{u.filename || "—"}</td>
+                        <td className="px-4 py-2 text-right">{fmtRM(u.cost)}</td>
+                        <td className="px-4 py-2 text-right">{fmtNum(u.sku_orders)}</td>
+                        <td className="px-4 py-2 text-right">{fmtRM(u.gross_revenue)}</td>
+                        <td className="px-4 py-2 text-right text-muted-fg">{fmtNum(u.rows_counted)}</td>
+                        <td className="px-4 py-2 text-right">
+                          {canEdit && (
+                            <button onClick={() => remove(u)} disabled={busy === u.id}
+                              aria-label="Buang upload" title="Buang fail ini"
+                              className="cursor-pointer rounded-lg p-1.5 text-muted-fg transition hover:bg-danger/10 hover:text-danger disabled:opacity-50">
+                              {busy === u.id ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Trash2 className="h-4 w-4" aria-hidden="true" />}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })
+      )}
     </div>
   );
 }

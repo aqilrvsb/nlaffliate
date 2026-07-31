@@ -42,8 +42,15 @@ export default async function AdminPage({
 
   const marketers = plain(
     await db.prepare(
-      `SELECT m.id, m.name, m.email, m.staff_id, m.phone, m.leader_id,
-              l.name AS leader_name, l.staff_id AS leader_staff
+      `SELECT m.id, m.name, m.email, m.staff_id, m.phone, m.leader_id, m.activated,
+              l.name AS leader_name, l.staff_id AS leader_staff,
+              (SELECT COUNT(*)::int FROM brands bx WHERE bx.marketer_id = m.id) AS brand_count,
+              -- Products live on the shared catalogue brand, so resolve each of
+              -- the marketer's copies back through COALESCE(catalogue_id, id).
+              (SELECT COUNT(*)::int FROM products px
+                WHERE px.brand_id IN (
+                  SELECT COALESCE(catalogue_id, id) FROM brands WHERE marketer_id = m.id
+                )) AS product_count
          FROM users m
          LEFT JOIN users l ON l.id = m.leader_id
         WHERE m.role = 'marketer' ORDER BY m.name`
@@ -51,7 +58,7 @@ export default async function AdminPage({
   );
 
   const leaders = plain(
-    await db.prepare("SELECT id, name, staff_id FROM users WHERE role = 'leader' ORDER BY staff_id")
+    await db.prepare("SELECT id, name, staff_id, activated FROM users WHERE role = 'leader' ORDER BY staff_id")
       .all() as any[]
   );
 

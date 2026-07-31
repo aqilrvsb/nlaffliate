@@ -36,6 +36,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Nama dan No WhatsApp diperlukan." }, { status: 400 });
   }
 
+  // One person, one account. A number that already registered — whatever role —
+  // is blocked, so signing up as a marketer can never leave a stray affiliate
+  // (or vice versa) on the same phone. Admin can remove the wrong one and the
+  // person re-registers under the role they want.
+  const clash = await db
+    .prepare("SELECT staff_id, role FROM users WHERE phone = ?")
+    .get<{ staff_id: string | null; role: string }>(phone);
+  if (clash) {
+    const roleMs = clash.role === "marketer" ? "marketer"
+      : clash.role === "affiliate" ? "affiliate"
+      : clash.role === "leader" ? "leader" : clash.role;
+    return NextResponse.json(
+      {
+        error: `Nombor WhatsApp ini sudah didaftarkan sebagai ${roleMs} (${clash.staff_id}). Sila log masuk, atau hubungi admin jika ingin menukar peranan.`,
+      },
+      { status: 409 }
+    );
+  }
+
   // Staff ID and first password are generated, never chosen. The per-role
   // sequence keeps the ID collision-free even under concurrent creation.
   const staffId = await nextStaffId(role);

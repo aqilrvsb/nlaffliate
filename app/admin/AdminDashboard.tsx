@@ -6,7 +6,7 @@ import {
   TrendingUp, Users, ShoppingBag, UserRound, Bot, Check, ExternalLink,
   Loader2, KeyRound, Clock, AlertTriangle, CalendarDays, Timer,
   LayoutDashboard, Package, Boxes, Link2, Trash2, Plus, AlertCircle, BarChart3, MessageCircle,
-  Tag, Search, UserCheck, UserX, Menu, LogOut, Settings, X, Radio, Crown, Pencil,
+  Tag, Search, UserCheck, UserX, Menu, LogOut, Settings, X, Radio, Crown, Pencil, Phone,
 } from "lucide-react";
 import Link from "next/link";
 import type { SessionUser } from "@/lib/session";
@@ -25,11 +25,13 @@ import DateRangeFilter from "@/components/DateRangeFilter";
 import Pagination from "@/components/Pagination";
 import { getPage, paginate } from "@/lib/pagination";
 import { useSearchParams } from "next/navigation";
-import { fmtDate, fmtTimeRange, sumDurations } from "@/lib/format";
+import { fmtDate, fmtTimeRange, sumDurations, fmtRM, fmtNum, fmtRMor } from "@/lib/format";
 import { confirmDialog, alertDialog } from "@/lib/swal";
 
-type Marketer = { id: number; name: string; email?: string | null; staff_id?: string | null; phone?: string | null; leader_id?: number | null; leader_name?: string | null; leader_staff?: string | null };
-type Leader = { id: number; name: string; staff_id: string | null };
+type Marketer = { id: number; name: string; email?: string | null; staff_id?: string | null; phone?: string | null; leader_id?: number | null; leader_name?: string | null; leader_staff?: string | null; brand_count?: number; product_count?: number; activated?: boolean };
+type Leader = { id: number; name: string; staff_id: string | null; activated?: boolean };
+/** The shape the shared edit / activate helpers need from any account. */
+type EditableUser = { id: number; name: string; staff_id?: string | null };
 type Affiliate = {
   id: number; name: string; email?: string | null; staff_id?: string | null; phone: string | null;
   marketer_id: number | null; marketer_name: string | null; activated?: boolean;
@@ -69,8 +71,25 @@ export default function AdminDashboard({
   const [addLeader, setAddLeader] = useState(false);
   // Which leader's marketer list is open in the modal.
   const [leaderListFor, setLeaderListFor] = useState<Leader | null>(null);
-  // Which leader is being edited (name / password).
-  const [editLeader, setEditLeader] = useState<Leader | null>(null);
+  // Which account is being edited (name / password) — any role.
+  const [editUser, setEditUser] = useState<{ user: EditableUser; label: string } | null>(null);
+
+  // Activate / deactivate any account. Deactivated users can't log in.
+  async function toggleActivated(id: number, next: boolean) {
+    setSavingId(id);
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activated: next }),
+    });
+    setSavingId(null);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      await alertDialog({ title: "Tidak berjaya", text: d.error || "Ralat.", variant: "warning" });
+      return;
+    }
+    router.refresh();
+  }
   const [navOpen, setNavOpen] = useState(false);
 
   function goTab(key: string) {
@@ -86,6 +105,8 @@ export default function AdminDashboard({
   const [affStatus, setAffStatus] = useState<"all" | "done" | "no">("all");
   // Which marketer's affiliate list is open in the modal.
   const [affListFor, setAffListFor] = useState<Marketer | null>(null);
+  // Which marketer's brand/product detail is open, and which tab of it.
+  const [catalogueFor, setCatalogueFor] = useState<{ marketer: Marketer; tab: "brand" | "product" } | null>(null);
 
   /**
    * Two-step delete: the first call reports what would be destroyed, and the
@@ -294,10 +315,10 @@ export default function AdminDashboard({
         <Kpi Icon={Check} label="Total Completed Live" value={completed} tone="emerald" />
         <Kpi Icon={Timer} label="Total Duration Completed Live" value={totalDuration} />
 
-        <Kpi Icon={TrendingUp} label="Total GMV" value={`RM${totalGmv.toFixed(2)}`}
+        <Kpi Icon={TrendingUp} label="Total GMV" value={fmtRM(totalGmv)}
           accent className="col-span-2" />
-        <Kpi Icon={Users} label="Total Viewers" value={totalViewers} />
-        <Kpi Icon={ShoppingBag} label="Item Sold" value={totalItems} />
+        <Kpi Icon={Users} label="Total Viewers" value={fmtNum(totalViewers)} />
+        <Kpi Icon={ShoppingBag} label="Item Sold" value={fmtNum(totalItems)} />
       </div>
 
       <AiSettingsCard />
@@ -333,6 +354,8 @@ export default function AdminDashboard({
                 <th className="px-4 py-3 font-semibold">Marketer</th>
                 <th className="px-4 py-3 font-semibold">ID Staff</th>
                 <th className="px-4 py-3 text-center font-semibold">Affiliates</th>
+                <th className="px-4 py-3 text-center font-semibold">Brand</th>
+                <th className="px-4 py-3 text-center font-semibold">Product</th>
                 <th className="px-4 py-3 font-semibold">Leader</th>
                 <th className="px-4 py-3 text-right font-semibold">Actions</th>
               </tr>
@@ -359,6 +382,22 @@ export default function AdminDashboard({
                         {owned}
                       </button>
                     </td>
+                    <td className="px-4 py-3 text-center">
+                      <button onClick={() => setCatalogueFor({ marketer: m, tab: "brand" })}
+                        disabled={!m.brand_count}
+                        title={!m.brand_count ? "Tiada brand" : "Lihat brand"}
+                        className="inline-flex min-w-[2.5rem] cursor-pointer items-center justify-center rounded-lg bg-accent/10 px-2.5 py-1 text-sm font-bold text-accent tabular-nums transition hover:bg-accent/20 disabled:cursor-default disabled:bg-transparent disabled:text-muted-fg disabled:hover:bg-transparent">
+                        {m.brand_count ?? 0}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button onClick={() => setCatalogueFor({ marketer: m, tab: "product" })}
+                        disabled={!m.product_count}
+                        title={!m.product_count ? "Tiada product" : "Lihat product"}
+                        className="inline-flex min-w-[2.5rem] cursor-pointer items-center justify-center rounded-lg bg-emerald-500/10 px-2.5 py-1 text-sm font-bold text-emerald-600 tabular-nums transition hover:bg-emerald-500/20 disabled:cursor-default disabled:bg-transparent disabled:text-muted-fg disabled:hover:bg-transparent">
+                        {m.product_count ?? 0}
+                      </button>
+                    </td>
                     <td className="px-4 py-3">
                       <select
                         className="input !w-auto !py-1.5 cursor-pointer text-sm disabled:opacity-60"
@@ -373,11 +412,17 @@ export default function AdminDashboard({
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
-                        {savingId === m.id && <Loader2 className="h-4 w-4 animate-spin text-muted-fg" aria-hidden="true" />}
+                        <ActiveToggle on={m.activated !== false} busy={savingId === m.id}
+                          onToggle={(next) => toggleActivated(m.id, next)} />
                         <button onClick={() => manageMarketer(m.id)} disabled={savingId === m.id}
                           title="Urus marketer ini — buat live, affiliate, reporting bagi pihak mereka"
                           className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-primary px-2.5 py-1.5 text-xs font-semibold text-primary-fg shadow-lift transition hover:opacity-90 disabled:opacity-50">
                           <UserRound className="h-3.5 w-3.5" aria-hidden="true" /> Urus
+                        </button>
+                        <button onClick={() => setEditUser({ user: m, label: "Marketer" })}
+                          aria-label={`Edit ${m.name}`} title="Edit nama / reset password"
+                          className="cursor-pointer rounded-lg p-1.5 text-muted-fg transition hover:bg-accent/10 hover:text-accent">
+                          <Pencil className="h-4 w-4" aria-hidden="true" />
                         </button>
                         <button onClick={() => removeUser(m.id, m.name)}
                           aria-label={`Delete ${m.name}`} title="Delete account"
@@ -390,7 +435,7 @@ export default function AdminDashboard({
                 );
               })}
               {marketers.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-fg">No marketers registered yet.</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-fg">No marketers registered yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -454,7 +499,9 @@ export default function AdminDashboard({
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => setEditLeader(l)}
+                        <ActiveToggle on={l.activated !== false} busy={savingId === l.id}
+                          onToggle={(next) => toggleActivated(l.id, next)} />
+                        <button onClick={() => setEditUser({ user: l, label: "Leader" })}
                           aria-label={`Edit ${l.name}`} title="Edit nama / reset password"
                           className="cursor-pointer rounded-lg p-1.5 text-muted-fg transition hover:bg-accent/10 hover:text-accent">
                           <Pencil className="h-4 w-4" aria-hidden="true" />
@@ -573,10 +620,17 @@ export default function AdminDashboard({
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1.5">
+                      <ActiveToggle on={a.activated === true} busy={savingId === a.id}
+                        onToggle={(next) => toggleActivated(a.id, next)} />
                       <button onClick={() => setLinksFor(a)}
                         className="inline-flex cursor-pointer items-center gap-1 rounded-lg bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/20"
                         title="TikTok links">
                         <Link2 className="h-3.5 w-3.5" aria-hidden="true" /> Links
+                      </button>
+                      <button onClick={() => setEditUser({ user: a, label: "Affiliate" })}
+                        aria-label={`Edit ${a.name}`} title="Edit nama / reset password"
+                        className="cursor-pointer rounded-lg p-1.5 text-muted-fg transition hover:bg-accent/10 hover:text-accent">
+                        <Pencil className="h-4 w-4" aria-hidden="true" />
                       </button>
                       <button onClick={() => removeUser(a.id, a.name)}
                         aria-label={`Delete ${a.name}`} title="Delete account"
@@ -639,10 +693,10 @@ export default function AdminDashboard({
                   </td>
                   <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
                   <td className="px-4 py-3 text-right font-semibold text-ink">
-                    {r.gmv != null ? `RM${r.gmv}` : "—"}
+                    {fmtRMor(r.gmv)}
                   </td>
-                  <td className="px-4 py-3 text-right">{r.viewers ?? "—"}</td>
-                  <td className="px-4 py-3 text-right">{r.items_sold ?? "—"}</td>
+                  <td className="px-4 py-3 text-right">{r.viewers != null ? fmtNum(r.viewers) : "—"}</td>
+                  <td className="px-4 py-3 text-right">{r.items_sold != null ? fmtNum(r.items_sold) : "—"}</td>
                   <td className="px-4 py-3">{r.duration_live ?? "—"}</td>
                   <td className="px-4 py-3">
                     {r.screenshot_path ? (
@@ -679,8 +733,11 @@ export default function AdminDashboard({
         affiliates={affiliates}
         onClose={() => setLeaderListFor(null)} />
 
-      <EditLeaderModal leader={editLeader}
-        onClose={() => setEditLeader(null)} onSaved={() => router.refresh()} />
+      <EditUserModal target={editUser}
+        onClose={() => setEditUser(null)} onSaved={() => router.refresh()} />
+
+      <MarketerCatalogueModal target={catalogueFor}
+        onClose={() => setCatalogueFor(null)} />
         </div>
       </main>
     </div>
@@ -864,6 +921,98 @@ function MarketerAffiliatesModal({
   );
 }
 
+/**
+ * The brands a marketer holds and the products under them, opened from the
+ * Brand/Product counts on List Marketer. Two tabs, fetched together on open.
+ */
+function MarketerCatalogueModal({
+  target, onClose,
+}: { target: { marketer: Marketer; tab: "brand" | "product" } | null; onClose: () => void }) {
+  type B = { id: number; name: string };
+  type P = { id: number; name: string; sku: string | null; brand_name: string | null };
+  const [brands, setBrands] = useState<B[]>([]);
+  const [products, setProducts] = useState<P[]>([]);
+  const [tab, setTab] = useState<"brand" | "product">("brand");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!target) return;
+    setTab(target.tab); setLoading(true);
+    (async () => {
+      try {
+        const r = await fetch(`/api/admin/marketer-catalogue?marketer_id=${target.marketer.id}`);
+        const d = r.ok ? await r.json() : { brands: [], products: [] };
+        setBrands(d.brands || []); setProducts(d.products || []);
+      } catch {
+        setBrands([]); setProducts([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [target]);
+
+  const m = target?.marketer;
+  return (
+    <Modal open={!!target} onClose={onClose}
+      title={m ? `Brand & Product — ${m.name}` : "Brand & Product"}
+      subtitle={m ? (m.staff_id ?? undefined) : undefined}>
+      <div className="mb-3 flex gap-1 rounded-xl bg-primary/5 p-1">
+        {(["brand", "product"] as const).map((t) => (
+          <button key={t} type="button" onClick={() => setTab(t)}
+            className={`flex-1 cursor-pointer rounded-lg px-3 py-1.5 text-sm font-semibold capitalize transition ${
+              tab === t ? "bg-white text-primary shadow-sm" : "text-muted-fg hover:text-ink"
+            }`}>
+            {t === "brand" ? `Brand (${brands.length})` : `Product (${products.length})`}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <p className="flex items-center gap-2 py-6 text-sm text-muted-fg">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Loading…
+        </p>
+      ) : tab === "brand" ? (
+        brands.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-line py-6 text-center text-sm text-muted-fg">Tiada brand.</p>
+        ) : (
+          <div className="max-h-80 space-y-1 overflow-y-auto">
+            {brands.map((b, i) => (
+              <div key={b.id} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-primary/5">
+                <span className="w-5 text-right text-xs text-muted-fg">{i + 1}</span>
+                <Tag className="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+                <span className="text-sm font-semibold text-ink">{b.name}</span>
+              </div>
+            ))}
+          </div>
+        )
+      ) : products.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-line py-6 text-center text-sm text-muted-fg">Tiada product.</p>
+      ) : (
+        <div className="max-h-80 overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+              <tr>
+                <th className="py-2 pr-3 font-semibold">No</th>
+                <th className="py-2 pr-3 font-semibold">Product</th>
+                <th className="py-2 pr-3 font-semibold">Brand</th>
+              </tr>
+            </thead>
+            <tbody>
+              {products.map((p, i) => (
+                <tr key={p.id} className="border-b border-line/60 last:border-0">
+                  <td className="py-2 pr-3 text-muted-fg">{i + 1}</td>
+                  <td className="py-2 pr-3 font-medium text-ink">{p.name}</td>
+                  <td className="py-2 pr-3 text-muted-fg">{p.brand_name || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 /** Read-only list of the marketers under one leader, opened from the count. */
 function LeaderMarketersModal({
   leader, marketers, affiliates, onClose,
@@ -907,28 +1056,52 @@ function LeaderMarketersModal({
 }
 
 /**
- * Admin edits a leader: rename and/or reset the password. Staff ID is the login
- * identity and stays fixed. A blank password field leaves the password as is,
- * so a rename can be saved on its own.
+ * A small on/off switch for an account's `activated` flag. Off = the user
+ * cannot log in. Optimistic-free: the parent refreshes from the server.
  */
-function EditLeaderModal({
-  leader, onClose, onSaved,
-}: { leader: Leader | null; onClose: () => void; onSaved: () => void }) {
+function ActiveToggle({
+  on, busy, onToggle,
+}: { on: boolean; busy?: boolean; onToggle: (next: boolean) => void }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} disabled={busy}
+      onClick={() => onToggle(!on)}
+      title={on ? "Aktif — klik untuk nyahaktif (tak boleh login)" : "Nyahaktif — klik untuk aktifkan"}
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors disabled:opacity-50 ${
+        on ? "bg-emerald-500" : "bg-muted-fg/30"
+      }`}>
+      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+        on ? "translate-x-4" : "translate-x-0.5"
+      }`} />
+    </button>
+  );
+}
+
+/**
+ * Admin edits any account: rename and/or reset the password. Staff ID is the
+ * login identity and stays fixed. A blank password field leaves the password as
+ * is, so a rename can be saved on its own.
+ */
+function EditUserModal({
+  target, onClose, onSaved,
+}: {
+  target: { user: EditableUser; label: string } | null;
+  onClose: () => void; onSaved: () => void;
+}) {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!leader) return;
-    setName(leader.name); setPassword(""); setError("");
-  }, [leader]);
+    if (!target) return;
+    setName(target.user.name); setPassword(""); setError("");
+  }, [target]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!leader) return;
+    if (!target) return;
     setSaving(true); setError("");
-    const res = await fetch(`/api/admin/users/${leader.id}`, {
+    const res = await fetch(`/api/admin/users/${target.user.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, ...(password ? { password } : {}) }),
@@ -939,24 +1112,26 @@ function EditLeaderModal({
     onClose(); onSaved();
   }
 
+  const label = target?.label ?? "Akaun";
+  const staffId = target?.user.staff_id;
   return (
-    <Modal open={!!leader} onClose={onClose}
-      title={leader ? `Edit Leader — ${leader.staff_id ?? leader.name}` : "Edit Leader"}>
+    <Modal open={!!target} onClose={onClose}
+      title={target ? `Edit ${label} — ${staffId ?? target.user.name}` : `Edit ${label}`}>
       <form onSubmit={submit} className="space-y-3">
         <div>
-          <label className="label" htmlFor="ldr-name">Nama</label>
-          <input id="ldr-name" className="input" value={name} autoFocus
-            onChange={(e) => setName(e.target.value)} required placeholder="Nama leader" />
+          <label className="label" htmlFor="eu-name">Nama</label>
+          <input id="eu-name" className="input" value={name} autoFocus
+            onChange={(e) => setName(e.target.value)} required placeholder="Nama penuh" />
         </div>
         <div>
-          <label className="label" htmlFor="ldr-pass">Password baharu <span className="font-normal text-muted-fg">(biar kosong untuk kekalkan)</span></label>
+          <label className="label" htmlFor="eu-pass">Password baharu <span className="font-normal text-muted-fg">(biar kosong untuk kekalkan)</span></label>
           <div className="relative">
             <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-fg" aria-hidden="true" />
-            <input id="ldr-pass" className="input pl-9" type="text" autoComplete="off"
+            <input id="eu-pass" className="input pl-9" type="text" autoComplete="off"
               value={password} onChange={(e) => setPassword(e.target.value)}
               placeholder="Kosong = tak tukar" />
           </div>
-          <p className="mt-1 text-[11px] text-muted-fg">ID Staff ({leader?.staff_id}) kekal — tidak boleh ditukar.</p>
+          {staffId && <p className="mt-1 text-[11px] text-muted-fg">ID Staff ({staffId}) kekal — tidak boleh ditukar.</p>}
         </div>
 
         {error && (
@@ -988,7 +1163,9 @@ function EditLeaderModal({
 function WhatsAppCard() {
   const [cfg, setCfg] = useState<any>(null);
   const [device, setDevice] = useState("");
-  const [adminNotify, setAdminNotify] = useState("");
+  // Each admin notify number is its own input; the list grows/shrinks freely.
+  // Two empty rows by default so there's always somewhere to type both.
+  const [notifyNums, setNotifyNums] = useState<string[]>(["", ""]);
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -999,13 +1176,26 @@ function WhatsAppCard() {
       const r = await fetch("/api/admin/whatsapp");
       const d = r.ok ? await r.json() : {};
       setCfg(d);
-      setAdminNotify(d.admin_notify || "");
+      const nums = String(d.admin_notify || "")
+        .split(",").map((s: string) => s.trim()).filter(Boolean);
+      // Always show at least two rows so the "two numbers" case is obvious.
+      setNotifyNums(nums.length >= 2 ? nums : [...nums, ...Array(2 - nums.length).fill("")]);
     } catch { setCfg({}); }
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  function setNum(i: number, v: string) {
+    setNotifyNums((prev) => prev.map((n, idx) => (idx === i ? v : n)));
+  }
+  function addNum() { setNotifyNums((prev) => [...prev, ""]); }
+  function removeNum(i: number) {
+    setNotifyNums((prev) => (prev.length <= 1 ? [""] : prev.filter((_, idx) => idx !== i)));
+  }
+
   async function save() {
     setBusy(true); setSaved(false); setResult(null);
+    // Store as the comma list the backend already reads; blanks/dupes dropped.
+    const adminNotify = [...new Set(notifyNums.map((n) => n.trim()).filter(Boolean))].join(",");
     await fetch("/api/admin/whatsapp", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ device, admin_notify: adminNotify }),
@@ -1060,12 +1250,33 @@ function WhatsAppCard() {
             onChange={(e) => setPhone(e.target.value)} />
         </div>
         <div className="sm:col-span-2">
-          <label className="label" htmlFor="wa-admin-notify">Nombor admin untuk notifikasi</label>
-          <input id="wa-admin-notify" className="input" autoComplete="off"
-            placeholder="601114721068, 60125485449"
-            value={adminNotify} onChange={(e) => setAdminNotify(e.target.value)} />
+          <label className="label">Nombor admin untuk notifikasi</label>
+          <div className="space-y-2">
+            {notifyNums.map((num, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">
+                  {i + 1}
+                </span>
+                <div className="relative flex-1">
+                  <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-fg" aria-hidden="true" />
+                  <input className="input !pl-9" type="tel" inputMode="tel" autoComplete="off"
+                    placeholder={i === 0 ? "601114721068" : "60125485449"}
+                    value={num} onChange={(e) => setNum(i, e.target.value)} />
+                </div>
+                <button type="button" onClick={() => removeNum(i)}
+                  aria-label={`Buang nombor ${i + 1}`} title="Buang nombor"
+                  className="shrink-0 cursor-pointer rounded-lg p-2 text-muted-fg transition hover:bg-danger/10 hover:text-danger">
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button type="button" onClick={addNum}
+            className="mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-dashed border-primary/40 px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/10">
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Tambah nombor
+          </button>
           <p className="mt-1.5 text-[11px] text-muted-fg">
-            Admin dapat notifikasi bila ada affiliate/marketer baharu daftar. Boleh masukkan lebih satu nombor (asingkan dengan koma).
+            Setiap nombor di sini dapat notifikasi bila ada affiliate/marketer baharu daftar. Tambah atau buang bila-bila masa, kemudian tekan <b>Save device</b>.
           </p>
         </div>
       </div>

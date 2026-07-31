@@ -23,7 +23,7 @@ import DateRangeFilter from "@/components/DateRangeFilter";
 import Modal from "@/components/Modal";
 import Pagination from "@/components/Pagination";
 import { getPage, paginate } from "@/lib/pagination";
-import { fmtDate, fmtTimeRange, sumDurations } from "@/lib/format";
+import { fmtDate, fmtTimeRange, sumDurations, fmtRM, fmtNum, fmtRMor } from "@/lib/format";
 import { resolveRange } from "@/lib/daterange";
 import { confirmDialog } from "@/lib/swal";
 import { handleFromUrl } from "@/lib/tiktok";
@@ -204,10 +204,10 @@ export default function AffiliateDashboard({
         <Kpi Icon={Check} label="Total Completed Live" value={totals.done} tone="emerald" />
         <Kpi Icon={Timer} label="Total Duration Completed Live" value={totalDuration} />
 
-        <Kpi Icon={TrendingUp} label="Total GMV" value={`RM${totals.gmv.toFixed(2)}`}
+        <Kpi Icon={TrendingUp} label="Total GMV" value={fmtRM(totals.gmv)}
           fill="yellow" className="col-span-2" />
-        <Kpi Icon={Users} label="Total Viewers" value={totals.viewers} />
-        <Kpi Icon={ShoppingBag} label="Item Sold" value={totals.items} />
+        <Kpi Icon={Users} label="Total Viewers" value={fmtNum(totals.viewers)} />
+        <Kpi Icon={ShoppingBag} label="Item Sold" value={fmtNum(totals.items)} />
 
         <Kpi Icon={Clock} label="Pending Post" value={pendingItems.length}
           fill="red" className="col-span-2" />
@@ -830,9 +830,9 @@ function ResultView({
 
         {!edit ? (
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <Stat Icon={TrendingUp} label="Total Sales" value={b.gmv != null ? `RM${b.gmv}` : "—"} />
-            <Stat Icon={Users} label="Viewers" value={b.viewers ?? "—"} />
-            <Stat Icon={ShoppingBag} label="Items Sold" value={b.items_sold ?? "—"} />
+            <Stat Icon={TrendingUp} label="Total Sales" value={fmtRMor(b.gmv)} />
+            <Stat Icon={Users} label="Viewers" value={b.viewers != null ? fmtNum(b.viewers) : "—"} />
+            <Stat Icon={ShoppingBag} label="Items Sold" value={b.items_sold != null ? fmtNum(b.items_sold) : "—"} />
             <Stat Icon={Timer} label="Duration" value={b.duration_live ?? "—"} />
           </div>
         ) : (

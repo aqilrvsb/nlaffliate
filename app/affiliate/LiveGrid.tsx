@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import Pagination from "@/components/Pagination";
 import { getPage, paginate } from "@/lib/pagination";
-import { fmtDate, fmtTimeRange } from "@/lib/format";
+import { fmtDate, fmtTimeRange, fmtNum, fmtRMor } from "@/lib/format";
 import { useSearchParams } from "next/navigation";
 import { profileName } from "@/lib/tiktok";
 
@@ -163,9 +163,9 @@ function LiveCard({ it, reload }: { it: GridItem; reload: () => void }) {
         {done && (
           <div className="mt-1 grid grid-cols-2 gap-1.5 border-t border-line pt-2">
             <MiniStat Icon={TrendingUp} label="GMV"
-              value={it.gmv != null ? `RM${it.gmv}` : "—"} />
-            <MiniStat Icon={Users} label="Viewers" value={it.viewers ?? "—"} />
-            <MiniStat Icon={ShoppingBag} label="Items" value={it.items_sold ?? "—"} />
+              value={fmtRMor(it.gmv)} />
+            <MiniStat Icon={Users} label="Viewers" value={it.viewers != null ? fmtNum(it.viewers) : "—"} />
+            <MiniStat Icon={ShoppingBag} label="Items" value={it.items_sold != null ? fmtNum(it.items_sold) : "—"} />
             <MiniStat Icon={Timer} label="Duration" value={it.duration_live ?? "—"} />
           </div>
         )}

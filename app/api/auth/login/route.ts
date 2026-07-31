@@ -17,11 +17,24 @@ export async function POST(req: Request) {
   }
 
   const row = await db
-    .prepare("SELECT id, name, email, staff_id, password_hash, role FROM users WHERE staff_id = ?")
+    .prepare("SELECT id, name, email, staff_id, password_hash, role, activated FROM users WHERE staff_id = ?")
     .get<any>(staffId);
 
   if (!row || !bcrypt.compareSync(password, row.password_hash)) {
     return NextResponse.json({ error: "ID Staff atau password salah." }, { status: 401 });
+  }
+
+  // A deactivated account cannot log in. Affiliates wait for their marketer to
+  // activate them; everyone else has been switched off by an admin.
+  if (!row.activated) {
+    return NextResponse.json(
+      {
+        error: row.role === "affiliate"
+          ? "Akaun anda belum diaktifkan. Sila tunggu marketer mengaktifkan akaun anda."
+          : "Akaun anda telah dinyahaktifkan. Sila hubungi admin.",
+      },
+      { status: 403 }
+    );
   }
 
   await createSession({

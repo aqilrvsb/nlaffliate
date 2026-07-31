@@ -38,7 +38,7 @@ import ImageModal from "@/components/ImageModal";
 import { getPage, paginate } from "@/lib/pagination";
 import {
   fmtDate, fmtTime, fmtTimeRange, sumDurations,
-  durationHours, commissionFor, durationToSeconds,
+  durationHours, commissionFor, durationToSeconds, fmtRM, fmtNum, fmtRMor,
 } from "@/lib/format";
 import { resolveRange } from "@/lib/daterange";
 import { useNavigate } from "@/lib/useNavigate";
@@ -944,7 +944,7 @@ function DashboardTab({ affiliates, inRange, pending, success, overall, from, to
   affiliates: Affiliate[]; inRange: Live[]; pending: Live[]; success: Live[];
   overall: Overall[]; from: string; to: string;
 }) {
-  const rm = (n: number, has: boolean) => (has ? `RM${n.toFixed(2)}` : "—");
+  const rm = (n: number, has: boolean) => (has ? fmtRM(n) : "—");
 
   // "" = All Brands, the default. Every summary respects it — a scheduled
   // live now carries the brand it was booked against.
@@ -987,7 +987,7 @@ function DashboardTab({ affiliates, inRange, pending, success, overall, from, to
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <Kpi Icon={CheckCircle2} label="Total Live" value={livesB.length}
             sub={`${pendingB.length} pending · ${successB.length} done`} />
-          <Kpi Icon={TrendingUp} label="Affiliate Sales" value={`RM${t.gmv.toFixed(2)}`} fill="yellow" />
+          <Kpi Icon={TrendingUp} label="Affiliate Sales" value={fmtRM(t.gmv)} fill="yellow" />
           <Kpi Icon={Users} label="Affiliate Viewers" value={t.viewers} />
           <Kpi Icon={ShoppingBag} label="Affiliate Items" value={t.items} />
           <Kpi Icon={Timer} label="Affiliate Duration" value={t.duration} />
@@ -1428,12 +1428,12 @@ function AddScheduleModal({
 function SuccessSummary({ rows }: { rows: Live[] }) {
   const t = aggregate(rows);
   const affCount = new Set(rows.map((l) => l.affiliate_id)).size;
-  const rm = (n: number, has: boolean) => (has ? `RM${n.toFixed(2)}` : "—");
+  const rm = (n: number, has: boolean) => (has ? fmtRM(n) : "—");
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
       <Kpi Icon={CheckCircle2} label="Total Live" value={rows.length} />
       <Kpi Icon={Users} label="Total Affiliate" value={affCount} />
-      <Kpi Icon={TrendingUp} label="Total Sales" value={`RM${t.gmv.toFixed(2)}`} fill="yellow" />
+      <Kpi Icon={TrendingUp} label="Total Sales" value={fmtRM(t.gmv)} fill="yellow" />
       <Kpi Icon={Users} label="Viewers" value={t.viewers} />
       <Kpi Icon={ShoppingBag} label="Items Sold" value={t.items} />
       <Kpi Icon={Timer} label="Duration" value={t.duration} />
@@ -1787,21 +1787,21 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
               <p className="text-sm font-bold text-ink">Live Results</p>
               {l.ads_budget != null && (
                 <span className="chip bg-accent/10 text-accent">
-                  <Wallet className="h-3 w-3" aria-hidden="true" />Budget RM{l.ads_budget}
+                  <Wallet className="h-3 w-3" aria-hidden="true" />Budget {fmtRM(l.ads_budget)}
                 </span>
               )}
             </div>
             <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-              <Stat Icon={TrendingUp} label="Total Sales" value={l.gmv != null ? `RM${l.gmv}` : "—"} />
-              <Stat Icon={Users} label="Viewers" value={l.viewers ?? "—"} />
-              <Stat Icon={ShoppingBag} label="Items Sold" value={l.items_sold ?? "—"} />
+              <Stat Icon={TrendingUp} label="Total Sales" value={fmtRMor(l.gmv)} />
+              <Stat Icon={Users} label="Viewers" value={l.viewers != null ? fmtNum(l.viewers) : "—"} />
+              <Stat Icon={ShoppingBag} label="Items Sold" value={l.items_sold != null ? fmtNum(l.items_sold) : "—"} />
               <Stat Icon={Timer} label="Duration" value={l.duration_live ?? "—"} />
             </div>
             {(l.ads_budget != null || l.ad_spend != null || l.gross_revenue != null || l.roi != null) && (
               <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-4">
-                <Stat Icon={Wallet} label="Budget" value={l.ads_budget != null ? `RM${l.ads_budget}` : "—"} />
-                <Stat Icon={Wallet} label="Spend" value={l.ad_spend != null ? `RM${l.ad_spend}` : "—"} />
-                <Stat Icon={TrendingUp} label="Gross Revenue" value={l.gross_revenue != null ? `RM${l.gross_revenue}` : "—"} />
+                <Stat Icon={Wallet} label="Budget" value={fmtRMor(l.ads_budget)} />
+                <Stat Icon={Wallet} label="Spend" value={fmtRMor(l.ad_spend)} />
+                <Stat Icon={TrendingUp} label="Gross Revenue" value={fmtRMor(l.gross_revenue)} />
                 <Stat Icon={(l.roi ?? 0) >= 1 ? TrendingUp : TrendingDown}
                   label="ROI" value={l.roi ?? "—"} />
               </div>
@@ -2118,7 +2118,7 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
   const shown = lives.filter((l) => !brand || String(l.brand_id ?? "") === brand);
 
   const t = aggregate(shown);
-  const rm = (n: number, has: boolean) => (has ? `RM${n.toFixed(2)}` : "—");
+  const rm = (n: number, has: boolean) => (has ? fmtRM(n) : "—");
 
   // Narrowing to a brand should also drop affiliates who ran nothing for it,
   // otherwise the table fills with all-zero rows.
@@ -2210,9 +2210,9 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Kpi Icon={Users} label="Total Affiliate" value={active.length} />
-        <Kpi Icon={TrendingUp} label="Affiliate Sales" value={`RM${t.gmv.toFixed(2)}`} fill="yellow" />
-        <Kpi Icon={Users} label="Affiliate Viewers" value={t.viewers} />
-        <Kpi Icon={ShoppingBag} label="Affiliate Items" value={t.items} />
+        <Kpi Icon={TrendingUp} label="Affiliate Sales" value={fmtRM(t.gmv)} fill="yellow" />
+        <Kpi Icon={Users} label="Affiliate Viewers" value={fmtNum(t.viewers)} />
+        <Kpi Icon={ShoppingBag} label="Affiliate Items" value={fmtNum(t.items)} />
         <Kpi Icon={Timer} label="Affiliate Duration" value={t.duration} />
         <Kpi Icon={Wallet} label="Affiliate Budget" value={rm(t.budget, t.hasBudget)} />
         <Kpi Icon={Wallet} label="Affiliate Spend" value={rm(t.spend, t.hasSpend)} fill="red" />
@@ -2220,7 +2220,7 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
         <Kpi Icon={(t.roi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="Affiliate ROI"
           value={t.roi != null ? t.roi : "—"} />
         <Kpi Icon={Wallet} label="Total Commission"
-          value={`RM${totalCommission.toFixed(2)}`} fill="emerald" />
+          value={fmtRM(totalCommission)} fill="emerald" />
       </div>
 
       <div className="flex justify-end">
@@ -2259,9 +2259,9 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
                       <div className="text-xs font-mono text-muted-fg">{a.staff_id ?? ""}</div>
                       {a.phone && <div className="text-xs text-muted-fg">{a.phone}</div>}
                     </td>
-                    <td className="px-4 py-3 text-right font-semibold text-ink">RM{r.gmv.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right">{r.viewers}</td>
-                    <td className="px-4 py-3 text-right">{r.items}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{fmtRM(r.gmv)}</td>
+                    <td className="px-4 py-3 text-right">{fmtNum(r.viewers)}</td>
+                    <td className="px-4 py-3 text-right">{fmtNum(r.items)}</td>
                     <td className="px-4 py-3">{r.duration}</td>
                     <td className="px-4 py-3 text-right">{rm(r.budget, r.hasBudget)}</td>
                     <td className="px-4 py-3 text-right">{rm(r.spend, r.hasSpend)}</td>
@@ -2269,7 +2269,7 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
                     <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi != null ? r.roi : "—"}</td>
                     <td className="px-4 py-3 text-xs text-muted-fg" colSpan={2}>Total Income</td>
                     <td className="px-4 py-3 text-right font-extrabold text-emerald-700">
-                      RM{totalIncome.toFixed(2)}
+                      {fmtRM(totalIncome)}
                     </td>
                   </tr>
 
@@ -2281,9 +2281,9 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
                           {s.label}
                         </span>
                       </td>
-                      <td className="px-4 py-2 text-right">RM{s.agg.gmv.toFixed(2)}</td>
-                      <td className="px-4 py-2 text-right">{s.agg.viewers}</td>
-                      <td className="px-4 py-2 text-right">{s.agg.items}</td>
+                      <td className="px-4 py-2 text-right">{fmtRM(s.agg.gmv)}</td>
+                      <td className="px-4 py-2 text-right">{fmtNum(s.agg.viewers)}</td>
+                      <td className="px-4 py-2 text-right">{fmtNum(s.agg.items)}</td>
                       <td className="px-4 py-2">
                         {s.agg.duration}
                         {s.rate?.commission_type === "hour" && (
@@ -2307,11 +2307,11 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
                         {s.rate?.commission_value != null
                           ? (s.rate.commission_type === "percent"
                               ? `${s.rate.commission_value}%`
-                              : `RM${s.rate.commission_value}/j`)
+                              : `${fmtRM(s.rate.commission_value)}/j`)
                           : "—"}
                       </td>
                       <td className="px-4 py-2 text-right font-semibold text-emerald-700">
-                        {s.rate?.commission_type ? `RM${s.commission.toFixed(2)}` : "—"}
+                        {s.rate?.commission_type ? fmtRM(s.commission) : "—"}
                       </td>
                     </tr>
                   ))}
@@ -2335,9 +2335,9 @@ function ReportingTab({ affiliates, lives }: { affiliates: Affiliate[]; lives: L
 /* ── Sales (Live · Product · Card) ─────────────────────── */
 
 const money2 = (n: number | null | undefined) =>
-  n != null ? `RM${Number(n).toFixed(2)}` : "—";
+  n != null ? fmtRM(n) : "—";
 const intOr = (n: number | null | undefined) =>
-  n != null ? Number(n).toLocaleString() : "—";
+  n != null ? fmtNum(n) : "—";
 
 /** "2026-07-24" (the chosen report date) → "24-07-2026". */
 const fmtDMY = (v: string | null | undefined) => {
@@ -2621,8 +2621,8 @@ function SalesLiveTab({ rows: all }: { rows: SalesLive[] }) {
       <BrandFilterCard id="sl-filter-brand" value={brand} onChange={setBrand} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Kpi Icon={Wallet} label="Cost" value={`RM${cost.toFixed(2)}`} fill="red" />
-        <Kpi Icon={TrendingUp} label="Gross Revenue" value={`RM${gross.toFixed(2)}`} fill="emerald" />
+        <Kpi Icon={Wallet} label="Cost" value={fmtRM(cost)} fill="red" />
+        <Kpi Icon={TrendingUp} label="Gross Revenue" value={fmtRM(gross)} fill="emerald" />
         <Kpi Icon={(roi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI" value={roi != null ? roi : "—"} />
       </div>
 
@@ -2759,8 +2759,8 @@ function SalesProductTab({ rows: rawAll, cards }: { rows: SalesProduct[]; cards:
       </p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Kpi Icon={Wallet} label="Cost" value={`RM${cost.toFixed(2)}`} fill="red" />
-        <Kpi Icon={TrendingUp} label="Gross Revenue" value={`RM${gross.toFixed(2)}`} fill="emerald" />
+        <Kpi Icon={Wallet} label="Cost" value={fmtRM(cost)} fill="red" />
+        <Kpi Icon={TrendingUp} label="Gross Revenue" value={fmtRM(gross)} fill="emerald" />
         <Kpi Icon={(roi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI" value={roi != null ? roi : "—"} />
       </div>
 
@@ -3031,7 +3031,7 @@ function SalesCardTab({ rows: all }: { rows: SalesCard[] }) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Kpi Icon={Wallet} label="Cost" value={money(cost)} fill="red" />
         <Kpi Icon={ShoppingCart} label="SKU Order" value={int(orders)} />
-        <Kpi Icon={Wallet} label="Cost / Order" value={tCpo != null ? `RM${tCpo}` : "—"} />
+        <Kpi Icon={Wallet} label="Cost / Order" value={fmtRMor(tCpo)} />
         <Kpi Icon={TrendingUp} label="Gross Revenue" value={money(gross)} fill="emerald" />
         <Kpi Icon={(tRoi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="ROI" value={tRoi ?? "—"} />
       </div>
@@ -3097,8 +3097,8 @@ function SalesCardTab({ rows: all }: { rows: SalesCard[] }) {
 
 /* ── Overall ───────────────────────────────────────────── */
 
-const money = (n: number | null) => (n != null ? `RM${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—");
-const int = (n: number | null) => (n != null ? n.toLocaleString() : "—");
+const money = (n: number | null) => (n != null ? fmtRM(n) : "—");
+const int = (n: number | null) => (n != null ? fmtNum(n) : "—");
 
 function OverallImport() {
   const router = useRouter();
@@ -5139,8 +5139,8 @@ function UnknownTab({ rows }: { rows: Unknown[] }) {
                   <div className="text-xs text-muted-fg">{r.live_time || ""}</div>
                 </td>
                 <td className="px-4 py-3">{r.duration || "—"}</td>
-                <td className="px-4 py-3 text-right">{r.ad_spend != null ? `RM${r.ad_spend}` : "—"}</td>
-                <td className="px-4 py-3 text-right">{r.gross_revenue != null ? `RM${r.gross_revenue}` : "—"}</td>
+                <td className="px-4 py-3 text-right">{fmtRMor(r.ad_spend)}</td>
+                <td className="px-4 py-3 text-right">{fmtRMor(r.gross_revenue)}</td>
                 <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi ?? "—"}</td>
                 <td className="px-4 py-3">
                   {canEdit && (

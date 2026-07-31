@@ -6,6 +6,7 @@ import {
   Percent, Clock, Check, Loader2, AlertCircle, Wallet, Tag,
 } from "lucide-react";
 import Modal from "@/components/Modal";
+import { fmtRM } from "@/lib/format";
 
 export type LinkBrand = {
   id: number;
@@ -19,7 +20,7 @@ export function rateLabel(b: LinkBrand): string | null {
   if (!b.commission_type || b.commission_value == null) return null;
   return b.commission_type === "percent"
     ? `${b.commission_value}%`
-    : `RM${b.commission_value} / jam`;
+    : `${fmtRM(b.commission_value)} / jam`;
 }
 
 /**

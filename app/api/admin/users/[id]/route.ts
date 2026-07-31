@@ -7,11 +7,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Admin edits an account's name and/or resets its password.
+ * Admin edits an account: rename, reset password, and/or activate-deactivate.
  *
- * Staff ID stays immutable (it's the login identity); this only touches the
- * display name and the password hash. Either field is optional — a blank
- * password means "leave it as is", so the form can save a rename alone.
+ * Staff ID stays immutable (it's the login identity). Each field is optional —
+ * a blank password means "leave it as is", so a rename or a toggle can be saved
+ * on its own. `activated = false` blocks that user from logging in (enforced in
+ * the login route).
  */
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const user = await getSession();
@@ -23,24 +24,30 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: "Bad id." }, { status: 400 });
 
   const target = await db
-    .prepare("SELECT id, staff_id FROM users WHERE id = ?")
-    .get<{ id: number; staff_id: string | null }>(id);
+    .prepare("SELECT id, staff_id, role FROM users WHERE id = ?")
+    .get<{ id: number; staff_id: string | null; role: string }>(id);
   if (!target)
     return NextResponse.json({ error: "Account not found." }, { status: 404 });
 
   const body = await req.json().catch(() => ({}));
   const name = body.name === undefined ? undefined : String(body.name).trim();
   const password = body.password === undefined ? undefined : String(body.password);
+  const activated = body.activated === undefined ? undefined : Boolean(body.activated);
 
   if (name !== undefined && !name)
     return NextResponse.json({ error: "Nama tidak boleh kosong." }, { status: 400 });
   if (password !== undefined && password && password.length < 4)
     return NextResponse.json({ error: "Password sekurang-kurangnya 4 aksara." }, { status: 400 });
 
+  // Locking yourself out is never what you meant.
+  if (activated === false && id === user.id)
+    return NextResponse.json({ error: "You cannot deactivate your own account." }, { status: 409 });
+
   const sets: string[] = [];
   const args: any[] = [];
   if (name !== undefined) { sets.push("name = ?"); args.push(name); }
   if (password) { sets.push("password_hash = ?"); args.push(bcrypt.hashSync(password, 10)); }
+  if (activated !== undefined) { sets.push("activated = ?"); args.push(activated); }
 
   if (sets.length === 0)
     return NextResponse.json({ error: "Tiada perubahan." }, { status: 400 });
@@ -48,7 +55,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   args.push(id);
   await db.prepare(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`).run(...args);
 
-  return NextResponse.json({ ok: true, name, password_changed: !!password });
+  return NextResponse.json({
+    ok: true, name, password_changed: !!password,
+    activated: activated === undefined ? undefined : activated,
+  });
 }
 
 /**

@@ -1,3 +1,50 @@
+/**
+ * Money for display: 7989197 -> "RM7,989,197.00". Always thousand-separated
+ * with exactly two decimals. Numeric columns arrive from postgres.js as
+ * strings, so string input is accepted; anything non-finite renders "RM0.00".
+ */
+export function fmtRM(value: number | string | null | undefined): string {
+  const n = typeof value === "number" ? value : Number(value);
+  const safe = Number.isFinite(n) ? n : 0;
+  return `RM${safe.toLocaleString("en-MY", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+/**
+ * Money or an em dash when there's nothing to show — the common table/stat
+ * case where a missing value must read "—" rather than "RM0.00".
+ */
+export function fmtRMor(value: number | string | null | undefined, dash = "—"): string {
+  if (value == null || value === "") return dash;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? fmtRM(n) : dash;
+}
+
+/**
+ * Plain count with thousand separators: 12345 -> "12,345". `decimals`
+ * controls fixed decimal places (default 0). Non-finite input renders "0".
+ */
+export function fmtNum(
+  value: number | string | null | undefined,
+  decimals = 0
+): string {
+  const n = typeof value === "number" ? value : Number(value);
+  const safe = Number.isFinite(n) ? n : 0;
+  return safe.toLocaleString("en-MY", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+/** Count or an em dash when null/blank: 12345 -> "12,345", null -> "—". */
+export function fmtNumOr(value: number | string | null | undefined, dash = "—"): string {
+  if (value == null || value === "") return dash;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? fmtNum(n) : dash;
+}
+
 /** "14:30" -> "2:30 PM". Returns "" for empty/invalid input. */
 export function fmtTime(t?: string | null): string {
   if (!t) return "";

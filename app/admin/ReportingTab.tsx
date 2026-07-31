@@ -5,7 +5,7 @@ import { ChevronDown, Link2, TrendingUp, TrendingDown, Users, ShoppingBag, Timer
 import DateRangeFilter from "@/components/DateRangeFilter";
 import SortTh, { useTableSort } from "@/components/SortableTable";
 import {
-  sumDurations, durationHours, commissionFor, durationToSeconds,
+  sumDurations, durationHours, commissionFor, durationToSeconds, fmtRM, fmtNum,
 } from "@/lib/format";
 import { handleFromUrl } from "@/lib/tiktok";
 import type { LinkBrand } from "@/components/BrandCommission";
@@ -148,7 +148,7 @@ export default function AdminReportingTab({
   });
   const { sorted: tableRows, sort, toggleSort } = useTableSort(unsorted);
   const totalCommission = tableRows.reduce((s, x) => s + x.income, 0);
-  const rm = (n: number, has: boolean) => (has ? `RM${n.toFixed(2)}` : "—");
+  const rm = (n: number, has: boolean) => (has ? fmtRM(n) : "—");
 
   return (
     <div className="space-y-5">
@@ -177,16 +177,16 @@ export default function AdminReportingTab({
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Kpi Icon={Users} label="Total Affiliate" value={active.length} />
-        <Kpi Icon={TrendingUp} label="Affiliate Sales" value={`RM${totals.gmv.toFixed(2)}`} fill="yellow" />
-        <Kpi Icon={Users} label="Affiliate Viewers" value={totals.viewers} />
-        <Kpi Icon={ShoppingBag} label="Affiliate Items" value={totals.items} />
+        <Kpi Icon={TrendingUp} label="Affiliate Sales" value={fmtRM(totals.gmv)} fill="yellow" />
+        <Kpi Icon={Users} label="Affiliate Viewers" value={fmtNum(totals.viewers)} />
+        <Kpi Icon={ShoppingBag} label="Affiliate Items" value={fmtNum(totals.items)} />
         <Kpi Icon={Timer} label="Affiliate Duration" value={totals.duration} />
         <Kpi Icon={Wallet} label="Affiliate Budget" value={rm(totals.budget, totals.hasBudget)} />
         <Kpi Icon={Wallet} label="Affiliate Spend" value={rm(totals.spend, totals.hasSpend)} fill="red" />
         <Kpi Icon={TrendingUp} label="Affiliate Gross Revenue" value={rm(totals.gross, totals.hasGross)} fill="emerald" />
         <Kpi Icon={(totals.roi ?? 0) >= 1 ? TrendingUp : TrendingDown} label="Affiliate ROI"
           value={totals.roi != null ? totals.roi : "—"} />
-        <Kpi Icon={Wallet} label="Total Commission" value={`RM${totalCommission.toFixed(2)}`} fill="emerald" />
+        <Kpi Icon={Wallet} label="Total Commission" value={fmtRM(totalCommission)} fill="emerald" />
       </div>
 
       <div className="flex justify-end">
@@ -230,9 +230,9 @@ export default function AdminReportingTab({
                         ? <span className="chip bg-accent/10 text-accent">{a.marketer_name}</span>
                         : <span className="text-muted-fg/50">— Unassigned —</span>}
                     </td>
-                    <td className="px-4 py-3 text-right font-semibold text-ink">RM{r.gmv.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right">{r.viewers}</td>
-                    <td className="px-4 py-3 text-right">{r.items}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink">{fmtRM(r.gmv)}</td>
+                    <td className="px-4 py-3 text-right">{fmtNum(r.viewers)}</td>
+                    <td className="px-4 py-3 text-right">{fmtNum(r.items)}</td>
                     <td className="px-4 py-3">{r.duration}</td>
                     <td className="px-4 py-3 text-right">{rm(r.budget, r.hasBudget)}</td>
                     <td className="px-4 py-3 text-right">{rm(r.spend, r.hasSpend)}</td>
@@ -240,7 +240,7 @@ export default function AdminReportingTab({
                     <td className="px-4 py-3 text-right font-semibold text-ink">{r.roi != null ? r.roi : "—"}</td>
                     <td className="px-4 py-3 text-xs text-muted-fg" colSpan={2}>Total Income</td>
                     <td className="px-4 py-3 text-right font-extrabold text-emerald-700">
-                      RM{income.toFixed(2)}
+                      {fmtRM(income)}
                     </td>
                   </tr>
 
@@ -253,9 +253,9 @@ export default function AdminReportingTab({
                         </span>
                       </td>
                       <td className="px-4 py-2" />
-                      <td className="px-4 py-2 text-right">RM{s.agg.gmv.toFixed(2)}</td>
-                      <td className="px-4 py-2 text-right">{s.agg.viewers}</td>
-                      <td className="px-4 py-2 text-right">{s.agg.items}</td>
+                      <td className="px-4 py-2 text-right">{fmtRM(s.agg.gmv)}</td>
+                      <td className="px-4 py-2 text-right">{fmtNum(s.agg.viewers)}</td>
+                      <td className="px-4 py-2 text-right">{fmtNum(s.agg.items)}</td>
                       <td className="px-4 py-2">
                         {s.agg.duration}
                         {s.rate?.commission_type === "hour" && (
@@ -277,11 +277,11 @@ export default function AdminReportingTab({
                         {s.rate?.commission_value != null
                           ? (s.rate.commission_type === "percent"
                               ? `${s.rate.commission_value}%`
-                              : `RM${s.rate.commission_value}/j`)
+                              : `${fmtRM(s.rate.commission_value)}/j`)
                           : "—"}
                       </td>
                       <td className="px-4 py-2 text-right font-semibold text-emerald-700">
-                        {s.rate?.commission_type ? `RM${s.commission.toFixed(2)}` : "—"}
+                        {s.rate?.commission_type ? fmtRM(s.commission) : "—"}
                       </td>
                     </tr>
                   ))}

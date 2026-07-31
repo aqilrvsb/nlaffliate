@@ -6,7 +6,7 @@ import {
   TrendingUp, Users, ShoppingBag, UserRound, Bot, Check, ExternalLink,
   Loader2, KeyRound, Clock, AlertTriangle, CalendarDays, Timer,
   LayoutDashboard, Package, Boxes, Link2, Trash2, Plus, AlertCircle, BarChart3, MessageCircle,
-  Tag,
+  Tag, Search, UserCheck, UserX,
 } from "lucide-react";
 import Modal from "@/components/Modal";
 import StaffCreateModal from "./StaffCreateModal";
@@ -31,7 +31,7 @@ type Marketer = { id: number; name: string; email?: string | null; staff_id?: st
 type Leader = { id: number; name: string; staff_id: string | null };
 type Affiliate = {
   id: number; name: string; email?: string | null; staff_id?: string | null; phone: string | null;
-  marketer_id: number | null; marketer_name: string | null;
+  marketer_id: number | null; marketer_name: string | null; activated?: boolean;
   lives: number; done: number; gmv: number; items: number; viewers: number;
 };
 type Row = {
@@ -53,6 +53,9 @@ export default function AdminDashboard({
   const [linksFor, setLinksFor] = useState<Affiliate | null>(null);
   const [deleteErr, setDeleteErr] = useState("");
   const [addMarketer, setAddMarketer] = useState(false);
+  // Affiliate table filters.
+  const [affSearch, setAffSearch] = useState("");
+  const [affStatus, setAffStatus] = useState<"all" | "done" | "no">("all");
 
   /**
    * Two-step delete: the first call reports what would be destroyed, and the
@@ -129,6 +132,20 @@ export default function AdminDashboard({
   const totalDuration = sumDurations(
     rows.filter((r) => r.status === "completed").map((r) => r.duration_live)
   );
+
+  // Affiliate register status: "Done Register" = activated, "No Register" = not.
+  const affDoneCount = affiliates.filter((a) => a.activated).length;
+  const affNoCount = affiliates.length - affDoneCount;
+  const affQ = affSearch.trim().toLowerCase();
+  const affFiltered = affiliates.filter((a) => {
+    if (affStatus === "done" && !a.activated) return false;
+    if (affStatus === "no" && a.activated) return false;
+    if (affQ) {
+      const hay = `${a.name} ${a.staff_id ?? ""} ${a.phone ?? ""} ${a.email ?? ""}`.toLowerCase();
+      if (!hay.includes(affQ)) return false;
+    }
+    return true;
+  });
 
   const params = useSearchParams();
   const page = getPage(params.get("page"));
@@ -240,65 +257,127 @@ export default function AdminDashboard({
       </section>
 
       <section>
-        <h2 className="section-title mb-3">Affiliates &amp; Assignment</h2>
-        <div className="grid gap-3 md:grid-cols-2">
-          {affiliates.map((a) => (
-            <div key={a.id} className="card flex flex-col gap-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate font-bold text-ink">{a.name}</p>
-                  <p className="truncate text-xs text-muted-fg">
-                    <span className="font-mono">{a.staff_id}</span>{a.phone ? ` · ${a.phone}` : ""}
-                  </p>
-                </div>
-                <span className="chip shrink-0 bg-primary/10 text-primary">
-                  RM{Number(a.gmv).toFixed(0)}
-                </span>
-              </div>
+        <h2 className="section-title mb-3">Affiliate</h2>
 
-              <div className="grid grid-cols-3 gap-2">
-                <MiniStat label="Lives" value={`${a.done}/${a.lives}`} />
-                <MiniStat label="Items" value={a.items} />
-                <MiniStat label="Viewers" value={a.viewers} />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-fg"
-                  htmlFor={`mk-${a.id}`}>
-                  Assigned marketer
-                </label>
-                <div className="flex items-center gap-2">
-                  <select id={`mk-${a.id}`} className="input cursor-pointer !py-2 text-sm"
-                    value={a.marketer_id ?? ""} disabled={savingId === a.id}
-                    onChange={(e) => assign(a.id, e.target.value)}>
-                    <option value="">— Unassigned —</option>
-                    {marketers.map((m) => (
-                      <option key={m.id} value={m.id}>{m.name}</option>
-                    ))}
-                  </select>
-                  {savingId === a.id && (
-                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-fg" aria-hidden="true" />
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button className="btn-ghost flex-1 !py-2" onClick={() => setLinksFor(a)}>
-                  <Link2 className="h-4 w-4" aria-hidden="true" />
-                  TikTok links
-                </button>
-                <button onClick={() => removeUser(a.id, a.name)}
-                  aria-label={`Delete ${a.name}`} title="Delete account"
-                  className="shrink-0 cursor-pointer rounded-xl border border-line bg-white/70 p-2.5 text-muted-fg shadow-lift transition-colors duration-200 hover:bg-danger/10 hover:text-danger">
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-          ))}
-          {affiliates.length === 0 && (
-            <p className="card text-center text-sm text-muted-fg">No affiliates registered yet.</p>
-          )}
+        {/* Register-status summary. "Done Register" = boleh login (activated). */}
+        <div className="mb-4 grid gap-3 sm:grid-cols-3">
+          <button type="button" onClick={() => setAffStatus("all")}
+            className={`card cursor-pointer text-left transition ${affStatus === "all" ? "ring-2 ring-primary" : "hover:bg-primary/5"}`}>
+            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-fg">
+              <Users className="h-3.5 w-3.5" aria-hidden="true" /> Total Affiliate
+            </p>
+            <p className="mt-1 text-2xl font-extrabold text-ink">{affiliates.length}</p>
+          </button>
+          <button type="button" onClick={() => setAffStatus("done")}
+            className={`card cursor-pointer text-left transition ${affStatus === "done" ? "ring-2 ring-emerald-500" : "hover:bg-emerald-500/5"}`}>
+            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-fg">
+              <UserCheck className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" /> Done Register
+            </p>
+            <p className="mt-1 text-2xl font-extrabold text-emerald-600">{affDoneCount}</p>
+          </button>
+          <button type="button" onClick={() => setAffStatus("no")}
+            className={`card cursor-pointer text-left transition ${affStatus === "no" ? "ring-2 ring-rose-500" : "hover:bg-rose-500/5"}`}>
+            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-fg">
+              <UserX className="h-3.5 w-3.5 text-rose-600" aria-hidden="true" /> No Register
+            </p>
+            <p className="mt-1 text-2xl font-extrabold text-rose-600">{affNoCount}</p>
+          </button>
         </div>
+
+        {/* Search + status filter. */}
+        <div className="mb-3 grid gap-3 sm:grid-cols-[1fr_auto]">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-fg" aria-hidden="true" />
+            <input className="input !pl-9" placeholder="Cari nama, ID staff, atau phone…"
+              value={affSearch} onChange={(e) => setAffSearch(e.target.value)} />
+          </div>
+          <select className="input cursor-pointer sm:!w-52"
+            value={affStatus} onChange={(e) => setAffStatus(e.target.value as "all" | "done" | "no")}>
+            <option value="all">All Status ({affiliates.length})</option>
+            <option value="done">Done Register ({affDoneCount})</option>
+            <option value="no">No Register ({affNoCount})</option>
+          </select>
+        </div>
+
+        <div className="glass overflow-x-auto rounded-2xl">
+          <table className="w-full min-w-[860px] text-sm">
+            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+              <tr>
+                <th className="px-4 py-3 font-semibold">No</th>
+                <th className="px-4 py-3 font-semibold">Full Name</th>
+                <th className="px-4 py-3 font-semibold">ID Staff</th>
+                <th className="px-4 py-3 font-semibold">Phone</th>
+                <th className="px-4 py-3 font-semibold">Assigned Marketer</th>
+                <th className="px-4 py-3 text-center font-semibold">Lives</th>
+                <th className="px-4 py-3 font-semibold">Status</th>
+                <th className="px-4 py-3 text-right font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {affFiltered.map((a, i) => (
+                <tr key={a.id} className="border-b border-line/60 last:border-0 hover:bg-primary/[0.03]">
+                  <td className="px-4 py-3 text-muted-fg">{i + 1}</td>
+                  <td className="px-4 py-3 font-semibold text-ink">{a.name}</td>
+                  <td className="px-4 py-3 font-mono text-muted-fg">{a.staff_id || "—"}</td>
+                  <td className="px-4 py-3 text-muted-fg">{a.phone || "—"}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <select className="input cursor-pointer !w-auto !py-1.5 text-sm"
+                        value={a.marketer_id ?? ""} disabled={savingId === a.id}
+                        onChange={(e) => assign(a.id, e.target.value)}>
+                        <option value="">— Unassigned —</option>
+                        {marketers.map((m) => (
+                          <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                      </select>
+                      {savingId === a.id && (
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-fg" aria-hidden="true" />
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-center tabular-nums">{a.done}/{a.lives}</td>
+                  <td className="px-4 py-3">
+                    {a.activated ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+                        <UserCheck className="h-3 w-3" aria-hidden="true" /> Done Register
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2.5 py-0.5 text-xs font-semibold text-rose-700">
+                        <UserX className="h-3 w-3" aria-hidden="true" /> No Register
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button onClick={() => setLinksFor(a)}
+                        className="inline-flex cursor-pointer items-center gap-1 rounded-lg bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/20"
+                        title="TikTok links">
+                        <Link2 className="h-3.5 w-3.5" aria-hidden="true" /> Links
+                      </button>
+                      <button onClick={() => removeUser(a.id, a.name)}
+                        aria-label={`Delete ${a.name}`} title="Delete account"
+                        className="cursor-pointer rounded-lg p-1.5 text-muted-fg transition hover:bg-danger/10 hover:text-danger">
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {affFiltered.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-fg">
+                    {affiliates.length === 0 ? "No affiliates registered yet." : "Tiada affiliate sepadan dengan carian."}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {deleteErr && (
+          <p className="mt-2 flex items-center gap-1.5 text-sm text-danger">
+            <AlertCircle className="h-4 w-4" aria-hidden="true" />{deleteErr}
+          </p>
+        )}
       </section>
 
       <section>

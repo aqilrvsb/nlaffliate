@@ -56,6 +56,8 @@ export default function AdminDashboard({
   // Affiliate table filters.
   const [affSearch, setAffSearch] = useState("");
   const [affStatus, setAffStatus] = useState<"all" | "done" | "no">("all");
+  // Which marketer's affiliate list is open in the modal.
+  const [affListFor, setAffListFor] = useState<Marketer | null>(null);
 
   /**
    * Two-step delete: the first call reports what would be destroyed, and the
@@ -133,13 +135,14 @@ export default function AdminDashboard({
     rows.filter((r) => r.status === "completed").map((r) => r.duration_live)
   );
 
-  // Affiliate register status: "Done Register" = activated, "No Register" = not.
-  const affDoneCount = affiliates.filter((a) => a.activated).length;
+  // Register status is about assignment: "Done Register" = has a marketer,
+  // "No Register" = still unassigned (marketer_id is null).
+  const affDoneCount = affiliates.filter((a) => a.marketer_id != null).length;
   const affNoCount = affiliates.length - affDoneCount;
   const affQ = affSearch.trim().toLowerCase();
   const affFiltered = affiliates.filter((a) => {
-    if (affStatus === "done" && !a.activated) return false;
-    if (affStatus === "no" && a.activated) return false;
+    if (affStatus === "done" && a.marketer_id == null) return false;
+    if (affStatus === "no" && a.marketer_id != null) return false;
     if (affQ) {
       const hay = `${a.name} ${a.staff_id ?? ""} ${a.phone ?? ""} ${a.email ?? ""}`.toLowerCase();
       if (!hay.includes(affQ)) return false;
@@ -247,7 +250,13 @@ export default function AdminDashboard({
                       </div>
                     </td>
                     <td className="px-4 py-3 font-mono text-muted-fg">{m.staff_id}</td>
-                    <td className="px-4 py-3 text-center tabular-nums">{owned}</td>
+                    <td className="px-4 py-3 text-center">
+                      <button onClick={() => setAffListFor(m)} disabled={owned === 0}
+                        title={owned === 0 ? "Tiada affiliate" : "Lihat senarai affiliate"}
+                        className="inline-flex min-w-[2.5rem] cursor-pointer items-center justify-center rounded-lg bg-primary/10 px-2.5 py-1 text-sm font-bold text-primary tabular-nums transition hover:bg-primary/20 disabled:cursor-default disabled:bg-transparent disabled:text-muted-fg disabled:hover:bg-transparent">
+                        {owned}
+                      </button>
+                    </td>
                     <td className="px-4 py-3">
                       <select
                         className="input !w-auto !py-1.5 cursor-pointer text-sm disabled:opacity-60"
@@ -365,7 +374,7 @@ export default function AdminDashboard({
                   </td>
                   <td className="px-4 py-3 text-center tabular-nums">{a.done}/{a.lives}</td>
                   <td className="px-4 py-3">
-                    {a.activated ? (
+                    {a.marketer_id != null ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
                         <UserCheck className="h-3 w-3" aria-hidden="true" /> Done Register
                       </span>
@@ -473,6 +482,10 @@ export default function AdminDashboard({
       )}
 
       <TikTokLinksModal affiliate={linksFor} onClose={() => setLinksFor(null)} />
+
+      <MarketerAffiliatesModal marketer={affListFor}
+        affiliates={affiliates.filter((a) => affListFor && a.marketer_id === affListFor.id)}
+        onClose={() => setAffListFor(null)} />
     </div>
   );
 }
@@ -607,6 +620,48 @@ function TikTokLinksModal({
         <p className="mt-2 flex items-center gap-1.5 text-sm text-danger">
           <AlertCircle className="h-4 w-4" aria-hidden="true" />{error}
         </p>
+      )}
+    </Modal>
+  );
+}
+
+/** Read-only list of the affiliates under one marketer, opened from the count. */
+function MarketerAffiliatesModal({
+  marketer, affiliates, onClose,
+}: { marketer: Marketer | null; affiliates: Affiliate[]; onClose: () => void }) {
+  return (
+    <Modal open={!!marketer} onClose={onClose}
+      title={marketer ? `Affiliate — ${marketer.name}` : "Affiliate"}
+      subtitle={marketer ? `${affiliates.length} affiliate di bawah ${marketer.staff_id ?? marketer.name}` : undefined}>
+      {affiliates.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-line py-6 text-center text-sm text-muted-fg">
+          Tiada affiliate di bawah marketer ini.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[420px] text-sm">
+            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+              <tr>
+                <th className="py-2 pr-3 font-semibold">No</th>
+                <th className="py-2 pr-3 font-semibold">Nama</th>
+                <th className="py-2 pr-3 font-semibold">ID Staff</th>
+                <th className="py-2 pr-3 font-semibold">Phone</th>
+                <th className="py-2 pr-3 text-center font-semibold">Lives</th>
+              </tr>
+            </thead>
+            <tbody>
+              {affiliates.map((a, i) => (
+                <tr key={a.id} className="border-b border-line/60 last:border-0">
+                  <td className="py-2 pr-3 text-muted-fg">{i + 1}</td>
+                  <td className="py-2 pr-3 font-medium text-ink">{a.name}</td>
+                  <td className="py-2 pr-3 font-mono text-muted-fg">{a.staff_id || "—"}</td>
+                  <td className="py-2 pr-3 text-muted-fg">{a.phone || "—"}</td>
+                  <td className="py-2 pr-3 text-center tabular-nums">{a.done}/{a.lives}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </Modal>
   );

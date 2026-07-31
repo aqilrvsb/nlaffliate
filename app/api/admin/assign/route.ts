@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { sendWhatsApp, affiliateAssignedMessage } from "@/lib/whatsapp";
 
 export async function POST(req: Request) {
   const user = await getSession();
@@ -27,8 +28,28 @@ export async function POST(req: Request) {
 
   await db.prepare("UPDATE users SET marketer_id = ? WHERE id = ?").run(mid, affiliate_id);
 
-  // No affiliate notification here any more. Assignment is just the step that
-  // lets the marketer set up the account; the affiliate is told they can log
-  // in only when the marketer presses Activate.
-  return NextResponse.json({ ok: true });
+  // The affiliate is told they can log in only when the marketer presses
+  // Activate. But alert the MARKETER now, so they know a new affiliate landed
+  // in their list and can go set it up. Best-effort.
+  let notified: boolean | null = null;
+  let notify_note: string | null = null;
+  if (mid) {
+    const info = await db
+      .prepare(
+        `SELECT m.phone AS marketer_phone, a.name AS aff_name, a.staff_id AS aff_staff
+           FROM users m JOIN users a ON a.id = ?
+          WHERE m.id = ?`
+      )
+      .get<{ marketer_phone: string | null; aff_name: string; aff_staff: string | null }>(affiliate_id, mid);
+    if (info) {
+      const wa = await sendWhatsApp(
+        info.marketer_phone,
+        affiliateAssignedMessage({ affiliateName: info.aff_name, affiliateStaffId: info.aff_staff })
+      );
+      notified = wa.ok;
+      notify_note = wa.skipped || wa.error || null;
+    }
+  }
+
+  return NextResponse.json({ ok: true, notified, notify_note });
 }

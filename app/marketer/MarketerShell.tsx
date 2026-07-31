@@ -21,7 +21,6 @@ import {
   type LinkBrand,
 } from "@/components/BrandCommission";
 import AddProfileLink, { DeleteProfileLink } from "@/components/AddProfileLink";
-import ProductsTab from "@/app/admin/ProductsTab";
 import AffiliatePosts from "./AffiliatePosts";
 import SortTh, { useTableSort } from "@/components/SortableTable";
 import SopButton from "@/components/SopButton";
@@ -29,6 +28,7 @@ import Modal from "@/components/Modal";
 import ExampleHint from "@/components/ExampleHint";
 import DurationInput from "@/components/DurationInput";
 import { compressScreenshot } from "@/lib/image";
+import ProductsTab from "@/app/admin/ProductsTab";
 import PillarCreate from "./PillarCreate";
 import PillarReport from "./PillarReport";
 import { EditContext, useCanEdit } from "./edit-context";
@@ -378,7 +378,8 @@ export default function MarketerShell({
               </button>
             )}
 
-            {/* Brand leads: everything below is scoped by it. */}
+            {/* Brand & Product: view-only. Admin creates + assigns; the
+                marketer only sees the ones that are theirs. */}
             <button onClick={() => go("brand")}
               className={`mt-1 flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
                 active === "brand" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
@@ -386,10 +387,6 @@ export default function MarketerShell({
               <NavIcon Icon={Tag} busy={navPending && navKey === "brand"} />
               Brand
             </button>
-
-            {/* Product — the same shared catalogue admin maintains. Products
-                belong to no single marketer, so this is one list both roles
-                edit; a marketer filling it in when admin is busy is the point. */}
             <button onClick={() => go("product")}
               className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ${
                 active === "product" ? "bg-primary text-primary-fg shadow-lift" : "text-ink hover:bg-primary/10"
@@ -736,8 +733,14 @@ export default function MarketerShell({
           {active === "sales-live-campaign" && <SalesCampaignTab rows={salesLiveCampaign} kind="live" />}
           {active === "sales-product-campaign" && <SalesCampaignTab rows={salesProductCampaign} kind="product" />}
           {active === "sales-card" && <SalesCardTab rows={salesCard} />}
-          {active === "brand" && <BrandsTab />}
-          {active === "product" && <ProductsTab />}
+          {/* Brand & Product: view-only for marketer/leader — admin creates and
+              assigns them. Forcing canEdit=false hides every add/edit/delete. */}
+          {active === "brand" && (
+            <EditContext.Provider value={false}><BrandsTab /></EditContext.Provider>
+          )}
+          {active === "product" && (
+            <EditContext.Provider value={false}><ProductsTab /></EditContext.Provider>
+          )}
           {active === "overall" && <OverallTab overall={overall} salesLive={salesLive} salesProduct={salesProductAdj} salesCard={salesCard} spendTtm={spendTtm} />}
           {active === "creator" && <CreatorTab reports={creatorReports} />}
           {active === "live-users" && <ListLiveUserTab liveUsers={liveUsers} />}

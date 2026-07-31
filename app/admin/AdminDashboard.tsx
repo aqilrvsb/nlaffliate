@@ -129,7 +129,7 @@ export default function AdminDashboard({
     // that from the welcome message — so say so when it did not send.
     if (data.notified === false && data.notify_note) {
       await alertDialog({
-        title: "Assigned, but the welcome WhatsApp was not sent",
+        title: "Assigned — but the marketer's WhatsApp alert was not sent",
         text: data.notify_note, variant: "warning",
       });
     }

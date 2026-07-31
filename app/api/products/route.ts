@@ -30,12 +30,17 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const brand = url.searchParams.get("brand");
 
+  // A marketer/leader only sees products on the brands that are theirs (via
+  // their adopted brand's catalogue row); admin sees the whole catalogue.
+  const ownScoped = user.role === "marketer" || user.role === "leader";
+  const cols = `p.id, p.name, p.sku, p.product_url, p.info, p.knowledge, p.document_url,
+                p.image_url, p.brand_id, b.name AS brand_name, p.created_at`;
+
   // Affiliates browse the catalogue by brand when requesting a sample, so the
   // filter lives here rather than being done client-side over everything.
   const products = brand
     ? await db.prepare(
-        `SELECT p.id, p.name, p.sku, p.product_url, p.info, p.knowledge, p.document_url,
-                  p.image_url, p.brand_id, b.name AS brand_name, p.created_at
+        `SELECT ${cols}
            FROM products p LEFT JOIN brands b ON b.id = p.brand_id
           -- The caller may pass a marketer's copy of a brand; products live
           -- on the catalogue row, so resolve through catalogue_id.
@@ -44,12 +49,20 @@ export async function GET(req: Request) {
           )
           ORDER BY p.name`
       ).all(Number(brand))
-    : await db.prepare(
-        `SELECT p.id, p.name, p.sku, p.product_url, p.info, p.knowledge, p.document_url,
-                  p.image_url, p.brand_id, b.name AS brand_name, p.created_at
-           FROM products p LEFT JOIN brands b ON b.id = p.brand_id
-          ORDER BY b.name NULLS LAST, p.name`
-      ).all();
+    : ownScoped
+      ? await db.prepare(
+          `SELECT ${cols}
+             FROM products p LEFT JOIN brands b ON b.id = p.brand_id
+            WHERE p.brand_id IN (
+              SELECT COALESCE(catalogue_id, id) FROM brands WHERE marketer_id = ?
+            )
+            ORDER BY b.name NULLS LAST, p.name`
+        ).all(user.id)
+      : await db.prepare(
+          `SELECT ${cols}
+             FROM products p LEFT JOIN brands b ON b.id = p.brand_id
+            ORDER BY b.name NULLS LAST, p.name`
+        ).all();
 
   return NextResponse.json({ products });
 }

@@ -182,6 +182,22 @@ export function newRegistrationMessage(opts: {
 
 /* ── Marketer alerts ───────────────────────────────────── */
 
+/** Tell a marketer that admin just handed them a new affiliate to set up. */
+export function affiliateAssignedMessage(opts: {
+  affiliateName: string; affiliateStaffId?: string | null;
+}) {
+  return compose([
+    "Affiliate Baharu Ditugaskan",
+    "",
+    `Anda baru sahaja diberikan affiliate:`,
+    `${opts.affiliateName}${opts.affiliateStaffId ? ` (${opts.affiliateStaffId})` : ""}`,
+    "",
+    "Sila set up akaun mereka dan tekan Activate supaya mereka boleh log masuk.",
+    "",
+    LOGIN_URL,
+  ]);
+}
+
 /**
  * The marketer's phone, looked up from any affiliate of theirs.
  *

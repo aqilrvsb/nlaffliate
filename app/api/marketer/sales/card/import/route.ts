@@ -3,7 +3,6 @@ import * as XLSX from "xlsx";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { moneyScalerFromForm } from "@/lib/currency";
-import { recomputeSalesCard } from "@/lib/salesCard";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -17,11 +16,10 @@ const str = (v: any) => (v != null && String(v).trim() !== "" ? String(v).trim()
 
 /**
  * Import a TikTok "creative data for product campaigns" xlsx, but keep ONLY the
- * rows where Creative type = "Product card". They are summed into ONE upload
- * batch (sales_card_upload); the day's Card total is the sum of all its
- * batches. So many files can be uploaded for the same brand + date and they
- * ACCUMULATE — a wrongly-uploaded file is removed from the Excel Product Card
- * tab to re-tally.
+ * rows where Creative type = "Product card". This upload's totals are ADDED to
+ * the day's Product Card row for the brand + date, so several files can be
+ * uploaded for the same day and they ACCUMULATE. Fixing a mistake is done from
+ * the Product Card table itself — edit the day's totals, or delete the row.
  */
 export async function POST(req: Request) {
   const user = await getSession();
@@ -78,17 +76,23 @@ export async function POST(req: Request) {
       { status: 400 }
     );
 
-  // Log this upload as a batch, then rebuild the day's total from all batches.
+  // Accumulate onto the day's existing total (upload as many files as needed).
+  const existing = await db
+    .prepare("SELECT cost, sku_orders, gross_revenue FROM sales_card WHERE marketer_id = ? AND brand_id = ? AND report_date = ?")
+    .get<{ cost: number; sku_orders: number; gross_revenue: number }>(user.id, brandId, reportDate);
+  const nCost = (existing?.cost || 0) + cost;
+  const nOrders = (existing?.sku_orders || 0) + orders;
+  const nGross = (existing?.gross_revenue || 0) + gross;
+  const cpo = nOrders > 0 ? Math.round((nCost / nOrders) * 100) / 100 : null;
+  const roi = nCost > 0 ? Math.round((nGross / nCost) * 100) / 100 : null;
+
   await db.prepare(
-      `INSERT INTO sales_card_upload
-         (marketer_id, brand_id, report_date, cost, sku_orders, gross_revenue, filename, rows_counted)
+      "DELETE FROM sales_card WHERE marketer_id = ? AND brand_id = ? AND report_date = ?"
+    ).run(user.id, brandId, reportDate);
+  await db.prepare(
+      `INSERT INTO sales_card (marketer_id, brand_id, report_date, cost, sku_orders, cost_per_order, gross_revenue, roi)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(user.id, brandId, reportDate, cost, orders, gross, file.name || null, counted);
+    ).run(user.id, brandId, reportDate, nCost, nOrders, cpo, nGross, roi);
 
-  const { batches } = await recomputeSalesCard(user.id, brandId, reportDate);
-
-  return NextResponse.json({
-    ok: true, imported: counted, skipped, total: rows.length,
-    report_date: reportDate, batches,
-  });
+  return NextResponse.json({ ok: true, imported: counted, skipped, total: rows.length, report_date: reportDate });
 }

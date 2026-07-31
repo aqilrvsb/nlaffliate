@@ -164,6 +164,8 @@ export default function AdminDashboard({
 
       <TabBar active={tab} tabs={[
         { key: "overview", label: "Overview", icon: LayoutDashboard },
+        { key: "marketer", label: "List Marketer", icon: UserRound },
+        { key: "affiliate", label: "List Affiliate", icon: Users },
         { key: "brand",    label: "Brand",    icon: Tag },
         { key: "product",  label: "Product",  icon: Package },
         { key: "reporting", label: "Reporting Affiliate", icon: BarChart3 },
@@ -177,7 +179,7 @@ export default function AdminDashboard({
         <AdminReportingTab affiliates={affiliates}
           rows={rows as unknown as AdminLive[]} links={links} />
       )}
-      {tab !== "overview" ? null : (
+      {tab === "overview" && (
       <>
       <DateRangeFilter count={rows.length} />
 
@@ -195,12 +197,18 @@ export default function AdminDashboard({
 
       <AiSettingsCard />
       <WhatsAppCard />
+      </>
+      )}
 
+      {tab === "marketer" && (
+      <>
       <StaffCreateModal open={addMarketer} onClose={() => setAddMarketer(false)} />
-
       <section>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="section-title">Marketers</h2>
+          <div>
+            <h2 className="section-title">List Marketer</h2>
+            <p className="text-sm text-muted-fg">Semua marketer &amp; leader jagaan mereka.</p>
+          </div>
           <div className="flex items-center gap-2">
             {deleteErr && (
               <span className="flex items-center gap-1.5 text-sm text-danger">
@@ -212,52 +220,72 @@ export default function AdminDashboard({
             </button>
           </div>
         </div>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {marketers.map((m) => {
-            const owned = affiliates.filter((a) => a.marketer_id === m.id).length;
-            return (
-              <div key={m.id} className="card flex flex-col gap-3">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary text-sm font-bold text-white">
-                    {m.name.charAt(0).toUpperCase()}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-bold text-ink">{m.name}</p>
-                    <p className="truncate text-xs font-mono text-muted-fg">{m.staff_id}</p>
-                    <p className="text-xs text-muted-fg">
-                      {owned} affiliate{owned === 1 ? "" : "s"}
-                    </p>
-                  </div>
-                  <button onClick={() => removeUser(m.id, m.name)}
-                    aria-label={`Delete ${m.name}`} title="Delete account"
-                    className="shrink-0 cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger">
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </div>
-                <label className="flex items-center gap-2 border-t border-line pt-2">
-                  <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-muted-fg">Leader</span>
-                  <select
-                    className="input !py-1.5 flex-1 cursor-pointer text-sm disabled:opacity-60"
-                    value={m.leader_id != null ? String(m.leader_id) : ""}
-                    disabled={savingId === m.id}
-                    onChange={(e) => assignLeader(m.id, e.target.value)}>
-                    <option value="">— Tiada leader —</option>
-                    {leaders.map((l) => (
-                      <option key={l.id} value={l.id}>{l.staff_id || l.name}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            );
-          })}
-          {marketers.length === 0 && (
-            <p className="card text-center text-sm text-muted-fg">No marketers registered yet.</p>
-          )}
+        <div className="glass overflow-x-auto rounded-2xl">
+          <table className="w-full min-w-[720px] text-sm">
+            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
+              <tr>
+                <th className="px-4 py-3 font-semibold">No</th>
+                <th className="px-4 py-3 font-semibold">Marketer</th>
+                <th className="px-4 py-3 font-semibold">ID Staff</th>
+                <th className="px-4 py-3 text-center font-semibold">Affiliates</th>
+                <th className="px-4 py-3 font-semibold">Leader</th>
+                <th className="px-4 py-3 text-right font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {marketers.map((m, i) => {
+                const owned = affiliates.filter((a) => a.marketer_id === m.id).length;
+                return (
+                  <tr key={m.id} className="border-b border-line/60 last:border-0 hover:bg-primary/[0.03]">
+                    <td className="px-4 py-3 text-muted-fg">{i + 1}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary text-xs font-bold text-white">
+                          {m.name.charAt(0).toUpperCase()}
+                        </span>
+                        <span className="font-semibold text-ink">{m.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-muted-fg">{m.staff_id}</td>
+                    <td className="px-4 py-3 text-center tabular-nums">{owned}</td>
+                    <td className="px-4 py-3">
+                      <select
+                        className="input !w-auto !py-1.5 cursor-pointer text-sm disabled:opacity-60"
+                        value={m.leader_id != null ? String(m.leader_id) : ""}
+                        disabled={savingId === m.id}
+                        onChange={(e) => assignLeader(m.id, e.target.value)}>
+                        <option value="">— Tiada leader —</option>
+                        {leaders.map((l) => (
+                          <option key={l.id} value={l.id}>{l.staff_id || l.name}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        {savingId === m.id && <Loader2 className="h-4 w-4 animate-spin text-muted-fg" aria-hidden="true" />}
+                        <button onClick={() => removeUser(m.id, m.name)}
+                          aria-label={`Delete ${m.name}`} title="Delete account"
+                          className="cursor-pointer rounded-lg p-1.5 text-muted-fg transition hover:bg-danger/10 hover:text-danger">
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {marketers.length === 0 && (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-fg">No marketers registered yet.</td></tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
+      </>
+      )}
 
+      {tab === "affiliate" && (
       <section>
-        <h2 className="section-title mb-3">Affiliate</h2>
+        <h2 className="section-title mb-3">List Affiliate</h2>
 
         {/* Register-status summary. "Done Register" = boleh login (activated). */}
         <div className="mb-4 grid gap-3 sm:grid-cols-3">
@@ -379,7 +407,9 @@ export default function AdminDashboard({
           </p>
         )}
       </section>
+      )}
 
+      {tab === "overview" && (
       <section>
         <h2 className="section-title mb-3">All Live Reporting</h2>
         <div className="glass overflow-x-auto rounded-2xl">
@@ -440,7 +470,6 @@ export default function AdminDashboard({
         </div>
         <Pagination page={page} total={rows.length} />
       </section>
-      </>
       )}
 
       <TikTokLinksModal affiliate={linksFor} onClose={() => setLinksFor(null)} />

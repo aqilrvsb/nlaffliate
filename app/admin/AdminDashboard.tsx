@@ -222,6 +222,13 @@ export default function AdminDashboard({
                 </button>
               );
             })}
+
+            {/* The full marketer dashboard, over every marketer (browse + Urus). */}
+            <Link href="/marketer"
+              className="mt-2 flex cursor-pointer items-center gap-2.5 rounded-xl border border-dashed border-primary/40 px-3 py-2.5 text-sm font-semibold text-primary transition-colors duration-200 hover:bg-primary/10">
+              <Radio className="h-4 w-4 shrink-0" aria-hidden="true" />
+              Marketer Dashboard
+            </Link>
           </nav>
 
           {user && (

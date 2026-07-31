@@ -641,7 +641,7 @@ export default function MarketerShell({
               <span className={`flex items-center gap-2 text-sm ${canEdit ? "text-emerald-800" : "text-amber-800"}`}>
                 {canEdit
                   ? <><Pencil className="h-4 w-4 shrink-0" aria-hidden="true" /><b>Workspace saya</b> — boleh edit.</>
-                  : <><Eye className="h-4 w-4 shrink-0" aria-hidden="true" /><b>{overseer === "director" ? "Director" : "Monitor"}</b> — read-only.</>}
+                  : <><Eye className="h-4 w-4 shrink-0" aria-hidden="true" /><b>{user.role === "admin" ? "Admin" : overseer === "director" ? "Director" : "Monitor"}</b> — read-only.</>}
               </span>
               <div className="flex w-full items-center gap-2 sm:w-auto">
                 <label className={`shrink-0 text-[11px] font-bold uppercase tracking-wide ${canEdit ? "text-emerald-800" : "text-amber-800"}`} htmlFor="ldr-mkt">Papar</label>
@@ -693,7 +693,7 @@ export default function MarketerShell({
                     : viewValue === "all" ? "Semua team digabungkan."
                     : "Menunjukkan satu marketer team."}
               </span>
-              {overseer === "leader" && /^\d+$/.test(viewValue) && (
+              {(overseer === "leader" || user.role === "admin") && marketers.some((m) => String(m.id) === viewValue) && (
                 <button onClick={manageCurrent}
                   className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-fg shadow-lift transition hover:opacity-90"
                   title="Urus marketer ini — tambah/edit bagi pihak mereka">

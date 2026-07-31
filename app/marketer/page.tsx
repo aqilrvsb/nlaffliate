@@ -14,9 +14,13 @@ export const maxDuration = 60;
 export default async function MarketerPage({ searchParams }: { searchParams: { m?: string } }) {
   const user = await getSession();
   if (!user) redirect("/login");
-  if (user.role !== "marketer" && user.role !== "leader" && user.role !== "director") redirect("/");
+  if (user.role !== "marketer" && user.role !== "leader" && user.role !== "director" && user.role !== "admin") redirect("/");
   const isLeader = user.role === "leader";
-  const isDirector = user.role === "director";
+  const isAdmin = user.role === "admin";
+  // Admin oversees the WHOLE company on this dashboard exactly like a director
+  // (every marketer + leader, no team restriction) and can jump in to manage
+  // any of them (the Urus button). So it shares the director scoping here.
+  const isDirector = user.role === "director" || user.role === "admin";
 
   // Rosters the switcher drills into.
   //   Leader   -> their own TEAM (marketers whose leader_id is them) + they

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { AffiliateModal, AffiliateActions, ActivateAffiliate, type ManagedAffiliate } from "./AffiliateManager";
 import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
+import AdminBrandsTab from "@/app/admin/BrandsTab";
 import ProfileBrandPicker from "@/components/ProfileBrandPicker";
 import {
   BrandCommissionModal, CommissionSummary, CommissionButton, rateLabel,
@@ -749,10 +750,13 @@ export default function MarketerShell({
           {active === "sales-live-campaign" && <SalesCampaignTab rows={salesLiveCampaign} kind="live" />}
           {active === "sales-product-campaign" && <SalesCampaignTab rows={salesProductCampaign} kind="product" />}
           {active === "sales-card" && <SalesCardTab rows={salesCard} />}
-          {/* Brand & Product: view-only for marketer/leader — admin creates and
-              assigns them. Forcing canEdit=false hides every add/edit/delete. */}
+          {/* Brand: the director (HQNL) gets the full admin catalogue tab
+              (create / edit / delete / assign) — same as admin. Marketer &
+              leader stay view-only; admin creates and assigns for them. */}
           {active === "brand" && (
-            <EditContext.Provider value={false}><BrandsTab /></EditContext.Provider>
+            user.role === "director"
+              ? <AdminBrandsTab />
+              : <EditContext.Provider value={false}><BrandsTab /></EditContext.Provider>
           )}
           {active === "product" && (
             <EditContext.Provider value={false}><ProductsTab /></EditContext.Provider>

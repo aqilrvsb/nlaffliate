@@ -19,8 +19,9 @@ export const dynamic = "force-dynamic";
  */
 
 async function requireAdmin() {
+  // The director (HQNL) manages the brand catalogue alongside admin.
   const user = await getSession();
-  return user && user.role === "admin" ? user : null;
+  return user && (user.role === "admin" || user.role === "director") ? user : null;
 }
 
 /** GET ?catalogue_id=X → every marketer/leader with an `assigned` flag. */

@@ -116,14 +116,14 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const user = await getSession();
-  if (!user || (user.role !== "marketer" && user.role !== "leader" && user.role !== "admin")) {
+  if (!user || (user.role !== "marketer" && user.role !== "leader" && user.role !== "admin" && user.role !== "director")) {
     return NextResponse.json({ error: "Not allowed." }, { status: 403 });
   }
 
   const body = await req.json().catch(() => ({}));
 
-  /* ── Admin: add to the master catalogue ─────────────── */
-  if (user.role === "admin") {
+  /* ── Admin / director: add to the master catalogue ──── */
+  if (user.role === "admin" || user.role === "director") {
     const clean = String(body.name || "").trim();
     if (!clean) {
       return NextResponse.json({ error: "Brand name is required." }, { status: 400 });

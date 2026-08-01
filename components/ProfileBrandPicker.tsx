@@ -112,9 +112,15 @@ export default function ProfileBrandPicker({
             }`} />
         </button>
 
+        {/* Expands inline rather than as an absolute overlay: each `.card` has a
+            backdrop-filter, which makes it its own stacking context, so an
+            absolutely-positioned panel escaping the card was painted BEHIND the
+            neighbouring card (the "distorted", unclickable dropdown). In normal
+            flow it simply grows the card and always sits on top of its own
+            content. */}
         {open && (
           <div role="listbox"
-            className="absolute z-30 mt-1 w-full rounded-xl border border-line bg-white p-1 shadow-lift">
+            className="mt-1 w-full rounded-xl border border-line bg-white p-1 shadow-lift">
             <div className="max-h-52 overflow-y-auto">
               {brands.length === 0 ? (
                 <p className="px-2 py-1.5 text-[11px] text-muted-fg">Tiada brand lagi.</p>

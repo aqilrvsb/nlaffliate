@@ -19,7 +19,8 @@ async function reach(id: number) {
     .get<BrandRow>(id);
   if (!row) return null;
 
-  if (user.role === "admin" && row.marketer_id === null) return { user, row };
+  // Admin and the director both own the shared catalogue rows.
+  if ((user.role === "admin" || user.role === "director") && row.marketer_id === null) return { user, row };
   if ((user.role === "marketer" || user.role === "leader") && row.marketer_id === user.id) return { user, row };
   return null;
 }
@@ -61,7 +62,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     return NextResponse.json({ error: "Brand name is required." }, { status: 400 });
   }
 
-  if (user.role === "admin") {
+  if (user.role === "admin" || user.role === "director") {
     const dupe = await db
       .prepare(
         "SELECT id FROM brands WHERE marketer_id IS NULL AND lower(name) = lower(?) AND id <> ?"
@@ -139,8 +140,8 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   const count = async (sql: string) =>
     (await db.prepare(sql).get<{ n: number }>(id))?.n ?? 0;
 
-  /* ── Admin removing a catalogue entry ───────────────── */
-  if (user.role === "admin") {
+  /* ── Admin / director removing a catalogue entry ────── */
+  if (user.role === "admin" || user.role === "director") {
     // Marketers who adopted it keep their brand and all its data — they just
     // stop being linked to a catalogue row. Nothing of theirs is destroyed,
     // which is why this warns rather than cascades.

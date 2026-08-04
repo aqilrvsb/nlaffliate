@@ -31,28 +31,55 @@ export async function GET(req: Request) {
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
   const brand = url.searchParams.get("brand"); // omitted = all brands
+  const marketerParam = url.searchParams.get("marketer"); // reporting: whose pillar
+  const list = url.searchParams.get("list");
+
+  // The reporting marketer picker's roster: everyone who owns a pillar workspace.
+  if (list === "marketers") {
+    const marketers = await db
+      .prepare("SELECT id, name, staff_id FROM users WHERE role IN ('marketer', 'leader') ORDER BY name")
+      .all();
+    return NextResponse.json({ marketers });
+  }
 
   const where: string[] = [];
   const args: any[] = [];
 
-  // A marketer — and a leader in their own workspace — sees only their own
-  // pillars. (Admin sees everyone's.)
-  if (user.role === "marketer" || user.role === "leader") {
+  // Editing (the Create tab loads one level for one date) always stays the
+  // marketer's own — you can only key in your own pillar. Reporting is open:
+  // anyone can view any marketer's pillars, filtered by the `marketer` picker
+  // (omitted = everyone).
+  const editing = !!level;
+  if (editing && (user.role === "marketer" || user.role === "leader")) {
     where.push("e.marketer_id = ?");
     args.push(user.id);
+  } else if (marketerParam && /^\d+$/.test(marketerParam)) {
+    where.push("e.marketer_id = ?");
+    args.push(Number(marketerParam));
   }
   if (level) { where.push("e.level = ?"); args.push(Number(level)); }
   if (date)  { where.push("e.entry_date = ?"); args.push(date); }
   if (from)  { where.push("e.entry_date >= ?"); args.push(from); }
   if (to)    { where.push("e.entry_date <= ?"); args.push(to); }
-  if (brand) { where.push("e.brand_id = ?"); args.push(Number(brand)); }
+  // Match on the shared catalogue brand, not the exact copy id, so a brand
+  // picked from the viewer's own list still matches other marketers' copies of
+  // the same brand when viewing their pillars.
+  if (brand) {
+    where.push(
+      `(SELECT COALESCE(catalogue_id, id) FROM brands WHERE id = e.brand_id)
+       = (SELECT COALESCE(catalogue_id, id) FROM brands WHERE id = ?)`
+    );
+    args.push(Number(brand));
+  }
 
   const sql =
-    `SELECT e.id, e.marketer_id, e.brand_id, b.name AS brand_name,
+    `SELECT e.id, e.marketer_id, u.name AS marketer_name, u.staff_id AS marketer_staff,
+            e.brand_id, b.name AS brand_name,
             e.level, e.item_no, e.entry_date, e.item_name,
             e.problem, e.solution, e.planning, e.execution, e.updated_at
        FROM pillar_entries e
        LEFT JOIN brands b ON b.id = e.brand_id
+       LEFT JOIN users u ON u.id = e.marketer_id
       ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
       ORDER BY e.entry_date DESC, e.level, e.item_no`;
 

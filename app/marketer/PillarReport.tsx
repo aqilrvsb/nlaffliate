@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  Loader2, ChevronDown,
+  Loader2, ChevronDown, Users,
 } from "lucide-react";
 import { BrandFilterCard } from "./BrandsTab";
 import DateRangeFilter from "@/components/DateRangeFilter";
@@ -16,10 +16,12 @@ import {
 
 type Entry = {
   id: number; level: number; item_no: number; entry_date: string; item_name: string | null;
+  marketer_id: number | null; marketer_name: string | null; marketer_staff: string | null;
   brand_id: number | null; brand_name: string | null;
   problem: string | null; solution: string | null;
   planning: string | null; execution: string | null;
 };
+type MarketerOpt = { id: number; name: string; staff_id: string | null };
 
 const COL_DOT: Record<PillarColumnKey, string> = {
   problem: "bg-red-500", solution: "bg-amber-500",
@@ -39,6 +41,10 @@ export default function PillarReport() {
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
   // "" = All Brands, the default.
   const [brand, setBrand] = useState("");
+  // "" = every marketer; otherwise one marketer's pillar. Anyone can view
+  // anyone's here — the report is read-only.
+  const [marketer, setMarketer] = useState("");
+  const [marketers, setMarketers] = useState<MarketerOpt[]>([]);
 
   const params = useSearchParams();
   const { from, to } = resolveRange(
@@ -46,12 +52,21 @@ export default function PillarReport() {
     "month"
   );
 
+  // Roster for the marketer picker.
+  useEffect(() => {
+    fetch("/api/pillars?list=marketers")
+      .then((r): any => (r.ok ? r.json() : {}))
+      .then((d) => setMarketers(d.marketers || []))
+      .catch(() => setMarketers([]));
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     const qs = new URLSearchParams();
     if (from) qs.set("from", from);
     if (to) qs.set("to", to);
     if (brand) qs.set("brand", brand); // omitted = All Brands
+    if (marketer) qs.set("marketer", marketer); // omitted = every marketer
     try {
       const r = await fetch(`/api/pillars?${qs}`);
       const d = r.ok ? await r.json() : {};
@@ -59,7 +74,7 @@ export default function PillarReport() {
     } finally {
       setLoading(false);
     }
-  }, [from, to, brand]);
+  }, [from, to, brand, marketer]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -104,12 +119,32 @@ export default function PillarReport() {
       <div>
         <h2 className="section-title">Reporting Pillar</h2>
         <p className="text-sm text-muted-fg">
-          Liputan 10 pillar anda dalam julat tarikh yang dipilih.
+          Liputan 10 pillar dalam julat tarikh yang dipilih. Pilih marketer untuk lihat pillar mereka.
         </p>
       </div>
 
       <DateRangeFilter count={entries.length} countNoun={["entri", "entri"]}
         defaultMode="month" />
+
+      {/* Whose pillar — anyone can view any marketer's (read-only). */}
+      <div className="card flex flex-wrap items-end gap-3">
+        <div className="min-w-[220px]">
+          <label className="label" htmlFor="pr-marketer">
+            <Users className="mr-1 inline h-3 w-3" aria-hidden="true" />
+            Marketer
+          </label>
+          <select id="pr-marketer" className="input cursor-pointer !py-2 text-sm"
+            value={marketer} onChange={(e) => setMarketer(e.target.value)}>
+            <option value="">Semua Marketer</option>
+            {marketers.map((m) => (
+              <option key={m.id} value={m.id}>{m.staff_id ? `${m.staff_id} — ${m.name}` : m.name}</option>
+            ))}
+          </select>
+        </div>
+        <p className="pb-2 text-xs text-muted-fg">
+          {marketer ? "Pillar satu marketer sahaja." : "Gabungan semua marketer."}
+        </p>
+      </div>
 
       <BrandFilterCard id="pr-brand" value={brand} onChange={setBrand} />
 
@@ -210,6 +245,7 @@ function LevelDetail({ level, entries }: { level: number; entries: Entry[] }) {
         <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted-fg">
           <tr>
             <th className="px-3 py-2 font-semibold">Item</th>
+            <th className="px-3 py-2 font-semibold">Marketer</th>
             <th className="px-3 py-2 font-semibold">Brand</th>
             <th className="px-3 py-2 font-semibold">Tarikh</th>
             {PILLAR_COLUMNS.map((c) => (
@@ -222,6 +258,9 @@ function LevelDetail({ level, entries }: { level: number; entries: Entry[] }) {
             <tr key={e.id} className="border-t border-line/60 align-top">
               <td className="px-3 py-2 font-semibold text-ink">
                 {pillar.items.find((i) => i.no === e.item_no)?.name ?? e.item_name ?? `#${e.item_no}`}
+              </td>
+              <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-fg">
+                {e.marketer_staff || e.marketer_name || "—"}
               </td>
               <td className="whitespace-nowrap px-3 py-2">
                 {e.brand_name

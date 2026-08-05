@@ -22,12 +22,12 @@ async function canEdit(profileId: string) {
     .get<{ user_id: number; marketer_id: number | null }>(profileId);
   if (!row) return null;
 
-  // The owning affiliate, or the marketer responsible for them — the same
-  // pair who can create these links in the first place.
+  // The owning affiliate, or ANY marketer who manages them (shared affiliate).
   if (user.role === "marketer" || user.role === "leader") {
-    return row.marketer_id === user.id
-      ? { adminOverride: true, userId: null }
-      : null;
+    const manages = await db
+      .prepare("SELECT 1 AS ok FROM affiliate_marketers WHERE affiliate_id = ? AND marketer_id = ?")
+      .get(row.user_id, user.id);
+    return manages ? { adminOverride: true, userId: null } : null;
   }
   if (row.user_id !== user.id) return null;
   return { adminOverride: false, userId: user.id };
@@ -49,16 +49,19 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const owner = await db
     .prepare(
-      `SELECT p.id, u.marketer_id
+      `SELECT p.id, p.user_id, u.marketer_id
          FROM tiktok_profiles p JOIN users u ON u.id = p.user_id
         WHERE p.id = ?`
     )
-    .get<{ id: number; marketer_id: number | null }>(params.id);
+    .get<{ id: number; user_id: number; marketer_id: number | null }>(params.id);
   if (!owner) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
-  const allowed =
-    user.role === "admin" ||
-    ((user.role === "marketer" || user.role === "leader") && owner.marketer_id === user.id);
+  const managesOwner = (user.role === "marketer" || user.role === "leader")
+    ? !!(await db
+        .prepare("SELECT 1 AS ok FROM affiliate_marketers WHERE affiliate_id = ? AND marketer_id = ?")
+        .get(owner.user_id, user.id))
+    : false;
+  const allowed = user.role === "admin" || managesOwner;
   if (!allowed) {
     return NextResponse.json(
       {

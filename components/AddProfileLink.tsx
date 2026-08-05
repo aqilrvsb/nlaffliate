@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Loader2, AlertCircle, Trash2 } from "lucide-react";
+import { Plus, Loader2, AlertCircle, Trash2, Pencil, Check } from "lucide-react";
 import { confirmDialog, alertDialog } from "@/lib/swal";
+import Modal from "@/components/Modal";
 
 /**
  * Add a TikTok link on someone else's behalf.
@@ -53,6 +54,64 @@ export default function AddProfileLink({ userId }: { userId: number }) {
         </p>
       )}
     </form>
+  );
+}
+
+/**
+ * Edit a link's TikTok URL — affiliates paste the wrong one (Studio link,
+ * tracking junk) and the marketer fixes it. Any marketer managing the affiliate
+ * may edit, since the links are shared.
+ */
+export function EditProfileLink({ id, url }: { id: number; url: string }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [val, setVal] = useState(url);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setError("");
+    const res = await fetch(`/api/profiles/${id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: val }),
+    });
+    const d = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) return setError(d.error || "Gagal simpan.");
+    setOpen(false); router.refresh();
+  }
+
+  return (
+    <>
+      <button type="button" onClick={() => { setVal(url); setError(""); setOpen(true); }}
+        className="shrink-0 cursor-pointer rounded-lg p-1.5 text-muted-fg transition-colors duration-200 hover:bg-accent/10 hover:text-accent"
+        aria-label="Edit link" title="Edit link">
+        <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
+      <Modal open={open} onClose={() => setOpen(false)} title="Edit link TikTok">
+        <form onSubmit={save} className="space-y-3">
+          <div>
+            <label className="label" htmlFor={`edit-link-${id}`}>TikTok URL</label>
+            <input id={`edit-link-${id}`} className="input" type="url" required value={val}
+              autoFocus onChange={(e) => setVal(e.target.value)}
+              placeholder="https://www.tiktok.com/@username" />
+          </div>
+          {error && (
+            <p className="flex items-center gap-1.5 text-sm text-danger">
+              <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />{error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
+            <button className="btn" disabled={busy}>
+              {busy ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Saving…</>
+                    : <><Check className="h-4 w-4" aria-hidden="true" />Save</>}
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </>
   );
 }
 

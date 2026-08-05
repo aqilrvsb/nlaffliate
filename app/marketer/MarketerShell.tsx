@@ -21,7 +21,7 @@ import {
   BrandCommissionModal, CommissionSummary, CommissionButton, rateLabel,
   type LinkBrand,
 } from "@/components/BrandCommission";
-import AddProfileLink, { DeleteProfileLink } from "@/components/AddProfileLink";
+import AddProfileLink, { DeleteProfileLink, EditProfileLink } from "@/components/AddProfileLink";
 import AffiliatePosts from "./AffiliatePosts";
 import SortTh, { useTableSort } from "@/components/SortableTable";
 import SopButton from "@/components/SopButton";
@@ -1327,6 +1327,7 @@ function AffiliatesTab({ affiliates, lives, pending = [] }: {
                         <span className="flex shrink-0 items-center gap-1">
                           <CommissionButton
                             onClick={() => setRatesFor({ pid: l.id, brands: l.brands ?? [] })} />
+                          <EditProfileLink id={l.id} url={l.url} />
                           <DeleteProfileLink id={l.id} name={l.url} />
                         </span>
                       )}

@@ -65,6 +65,15 @@ export default async function AdminPage({
   const affiliates = plain(await db.prepare(
       `SELECT u.id, u.name, u.email, u.staff_id, u.phone, u.marketer_id, u.activated,
               m.name AS marketer_name,
+              -- Every marketer managing this affiliate (an affiliate can now be
+              -- shared). marketer_id above stays the "primary" the assign
+              -- dropdown controls.
+              COALESCE(
+                (SELECT json_agg(json_build_object('id', mk.id, 'name', mk.name, 'staff_id', mk.staff_id) ORDER BY mk.staff_id)
+                   FROM affiliate_marketers am JOIN users mk ON mk.id = am.marketer_id
+                  WHERE am.affiliate_id = u.id),
+                '[]'::json
+              ) AS managers,
               COUNT(b.id) AS lives,
               SUM(CASE WHEN b.status = 'completed' THEN 1 ELSE 0 END) AS done,
               COALESCE(SUM(r.gmv), 0) AS gmv,

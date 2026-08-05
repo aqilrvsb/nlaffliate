@@ -32,11 +32,20 @@ type Marketer = { id: number; name: string; email?: string | null; staff_id?: st
 type Leader = { id: number; name: string; staff_id: string | null; activated?: boolean };
 /** The shape the shared edit / activate helpers need from any account. */
 type EditableUser = { id: number; name: string; staff_id?: string | null };
+type Manager = { id: number; name: string; staff_id: string | null };
 type Affiliate = {
   id: number; name: string; email?: string | null; staff_id?: string | null; phone: string | null;
   marketer_id: number | null; marketer_name: string | null; activated?: boolean;
+  managers?: Manager[];
   lives: number; done: number; gmv: number; items: number; viewers: number;
 };
+/** An affiliate can be managed by several marketers; membership is authoritative
+ *  when present, falling back to the primary marketer_id. */
+const managesAff = (a: Affiliate, marketerId: number) =>
+  a.managers && a.managers.length
+    ? a.managers.some((mg) => mg.id === marketerId)
+    : a.marketer_id === marketerId;
+
 type Row = {
   booking_id: number; affiliate: string; marketer: string | null;
   profile_label: string; profile_url: string; profile_brand?: string | null;
@@ -362,7 +371,7 @@ export default function AdminDashboard({
             </thead>
             <tbody>
               {marketers.map((m, i) => {
-                const owned = affiliates.filter((a) => a.marketer_id === m.id).length;
+                const owned = affiliates.filter((a) => managesAff(a, m.id)).length;
                 return (
                   <tr key={m.id} className="border-b border-line/60 last:border-0 hover:bg-primary/[0.03]">
                     <td className="px-4 py-3 text-muted-fg">{i + 1}</td>
@@ -605,6 +614,18 @@ export default function AdminDashboard({
                         <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-fg" aria-hidden="true" />
                       )}
                     </div>
+                    {/* Extra marketers who also manage this affiliate (requested
+                        by them) — the dropdown above only sets the primary. */}
+                    {(a.managers ?? []).filter((mg) => mg.id !== a.marketer_id).length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-fg">Juga:</span>
+                        {(a.managers ?? []).filter((mg) => mg.id !== a.marketer_id).map((mg) => (
+                          <span key={mg.id} className="chip bg-accent/10 text-accent" title={mg.name}>
+                            {mg.staff_id || mg.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-center tabular-nums">{a.done}/{a.lives}</td>
                   <td className="px-4 py-3">
@@ -725,7 +746,7 @@ export default function AdminDashboard({
       <TikTokLinksModal affiliate={linksFor} onClose={() => setLinksFor(null)} />
 
       <MarketerAffiliatesModal marketer={affListFor}
-        affiliates={affiliates.filter((a) => affListFor && a.marketer_id === affListFor.id)}
+        affiliates={affiliates.filter((a) => affListFor && managesAff(a, affListFor.id))}
         onClose={() => setAffListFor(null)} />
 
       <LeaderMarketersModal leader={leaderListFor}

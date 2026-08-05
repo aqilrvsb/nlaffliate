@@ -24,8 +24,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Masukkan ID Staff affiliate (AFL-###)." }, { status: 400 });
 
   const aff = await db
-    .prepare("SELECT id, name, staff_id FROM users WHERE staff_id = ? AND role = 'affiliate'")
-    .get<{ id: number; name: string; staff_id: string }>(staffId);
+    .prepare("SELECT id, name, staff_id, marketer_id FROM users WHERE staff_id = ? AND role = 'affiliate'")
+    .get<{ id: number; name: string; staff_id: string; marketer_id: number | null }>(staffId);
   if (!aff)
     return NextResponse.json({ error: `Tiada affiliate dengan ID ${staffId}.` }, { status: 404 });
 
@@ -38,6 +38,12 @@ export async function POST(req: Request) {
   await db
     .prepare("INSERT INTO affiliate_marketers (marketer_id, affiliate_id) VALUES (?, ?) ON CONFLICT DO NOTHING")
     .run(user.id, aff.id);
+
+  // If the affiliate had no primary marketer yet (was pending), the requester
+  // becomes it and the account is opened — so "Done Register" stays truthful.
+  if (aff.marketer_id == null) {
+    await db.prepare("UPDATE users SET marketer_id = ?, activated = true WHERE id = ?").run(user.id, aff.id);
+  }
 
   return NextResponse.json({ ok: true, affiliate: { name: aff.name, staff_id: aff.staff_id } });
 }

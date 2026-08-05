@@ -2901,10 +2901,22 @@ function SalesProductTab({ rows: rawAll, cards }: { rows: SalesProduct[]; cards:
 
 function SalesCampaignTab({ rows: all, kind }: { rows: SalesCampaign[]; kind: "live" | "product" }) {
   const params = useSearchParams();
+  const router = useRouter();
+  const canEdit = useCanEdit();
   const { from, to } = resolveRange(
     { from: params.get("from"), to: params.get("to"), all: params.get("all") }, "month"
   );
   const [brand, setBrand] = useState("");
+
+  async function remove(r: SalesCampaign) {
+    if (!(await confirmDialog({
+      title: "Padam campaign ini?",
+      text: `${r.campaign_name || "campaign"} — jumlah harian ${kind === "live" ? "Live" : "Product"} akan dikira semula.`,
+      danger: true, confirmText: "Padam",
+    }))) return;
+    await fetch(`/api/marketer/sales/campaign/${r.id}?kind=${kind}`, { method: "DELETE" });
+    router.refresh();
+  }
   const unsorted = all.filter((p) => {
     if (from && p.report_date < from) return false;
     if (to && p.report_date > to) return false;
@@ -2957,6 +2969,7 @@ function SalesCampaignTab({ rows: all, kind }: { rows: SalesCampaign[]; kind: "l
                   <SortTh k="gross_revenue" sort={sort} on={toggleSort} right>Gross Revenue</SortTh>
                   <SortTh k="roi" sort={sort} on={toggleSort} right>ROI</SortTh>
                   {isLive && <SortTh k="live_views" sort={sort} on={toggleSort} right>LIVE Views</SortTh>}
+                  {canEdit && <th className="px-4 py-3 font-semibold">Action</th>}
                 </tr>
               </thead>
               <tbody>
@@ -2975,6 +2988,13 @@ function SalesCampaignTab({ rows: all, kind }: { rows: SalesCampaign[]; kind: "l
                     <td className="px-4 py-3 text-right">{money2(r.gross_revenue)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-ink">{deriveRoi(r.cost, r.gross_revenue, r.roi) ?? "—"}</td>
                     {isLive && <td className="px-4 py-3 text-right">{intOr(r.live_views)}</td>}
+                    {canEdit && (
+                      <td className="px-4 py-3">
+                        <button onClick={() => remove(r)}
+                          className="cursor-pointer rounded-lg p-2 text-muted-fg hover:bg-danger/10 hover:text-danger"
+                          aria-label="Padam campaign"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

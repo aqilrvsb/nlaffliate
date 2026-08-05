@@ -62,11 +62,22 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   // Result fields — present when entering/editing results.
   for (const [key, col, cast] of [
     ["ads_budget", "ads_budget", num], ["ad_spend", "ad_spend", num],
-    ["gross_revenue", "gross_revenue", num], ["roi", "roi", num], ["gmv", "gmv", num],
+    ["gross_revenue", "gross_revenue", num], ["gmv", "gmv", num],
     ["viewers", "viewers", intOrNull], ["items_sold", "items_sold", intOrNull],
     ["duration_live", "duration_live", (v: any) => String(v ?? "").trim() || null],
   ] as const) {
     if (key in body) push(col, (cast as any)(body[key]));
+  }
+
+  // ROI is DERIVED from gross ÷ spend, never trusted from the client — a
+  // comma-mangled or stale value there ("1,871.15" → 1 → ROI 0.01) can't be
+  // allowed to disagree with the two numbers it is computed from. When results
+  // are entered both are present, so recompute; otherwise leave ROI untouched.
+  if ("gross_revenue" in body && "ad_spend" in body) {
+    const spend = num(body.ad_spend);
+    const gross = num(body.gross_revenue);
+    push("roi", spend != null && spend > 0 && gross != null
+      ? Math.round((gross / spend) * 100) / 100 : null);
   }
 
   // complete:true finishes it; complete:false reopens it.

@@ -40,7 +40,7 @@ import ImageModal from "@/components/ImageModal";
 import { getPage, paginate } from "@/lib/pagination";
 import {
   fmtDate, fmtTime, fmtTimeRange, sumDurations,
-  durationHours, commissionFor, durationToSeconds, fmtRM, fmtNum, fmtRMor,
+  durationHours, commissionFor, durationToSeconds, fmtRM, fmtNum, fmtRMor, parseNum,
 } from "@/lib/format";
 import { DEFAULT_IDR_RATE } from "@/lib/currency";
 import { resolveRange } from "@/lib/daterange";
@@ -1539,7 +1539,7 @@ function ScheduleCard({ l, kind }: { l: Live; kind: "pending" | "success" }) {
   // definition, so a hand-entered value could only ever disagree with the two
   // numbers sitting next to it.
   const roi = (() => {
-    const sp = Number(spend), gr = Number(gross);
+    const sp = parseNum(spend), gr = parseNum(gross);
     if (!Number.isFinite(sp) || !Number.isFinite(gr) || sp <= 0) return "";
     return (Math.round((gr / sp) * 100) / 100).toFixed(2);
   })();
@@ -2574,7 +2574,7 @@ function SalesDailyEditModal({ kind, row, onClose }: {
     setError("");
   }, [row]);
 
-  const costN = parseFloat(f.cost), grossN = parseFloat(f.gross_revenue), ordersN = parseFloat(f.sku_orders);
+  const costN = parseNum(f.cost), grossN = parseNum(f.gross_revenue), ordersN = parseNum(f.sku_orders);
   const roi = costN > 0 && Number.isFinite(grossN) ? Math.round((grossN / costN) * 100) / 100 : null;
   const cpo = costN > 0 && ordersN > 0 ? Math.round((costN / ordersN) * 100) / 100 : null;
 
@@ -2985,7 +2985,7 @@ function CardEditModal({ row, onClose }: { row: SalesCard | null; onClose: () =>
     setError("");
   }, [row]);
 
-  const costN = parseFloat(f.cost), grossN = parseFloat(f.gross_revenue), ordersN = parseFloat(f.sku_orders);
+  const costN = parseNum(f.cost), grossN = parseNum(f.gross_revenue), ordersN = parseNum(f.sku_orders);
   const roi = costN > 0 && Number.isFinite(grossN) ? Math.round((grossN / costN) * 100) / 100 : null;
   const cpo = costN > 0 && ordersN > 0 ? Math.round((costN / ordersN) * 100) / 100 : null;
 
@@ -4007,8 +4007,9 @@ function LiveResultModal({
   }, [open, session]);
 
   // ROI = Gross Revenue / Spend, auto-calculated and shown read-only.
-  const spendN = parseFloat(f.ad_spend);
-  const grossN = parseFloat(f.gross_revenue);
+  // parseNum, not parseFloat: a typed "1,871.15" must not become 1.
+  const spendN = parseNum(f.ad_spend);
+  const grossN = parseNum(f.gross_revenue);
   const roi = Number.isFinite(spendN) && spendN > 0 && Number.isFinite(grossN)
     ? Math.round((grossN / spendN) * 100) / 100
     : null;
@@ -5086,7 +5087,7 @@ function ReportingSheetTab({ rows: all, userName }: { rows: ReportingSheetRow[];
   }
 
   const roiOf = (g: string, c: string) => {
-    const gg = parseFloat(g), cc = parseFloat(c);
+    const gg = parseNum(g), cc = parseNum(c);
     return cc > 0 && Number.isFinite(gg) ? Math.round((gg / cc) * 100) / 100 : "";
   };
 

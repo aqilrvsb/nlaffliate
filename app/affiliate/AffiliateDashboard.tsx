@@ -23,7 +23,7 @@ import DateRangeFilter from "@/components/DateRangeFilter";
 import Modal from "@/components/Modal";
 import Pagination from "@/components/Pagination";
 import { getPage, paginate } from "@/lib/pagination";
-import { fmtDate, fmtTimeRange, sumDurations, fmtRM, fmtNum, fmtRMor } from "@/lib/format";
+import { fmtDate, fmtTimeRange, sumDurations, fmtRM, fmtNum, fmtRMor, parseNum } from "@/lib/format";
 import { resolveRange } from "@/lib/daterange";
 import { confirmDialog } from "@/lib/swal";
 import { handleFromUrl } from "@/lib/tiktok";
@@ -787,9 +787,11 @@ function ResultView({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         booking_id: b.id,
-        gmv: gmv === "" ? null : Number(gmv),
-        viewers: viewers === "" ? null : Number(viewers),
-        items_sold: items === "" ? null : Number(items),
+        // parseNum, not Number: a typed "1,871.15" would otherwise become NaN
+        // and be dropped to null, silently losing the entry.
+        gmv: gmv === "" ? null : parseNum(gmv),
+        viewers: viewers === "" ? null : parseNum(viewers),
+        items_sold: items === "" ? null : parseNum(items),
         duration_live: dur || null,
       }),
     });

@@ -45,6 +45,18 @@ export function fmtNumOr(value: number | string | null | undefined, dash = "—"
   return Number.isFinite(n) ? fmtNum(n) : dash;
 }
 
+/**
+ * Parse a user-typed number tolerant of thousand separators and currency
+ * symbols: "1,871.15" -> 1871.15, "RM2,000" -> 2000. Plain parseFloat stops at
+ * the first comma ("1,871.15" -> 1), which silently wrecked auto-calculated ROI
+ * / Cost-per-order. Returns NaN when there's no number, so callers can guard
+ * with Number.isFinite.
+ */
+export function parseNum(v: string | number | null | undefined): number {
+  if (typeof v === "number") return v;
+  return parseFloat(String(v ?? "").replace(/[^0-9.\-]/g, ""));
+}
+
 /** "14:30" -> "2:30 PM". Returns "" for empty/invalid input. */
 export function fmtTime(t?: string | null): string {
   if (!t) return "";

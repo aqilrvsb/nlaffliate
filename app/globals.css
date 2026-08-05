@@ -118,3 +118,48 @@
     animation: none;
   }
 }
+
+/* ── Scrollable data tables ─────────────────────────────────────
+   Data tables are often wider than the screen. Left as plain
+   overflow-x-auto, the sideways scrollbar sits at the very BOTTOM of
+   a long table — you'd scroll past every row before you could reach
+   it. These rules (deliberately un-layered, so they win over the
+   Tailwind utility classes) cap each table's height, so BOTH the
+   sideways and the vertical scrollbars stay inside the viewport and
+   reachable, pin the header row while you scroll, and make the
+   scrollbar prominent so it's obvious a table scrolls sideways.
+   Applies to every role's tables (all use `glass overflow-x-auto`). */
+.glass.overflow-x-auto {
+  overflow: auto;
+  max-height: min(78vh, 760px);
+  overscroll-behavior: contain;
+}
+.glass.overflow-x-auto thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fdeef1; /* near-opaque so scrolled rows don't show through */
+}
+
+/* Prominent, theme-coloured scrollbars on every horizontal scroller. */
+.overflow-x-auto {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-primary) transparent;
+}
+.overflow-x-auto::-webkit-scrollbar {
+  height: 12px;
+  width: 12px;
+}
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-primary) 45%, transparent);
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background-clip: padding-box;
+}
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+  background-clip: padding-box;
+}

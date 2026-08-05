@@ -85,18 +85,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const raw: unknown[] = Array.isArray(body.brand_ids) ? body.brand_ids : [];
     const ids = [...new Set(raw.map(Number).filter((n) => Number.isFinite(n) && n > 0))];
 
-    // Every id must be a brand this caller may use, so a link cannot be
-    // pointed at someone else's brand (and their WhatsApp group).
+    // Any real brand may be tagged on a link — a marketer isn't restricted to
+    // brands they personally adopted (a shared affiliate is worked by several
+    // marketers, and admin assigns brands per marketer, so the "only your own"
+    // rule was too tight). We only guard that each id is an actual brand.
     for (const n of ids) {
-      const owned = await db
-        .prepare(
-          user.role === "admin"
-            ? "SELECT id FROM brands WHERE id = ? AND marketer_id IS NOT NULL"
-            : "SELECT id FROM brands WHERE id = ? AND marketer_id = ?"
-        )
-        .get(...(user.role === "admin" ? [n] : [n, user.id]));
-      if (!owned) {
-        return NextResponse.json({ error: "That brand is not yours." }, { status: 403 });
+      const exists = await db.prepare("SELECT id FROM brands WHERE id = ?").get(n);
+      if (!exists) {
+        return NextResponse.json({ error: "Brand tidak wujud." }, { status: 400 });
       }
     }
 

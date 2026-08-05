@@ -7,15 +7,18 @@ import { normalisePhone, sendWhatsApp, welcomeMessage } from "@/lib/whatsapp";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** A marketer may only reach affiliates assigned to them. */
+/** A marketer may reach any affiliate they MANAGE (membership — shared). */
 async function mine(id: number) {
   const user = await getSession();
   if (!user || user.role !== "marketer" && user.role !== "leader") return null;
   const row = await db
     .prepare(
-      "SELECT id, name, phone, staff_id, activated FROM users WHERE id = ? AND role = 'affiliate' AND marketer_id = ?"
+      `SELECT u.id, u.name, u.phone, u.staff_id, u.activated
+         FROM users u
+         JOIN affiliate_marketers am ON am.affiliate_id = u.id AND am.marketer_id = ?
+        WHERE u.id = ? AND u.role = 'affiliate'`
     )
-    .get<{ id: number; name: string; phone: string | null; staff_id: string | null; activated: boolean }>(id, user.id);
+    .get<{ id: number; name: string; phone: string | null; staff_id: string | null; activated: boolean }>(user.id, id);
   return row ? { user, row } : null;
 }
 
@@ -89,7 +92,22 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   const id = Number(params.id);
   const hit = await mine(id);
   if (!hit) return NextResponse.json({ error: "Affiliate not found." }, { status: 404 });
-  const { row } = hit;
+  const { user, row } = hit;
+
+  // Shared affiliate: if other marketers still manage them, "delete" just
+  // removes THIS marketer from their roster — the affiliate and everyone else's
+  // work stay. Only when this is the last manager is the account itself removed
+  // (the two-step impact confirm below).
+  const others = (await db
+    .prepare("SELECT COUNT(*)::int AS n FROM affiliate_marketers WHERE affiliate_id = ? AND marketer_id <> ?")
+    .get<{ n: number }>(id, user.id))?.n ?? 0;
+  if (others > 0) {
+    await db.prepare("DELETE FROM affiliate_marketers WHERE affiliate_id = ? AND marketer_id = ?").run(id, user.id);
+    // Hand this marketer's own schedules for the affiliate back to the pool so
+    // another manager can grab them rather than stranding the data.
+    await db.prepare("UPDATE bookings SET marketer_id = NULL WHERE user_id = ? AND marketer_id = ?").run(id, user.id);
+    return NextResponse.json({ ok: true, removed_membership: true, name: row.name });
+  }
 
   const count = async (sql: string) =>
     (await db.prepare(sql).get<{ n: number }>(id))?.n ?? 0;

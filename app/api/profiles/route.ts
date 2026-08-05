@@ -30,8 +30,15 @@ async function targetUserId(
     return exists ? asked : null;
   }
   if (user.role === "marketer" || user.role === "leader") {
+    // Any marketer who MANAGES this affiliate (membership) may edit the shared
+    // links — an affiliate can now have several marketers, all working the same
+    // profiles.
     const mine = await db
-      .prepare("SELECT id FROM users WHERE id = ? AND role = 'affiliate' AND marketer_id = ?")
+      .prepare(
+        `SELECT 1 FROM affiliate_marketers am
+           JOIN users u ON u.id = am.affiliate_id AND u.role = 'affiliate'
+          WHERE am.affiliate_id = ? AND am.marketer_id = ?`
+      )
       .get(asked, user.id);
     return mine ? asked : null;
   }

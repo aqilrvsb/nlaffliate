@@ -48,9 +48,9 @@ export async function POST(req: Request) {
     profile = await db.prepare(
         `SELECT p.id, p.user_id
            FROM tiktok_profiles p
-           JOIN users u ON u.id = p.user_id
-          WHERE p.id = ? AND u.marketer_id = ?`
-      ).get<{ id: number; user_id: number }>(Number(body.profile_id), user.id);
+           JOIN affiliate_marketers am ON am.affiliate_id = p.user_id AND am.marketer_id = ?
+          WHERE p.id = ?`
+      ).get<{ id: number; user_id: number }>(user.id, Number(body.profile_id));
   }
   if (!profile)
     return NextResponse.json(
@@ -90,16 +90,18 @@ export async function POST(req: Request) {
   // affiliate_can_edit = 1: a slot starts open. The marketer plans it, but the
   // affiliate is the one who has to run it, so they can still move it — the
   // marketer can lock it deliberately if the timing is fixed.
+  // The marketer who books it owns the schedule (its reporting rolls up to
+  // them), even for an affiliate shared with other marketers.
   const info = await db.prepare(
       `INSERT INTO bookings
          (user_id, profile_id, brand_id, live_date, start_time, end_time, note,
-          status, source, affiliate_can_edit, ads_budget)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, 1, ?) RETURNING id`
+          status, source, affiliate_can_edit, ads_budget, marketer_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, 1, ?, ?) RETURNING id`
     ).run(
       profile.user_id, profile.id, Number(brandRaw), liveDate, startTime,
       endTime, note || null,
       String(body.profile_id) === "inhouse" ? "inhouse" : "affiliate",
-      budget
+      budget, user.id
     );
 
   return NextResponse.json({ ok: true, id: Number(info.lastInsertRowid) });

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
-import { liveSummary, notifyScheduleChange } from "@/lib/notify";
+import { liveSummary, notifyScheduleToOwnerOrManagers } from "@/lib/notify";
 
 export async function GET() {
   const user = await getSession();
@@ -52,10 +52,13 @@ export async function POST(req: Request) {
   if (!brandRaw || !Number.isFinite(brandId)) {
     return NextResponse.json({ error: "Pick a brand." }, { status: 400 });
   }
+  // The brand must belong to one of this affiliate's marketers (they can now
+  // have several) — otherwise a booking could be filed against an unrelated
+  // marketer's brand.
   const brand = await db.prepare(
       `SELECT b.id FROM brands b
-         JOIN users a ON a.marketer_id = b.marketer_id
-        WHERE b.id = ? AND a.id = ?`
+        WHERE b.id = ?
+          AND b.marketer_id IN (SELECT marketer_id FROM affiliate_marketers WHERE affiliate_id = ?)`
     ).get(brandId, user.id);
   if (!brand) {
     return NextResponse.json(
@@ -78,18 +81,28 @@ export async function POST(req: Request) {
     );
   }
 
+  // Who owns this schedule? An affiliate with a single marketer → that marketer
+  // owns it straight away (old flow). With several marketers it's left
+  // unowned (marketer_id NULL) and lands in the pending grab pool — the first
+  // of their marketers to grab it becomes the owner.
+  const managers = (await db
+    .prepare("SELECT marketer_id FROM affiliate_marketers WHERE affiliate_id = ?")
+    .all<{ marketer_id: number }>(user.id)).map((m) => Number(m.marketer_id));
+  const ownerId = managers.length === 1 ? managers[0] : null;
+
   // Status is set explicitly (not left to the column default) so existing
   // databases created before the pending/completed rename behave correctly.
   const info = await db.prepare(
-      `INSERT INTO bookings (user_id, profile_id, brand_id, live_date, start_time, end_time, note, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending') RETURNING id`
+      `INSERT INTO bookings (user_id, profile_id, brand_id, live_date, start_time, end_time, note, status, marketer_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?) RETURNING id`
     )
-    .run(user.id, profile_id, brandId, live_date, start_time, end_time, note || null);
+    .run(user.id, profile_id, brandId, live_date, start_time, end_time, note || null, ownerId);
 
   const id = Number(info.lastInsertRowid);
-  // The marketer plans budgets around a schedule they do not own, so a new
-  // live is news. Best-effort — a failed message must not fail the booking.
-  await notifyScheduleChange("created", await liveSummary(id));
+  // A new live is news for the marketers planning budgets around it. When
+  // pending, EVERY managing marketer is told (any can grab it); once owned,
+  // only the owner. Best-effort — a failed message must not fail the booking.
+  await notifyScheduleToOwnerOrManagers("created", await liveSummary(id), ownerId);
 
   return NextResponse.json({ id });
 }

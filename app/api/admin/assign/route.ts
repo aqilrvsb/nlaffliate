@@ -28,6 +28,17 @@ export async function POST(req: Request) {
 
   await db.prepare("UPDATE users SET marketer_id = ? WHERE id = ?").run(mid, affiliate_id);
 
+  // Keep membership (the source of truth for who manages an affiliate) in step
+  // with the primary marketer_id. Assigning to a marketer adds them; clearing
+  // the assignment (Unassigned) empties the roster so the affiliate returns to
+  // the pending grab pool. Extra managers a marketer requested are left intact.
+  if (mid) {
+    await db.prepare("INSERT INTO affiliate_marketers (marketer_id, affiliate_id) VALUES (?, ?) ON CONFLICT DO NOTHING")
+      .run(mid, affiliate_id);
+  } else {
+    await db.prepare("DELETE FROM affiliate_marketers WHERE affiliate_id = ?").run(affiliate_id);
+  }
+
   // The affiliate is told they can log in only when the marketer presses
   // Activate. But alert the MARKETER now, so they know a new affiliate landed
   // in their list and can go set it up. Best-effort.

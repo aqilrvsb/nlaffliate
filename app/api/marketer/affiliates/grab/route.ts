@@ -47,5 +47,9 @@ export async function POST(req: Request) {
     );
   }
 
+  // Keep membership in step with the marketer_id just claimed.
+  await db.prepare("INSERT INTO affiliate_marketers (marketer_id, affiliate_id) VALUES (?, ?) ON CONFLICT DO NOTHING")
+    .run(user.id, affiliateId);
+
   return NextResponse.json({ ok: true, id: aff.id, name: aff.name });
 }

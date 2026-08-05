@@ -115,6 +115,20 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
   };
 
   /**
+   * Affiliate-level membership: which affiliates this view manages. An affiliate
+   * can now be managed by several marketers (affiliate_marketers), so their
+   * roster, TikTok profiles and posts are matched through that join rather than
+   * the old single `users.marketer_id`. `affCol` is the affiliate's id column.
+   * Schedules (bookings) are NOT scoped this way — each booking has its own
+   * owning marketer (`bookings.marketer_id`), matched with mCond.
+   */
+  const memberCond = (affCol: string) => {
+    const set = mid != null ? String(mid) : aggIds.join(",");
+    if (!set) return "FALSE";
+    return `${affCol} IN (SELECT affiliate_id FROM affiliate_marketers WHERE marketer_id IN (${set}))`;
+  };
+
+  /**
    * In team mode, collapse each marketer's own copy of a shared brand onto the
    * single catalogue brand, so the client's brand filter (which matches on
    * brand_id) groups the whole team's rows for that brand instead of only the
@@ -139,6 +153,25 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
     .prepare("SELECT id, name, staff_id, phone FROM users WHERE role = 'affiliate' AND marketer_id IS NULL ORDER BY name")
     .all()) as any[];
 
+  // Pending SCHEDULE pool: lives a shared affiliate self-created that nobody has
+  // grabbed yet (marketer_id NULL), for affiliates this marketer manages. Only
+  // in a marketer's own editable view — an aggregate/monitor can't grab.
+  const pendingSchedules = mid != null
+    ? ((await db.prepare(
+        `SELECT b.id AS booking_id, b.user_id AS affiliate_id, u.name AS affiliate,
+                u.staff_id AS affiliate_staff,
+                p.label AS profile_label, p.url AS profile_url,
+                b.live_date, b.start_time, b.end_time, b.note,
+                b.brand_id, br.name AS brand_name
+           FROM bookings b
+           JOIN users u ON u.id = b.user_id
+           JOIN tiktok_profiles p ON p.id = b.profile_id
+           LEFT JOIN brands br ON br.id = b.brand_id
+          WHERE b.marketer_id IS NULL AND ${memberCond("b.user_id")}
+          ORDER BY b.live_date, b.start_time`
+      ).all()) as any[])
+    : [];
+
   const plain = <T,>(rows: T[]): T[] => rows.map((r) => ({ ...r }));
 
   // All six reads are independent, so issue them together rather than paying
@@ -148,7 +181,7 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
       db.prepare(
           `SELECT u.id, u.name, u.email, u.staff_id, u.phone, u.address, u.activated
              FROM users u
-            WHERE u.role = 'affiliate' AND ${mCond("u.marketer_id")}
+            WHERE u.role = 'affiliate' AND ${memberCond("u.id")}
             ORDER BY u.name`
         ).all() as Promise<any[]>,
 
@@ -187,7 +220,7 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
              FROM tiktok_profiles p
              LEFT JOIN brands pb ON pb.id = p.brand_id
              JOIN users u ON u.id = p.user_id
-            WHERE ${mCond("u.marketer_id")}
+            WHERE ${memberCond("u.id")}
             ORDER BY p.id`
         ).all() as Promise<any[]>,
 
@@ -216,7 +249,9 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
              LEFT JOIN brands br ON br.id = b.brand_id
              ${kCatJoin("br", "brc")}
              LEFT JOIN live_results r ON r.booking_id = b.id
-            WHERE ${mCond("u.marketer_id")}
+            -- Each schedule belongs to its owning marketer. NULL owner = a
+            -- pending, un-grabbed affiliate live; it shows only in the grab pool.
+            WHERE ${mCond("b.marketer_id")}
             ORDER BY b.live_date DESC, b.start_time DESC`
         ).all() as Promise<any[]>,
 
@@ -253,7 +288,7 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
       db.prepare(
           `SELECT p.id, p.user_id AS affiliate_id, p.post_date, p.status
              FROM posts p JOIN users u ON u.id = p.user_id
-            WHERE ${mCond("u.marketer_id")}`
+            WHERE ${memberCond("u.id")}`
         ).all() as Promise<any[]>,
 
       db.prepare(
@@ -390,6 +425,7 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
       salesLiveCampaign={plain(salesLiveCampaign)} salesProductCampaign={plain(salesProductCampaign)}
       marketers={plain(marketers)} leaders={plain(leaders)} overseer={overseer}
       pendingAffiliates={plain(pendingAffiliates)}
+      pendingSchedules={plain(pendingSchedules)}
       viewValue={viewValue} canEdit={canEdit}
       teamAvailable={teamAvailable} teamMode={teamMode} />
   );

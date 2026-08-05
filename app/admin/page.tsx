@@ -92,7 +92,9 @@ export default async function AdminPage({
               r.gmv, r.viewers, r.items_sold, r.duration_live, r.screenshot_path
        FROM bookings b
        JOIN users u ON u.id = b.user_id
-       LEFT JOIN users m ON m.id = u.marketer_id
+       -- Attribute each live to the marketer who OWNS the schedule (a shared
+       -- affiliate can have several); falls back to the affiliate's marketer.
+       LEFT JOIN users m ON m.id = COALESCE(b.marketer_id, u.marketer_id)
        JOIN tiktok_profiles p ON p.id = b.profile_id
        LEFT JOIN brands pb ON pb.id = p.brand_id
        LEFT JOIN live_results r ON r.booking_id = b.id

@@ -66,6 +66,16 @@ async function toMarketer(affiliateId: number, message: string) {
   }
 }
 
+/** Phones of a specific set of marketers (skips those without a number). */
+async function marketerPhones(ids: number[]): Promise<string[]> {
+  const clean = [...new Set(ids.filter((n) => Number.isFinite(n)))];
+  if (!clean.length) return [];
+  const rows = await db
+    .prepare(`SELECT phone FROM users WHERE id IN (${clean.join(",")}) AND phone IS NOT NULL`)
+    .all<{ phone: string }>();
+  return rows.map((r) => r.phone).filter(Boolean);
+}
+
 /** Affiliate booked, changed or removed a live. */
 export async function notifyScheduleChange(
   kind: "created" | "updated" | "deleted",
@@ -73,6 +83,29 @@ export async function notifyScheduleChange(
 ) {
   if (!snapshot) return;
   await toMarketer(snapshot.affiliateId, scheduleAlert(kind, snapshot.summary));
+}
+
+/**
+ * Multi-marketer schedule alert. A pending (un-grabbed) live goes to EVERY
+ * marketer managing the affiliate — any of them can grab it. Once owned, only
+ * the owner is told. Best-effort.
+ */
+export async function notifyScheduleToOwnerOrManagers(
+  kind: "created" | "updated" | "deleted",
+  snapshot: { affiliateId: number; summary: LiveSummary } | null,
+  ownerId: number | null
+) {
+  if (!snapshot) return;
+  const ids = ownerId != null
+    ? [ownerId]
+    : (await db
+        .prepare("SELECT marketer_id FROM affiliate_marketers WHERE affiliate_id = ?")
+        .all<{ marketer_id: number }>(snapshot.affiliateId)).map((x) => Number(x.marketer_id));
+  const phones = await marketerPhones(ids);
+  const msg = scheduleAlert(kind, snapshot.summary);
+  for (const p of phones) {
+    try { await sendWhatsApp(p, msg); } catch { /* best-effort */ }
+  }
 }
 
 /** Affiliate uploaded a screenshot; the figures read from it ride along. */

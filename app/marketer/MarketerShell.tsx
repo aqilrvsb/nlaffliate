@@ -47,7 +47,7 @@ import { resolveRange } from "@/lib/daterange";
 import { useNavigate } from "@/lib/useNavigate";
 import { useSearchParams } from "next/navigation";
 import type { SessionUser } from "@/lib/session";
-import { confirmDialog } from "@/lib/swal";
+import { confirmDialog, alertDialog } from "@/lib/swal";
 import { handleFromUrl } from "@/lib/tiktok";
 
 type TikTokLink = {
@@ -232,7 +232,7 @@ export default function MarketerShell({
   user, affiliates, lives, unknowns, salesLive, salesProduct, overall, posts, creatorReports,
   liveUsers, liveSessions, dataQuality, salesCard, spendTtm, reportingSheet,
   salesLiveCampaign, salesProductCampaign, marketers = [], leaders = [],
-  pendingAffiliates = [], overseer = "", viewValue = "", canEdit = true,
+  pendingAffiliates = [], pendingSchedules = [], overseer = "", viewValue = "", canEdit = true,
   teamAvailable = false, teamMode = false,
 }: {
   user: SessionUser; affiliates: Affiliate[]; lives: Live[];
@@ -246,6 +246,8 @@ export default function MarketerShell({
   leaders?: { id: number; name: string; staff_id: string | null }[];
   /** Unassigned affiliates any marketer may grab. */
   pendingAffiliates?: { id: number; name: string; staff_id: string | null; phone: string | null }[];
+  /** Un-grabbed schedules from shared affiliates — any managing marketer can grab. */
+  pendingSchedules?: PendingSchedule[];
   /** Which oversight role is viewing, if any. */
   overseer?: "leader" | "director" | "";
   /** The switcher's current <option> value ("" = Saya, "all", "team-<id>", "<id>"). */
@@ -725,8 +727,11 @@ export default function MarketerShell({
             <AffiliatesTab affiliates={affiliates} lives={lives} pending={pendingAffiliates} />
           )}
           {active === "pending" && (
-            <ScheduleTab title="Pending lives" rows={pending} kind="pending"
-              showUpload affiliates={affiliates} defaultMode="today" />
+            <div className="space-y-4">
+              {canEdit && <PendingScheduleGrab schedules={pendingSchedules} />}
+              <ScheduleTab title="Pending lives" rows={pending} kind="pending"
+                showUpload affiliates={affiliates} defaultMode="today" />
+            </div>
           )}
           {active === "success" && (
             <ScheduleTab title="Completed lives" rows={success} kind="success"
@@ -1015,6 +1020,132 @@ function DashboardTab({ affiliates, inRange, pending, success, overall, from, to
 
 /* ── List Of Affiliate ─────────────────────────────────── */
 
+type PendingSchedule = {
+  booking_id: number; affiliate_id: number; affiliate: string; affiliate_staff: string | null;
+  profile_label: string | null; profile_url: string | null;
+  live_date: string; start_time: string; end_time: string | null; note: string | null;
+  brand_id: number | null; brand_name: string | null;
+};
+
+/**
+ * Grab pool for a shared affiliate's un-owned schedules. An affiliate with
+ * several marketers who books their own live leaves it un-owned; every managing
+ * marketer sees it here and the first to Grab owns it (first come, first served).
+ */
+function PendingScheduleGrab({ schedules }: { schedules: PendingSchedule[] }) {
+  const { refresh } = useNavigate();
+  const [busy, setBusy] = useState<number | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  if (schedules.length === 0) return null;
+
+  async function grab(s: PendingSchedule) {
+    setBusy(s.booking_id); setMsg(null);
+    const res = await fetch("/api/marketer/schedules/grab", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ booking_id: s.booking_id }),
+    });
+    const d = await res.json().catch(() => ({}));
+    setBusy(null);
+    if (!res.ok) setMsg({ ok: false, text: d.error || "Gagal grab." });
+    else { setMsg({ ok: true, text: "Jadual kini milik anda." }); refresh(); }
+  }
+
+  return (
+    <div className="card space-y-3 border-amber-200 bg-amber-50/50">
+      <div>
+        <h3 className="flex items-center gap-2 text-sm font-bold text-amber-800">
+          <Radio className="h-4 w-4" aria-hidden="true" /> Jadual Pending — boleh grab ({schedules.length})
+        </h3>
+        <p className="text-xs text-amber-700/80">
+          Live yang affiliate cipta sendiri &amp; belum ada marketer (affiliate dikongsi). Grab untuk jadikan jadual anda — siapa cepat dia dapat.
+        </p>
+      </div>
+      {msg && <p className={`text-xs font-medium ${msg.ok ? "text-emerald-600" : "text-danger"}`}>{msg.text}</p>}
+      <div className="space-y-2">
+        {schedules.map((s) => (
+          <div key={s.booking_id}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-white/70 px-3 py-2">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-ink">
+                {s.affiliate} <span className="font-mono text-xs text-muted-fg">{s.affiliate_staff}</span>
+              </p>
+              <p className="text-xs text-muted-fg">
+                {fmtDate(s.live_date)} · {fmtTimeRange(s.start_time, s.end_time)}
+                {s.brand_name ? ` · ${s.brand_name}` : ""}
+              </p>
+            </div>
+            <button onClick={() => grab(s)} disabled={busy === s.booking_id}
+              className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-fg shadow-lift transition hover:opacity-90 disabled:opacity-50">
+              {busy === s.booking_id
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                : <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />}
+              Grab
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Request to also manage an existing affiliate by their Staff ID. An affiliate
+ * can be shared between marketers — they keep one login and the same TikTok
+ * links; only the schedules each marketer creates/grabs are their own.
+ */
+function RequestAffiliateModal({
+  open, onClose, onDone,
+}: { open: boolean; onClose: () => void; onDone: () => void }) {
+  const [staffId, setStaffId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => { if (open) { setStaffId(""); setError(""); } }, [open]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setError("");
+    const res = await fetch("/api/marketer/affiliates/request", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ staff_id: staffId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) return setError(data.error || "Gagal.");
+    await alertDialog({
+      title: "Affiliate ditambah",
+      text: `${data.affiliate?.name ?? staffId} kini dalam senarai anda. Anda berkongsi link & komisyen; jadual yang anda cipta/grab milik anda.`,
+      variant: "success",
+    });
+    onDone();
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Request Affiliate"
+      subtitle="Masukkan ID Staff affiliate (AFL-###) untuk turut menguruskan mereka.">
+      <form onSubmit={submit} className="space-y-3">
+        <div>
+          <label className="label" htmlFor="req-staff">ID Staff Affiliate</label>
+          <input id="req-staff" className="input font-mono" value={staffId} autoFocus
+            onChange={(e) => setStaffId(e.target.value)} placeholder="AFL-041" required />
+        </div>
+        {error && (
+          <p className="flex items-center gap-1.5 text-sm text-danger">
+            <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />{error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn" disabled={busy}>
+            {busy ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Requesting…</>
+                  : <><UserPlus className="h-4 w-4" aria-hidden="true" />Request</>}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function AffiliatesTab({ affiliates, lives, pending = [] }: {
   affiliates: Affiliate[]; lives: Live[];
   pending?: { id: number; name: string; staff_id: string | null; phone: string | null }[];
@@ -1022,6 +1153,7 @@ function AffiliatesTab({ affiliates, lives, pending = [] }: {
   const canEdit = useCanEdit();
   const { refresh } = useNavigate();
   const [open, setOpen] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
   const [editing, setEditing] = useState<ManagedAffiliate | null>(null);
   const [grabbing, setGrabbing] = useState<number | null>(null);
   const [grabMsg, setGrabMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -1065,12 +1197,21 @@ function AffiliatesTab({ affiliates, lives, pending = [] }: {
           </p>
         </div>
         {canEdit && (
-          <button className="btn !py-2" onClick={openAdd}>
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            Add Affiliate
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button className="btn-ghost !py-2" onClick={() => setRequestOpen(true)}>
+              <UserPlus className="h-4 w-4" aria-hidden="true" />
+              Request Affiliate
+            </button>
+            <button className="btn !py-2" onClick={openAdd}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Add Affiliate
+            </button>
+          </div>
         )}
       </div>
+
+      <RequestAffiliateModal open={requestOpen} onClose={() => setRequestOpen(false)}
+        onDone={() => { setRequestOpen(false); refresh(); }} />
 
       {/* Pending pool — unassigned affiliates any marketer can grab. */}
       {canEdit && pending.length > 0 && (

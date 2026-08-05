@@ -50,6 +50,11 @@ export async function POST(req: Request) {
       `INSERT INTO users (name, phone, address, password_hash, role, marketer_id, staff_id, activated)
        VALUES (?, ?, ?, ?, 'affiliate', ?, ?, false) RETURNING id`
     ).run(name, phone, address || null, hash, user.id, staffId);
+  const newId = Number(info.lastInsertRowid);
+  // Membership is the source of truth for who manages an affiliate; keep it in
+  // step with the marketer_id set above.
+  await db.prepare("INSERT INTO affiliate_marketers (marketer_id, affiliate_id) VALUES (?, ?) ON CONFLICT DO NOTHING")
+    .run(user.id, newId);
 
   // Best-effort: a failed message must not undo a created account. The first
   // password is the Staff ID itself, so nobody is locked out either way.

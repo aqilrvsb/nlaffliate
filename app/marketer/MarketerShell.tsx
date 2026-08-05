@@ -33,7 +33,7 @@ import ProductsTab from "@/app/admin/ProductsTab";
 import PillarCreate from "./PillarCreate";
 import PillarReport from "./PillarReport";
 import { EditContext, useCanEdit } from "./edit-context";
-import { MarketerScopeContext } from "./team-context";
+import { MarketerScopeContext, useMarketerScope } from "./team-context";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import Pagination from "@/components/Pagination";
 import ImageModal from "@/components/ImageModal";
@@ -1877,7 +1877,7 @@ function BulkUpload() {
     router.refresh();
   }
 
-  if (!useCanEdit()) return null; // hidden while monitoring someone else
+  if (!useCanEdit()) return <ReadOnlyHint />; // read-only: hint in team mode, else hidden
   return (
     <div className="card w-full sm:w-auto">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -1951,7 +1951,7 @@ function LivePerformanceImport() {
     router.refresh();
   }
 
-  if (!useCanEdit()) return null; // hidden while monitoring someone else
+  if (!useCanEdit()) return <ReadOnlyHint />; // read-only: hint in team mode, else hidden
   return (
     <div className="card space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2433,6 +2433,24 @@ function RowCheck({ checked, onChange, aria }: {
   );
 }
 
+/**
+ * Shown in place of an import/edit box when the view is read-only. In a plain
+ * marketer's "All Team" aggregate it nudges them back to "Saya" (where their
+ * own data is editable); while monitoring someone else there's no such toggle,
+ * so it renders nothing.
+ */
+function ReadOnlyHint() {
+  const { teamMode } = useMarketerScope();
+  if (!teamMode) return null;
+  return (
+    <div className="card flex flex-wrap items-center gap-1.5 text-sm text-muted-fg">
+      <AlertCircle className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+      Paparan <b>All Team</b> baca sahaja. Tukar ke <b>Saya</b> (butang
+      <b>Paparan</b> di atas) untuk import fail.
+    </div>
+  );
+}
+
 /** Shared upload box for the two Sales imports. */
 function SalesImport({
   title, endpoint, columns, note, sampleHref, brandInputId, resultLabel,
@@ -2475,7 +2493,7 @@ function SalesImport({
     router.refresh();
   }
 
-  if (!useCanEdit()) return null; // hidden while monitoring someone else
+  if (!useCanEdit()) return <ReadOnlyHint />; // read-only: hint in team mode, else hidden
   return (
     <div className="card space-y-3">
       <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
@@ -3222,7 +3240,7 @@ function OverallImport() {
     </div>
   );
 
-  if (!useCanEdit()) return null; // hidden while monitoring someone else
+  if (!useCanEdit()) return <ReadOnlyHint />; // read-only: hint in team mode, else hidden
   return (
     <div className="card space-y-3">
       <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
@@ -3465,7 +3483,7 @@ function CreatorImport() {
     </div>
   );
 
-  if (!useCanEdit()) return null; // hidden while monitoring someone else
+  if (!useCanEdit()) return <ReadOnlyHint />; // read-only: hint in team mode, else hidden
   return (
     <div className="card space-y-3">
       <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
@@ -4587,7 +4605,7 @@ function DataQualityTab({ rows: all }: { rows: DataQuality[] }) {
 
   return (
     <>
-      {canEdit && <DataQualityImport />}
+      {canEdit ? <DataQualityImport /> : <ReadOnlyHint />}
       {canEdit && (
       <form onSubmit={submit} className="card space-y-3">
         <p className="flex items-center gap-1.5 text-sm font-bold text-ink">

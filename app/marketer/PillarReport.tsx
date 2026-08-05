@@ -3,9 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  Loader2, ChevronDown, Users,
+  Loader2, ChevronDown, Users, Tag,
 } from "lucide-react";
-import { BrandFilterCard } from "./BrandsTab";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import { resolveRange } from "@/lib/daterange";
 import { fmtDate } from "@/lib/format";
@@ -45,6 +44,11 @@ export default function PillarReport() {
   // anyone's here — the report is read-only.
   const [marketer, setMarketer] = useState("");
   const [marketers, setMarketers] = useState<MarketerOpt[]>([]);
+  // The brand filter lists the shared CATALOGUE brands (one option per brand),
+  // not every marketer's copy — otherwise admin's list has ~450 duplicates. The
+  // server matches entries on the catalogue brand, so a catalogue id filters
+  // every marketer's copy of it.
+  const [catBrands, setCatBrands] = useState<{ id: number; name: string }[]>([]);
 
   const params = useSearchParams();
   const { from, to } = resolveRange(
@@ -58,6 +62,14 @@ export default function PillarReport() {
       .then((r): any => (r.ok ? r.json() : {}))
       .then((d) => setMarketers(d.marketers || []))
       .catch(() => setMarketers([]));
+  }, []);
+
+  // Catalogue brands for the (deduplicated) brand filter.
+  useEffect(() => {
+    fetch("/api/brands?scope=catalogue")
+      .then((r): any => (r.ok ? r.json() : {}))
+      .then((d) => setCatBrands(d.brands || []))
+      .catch(() => setCatBrands([]));
   }, []);
 
   const load = useCallback(async () => {
@@ -146,7 +158,26 @@ export default function PillarReport() {
         </p>
       </div>
 
-      <BrandFilterCard id="pr-brand" value={brand} onChange={setBrand} />
+      {/* Brand filter — catalogue brands, so it shows all marketers' data for
+          the chosen brand (no per-copy duplicates). */}
+      <div className="card flex flex-wrap items-end gap-3">
+        <div className="min-w-[220px]">
+          <label className="label" htmlFor="pr-brand">
+            <Tag className="mr-1 inline h-3 w-3" aria-hidden="true" />
+            Brand
+          </label>
+          <select id="pr-brand" className="input cursor-pointer !py-2 text-sm"
+            value={brand} onChange={(e) => setBrand(e.target.value)}>
+            <option value="">All Brands</option>
+            {catBrands.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+        </div>
+        <p className="pb-2 text-xs text-muted-fg">
+          {brand ? "Menunjukkan satu brand sahaja." : "Menunjukkan semua brand."}
+        </p>
+      </div>
 
       {loading ? (
         <p className="flex items-center gap-2 text-sm text-muted-fg">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   HelpCircle, Save, Loader2, Check, AlertCircle, Layers, CalendarDays, X, Tag, Eye,
 } from "lucide-react";
@@ -28,54 +28,71 @@ const COL_HEAD: Record<PillarColumnKey, string> = {
 
 const CUSTOM_NO = 17;
 
+type Draft = { rows: Record<number, Row>; customName: string };
+
 export default function PillarCreate() {
   const canEdit = useCanEdit();
   const [level, setLevel] = useState(1);
   const [date, setDate] = useState(todayKL());
   const [brand, setBrand] = useState("");
-  const [rows, setRows] = useState<Record<number, Row>>({});
-  const [customName, setCustomName] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  // Drafts are kept for EVERY level in memory, so switching levels (and filling
+  // several) never loses unsaved input — one Submit writes them all at once.
+  const [drafts, setDrafts] = useState<Record<number, Draft>>({});
+  const [loaded, setLoaded] = useState<Set<number>>(new Set());
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [hint, setHint] = useState<{ name: string; text: string } | null>(null);
 
   const pillar = getPillar(level)!;
+  const cur: Draft = drafts[level] || { rows: {}, customName: "" };
+  const rows = cur.rows;
+  const customName = cur.customName;
 
-  const load = useCallback(async () => {
-    setLoading(true); setSaved(null); setError("");
-    // Entries are per (brand, level, date) — with no brand chosen there is
-    // nothing to load, so start from a blank sheet.
-    if (!brand) {
-      setRows({}); setCustomName("");
-      setLoading(false);
-      return;
-    }
-    try {
-      const r = await fetch(`/api/pillars?level=${level}&date=${date}&brand=${brand}`);
-      const d = r.ok ? await r.json() : {};
-      const next: Record<number, Row> = {};
-      let cname = "";
-      for (const e of d.entries || []) {
-        next[e.item_no] = {
-          problem: e.problem || "",
-          solution: e.solution || "",
-          planning: e.planning || "",
-          execution: e.execution || "",
-        };
-        if (e.item_no === CUSTOM_NO && e.item_name) cname = e.item_name;
-      }
-      setRows(next); setCustomName(cname);
-    } finally {
-      setLoading(false);
-    }
-  }, [level, date, brand]);
+  // A new brand/date is a fresh sheet — drop every level's draft and reload.
+  useEffect(() => {
+    setDrafts({}); setLoaded(new Set()); setSaved(null); setError("");
+  }, [brand, date]);
 
-  useEffect(() => { load(); }, [load]);
+  // Load the current level once (lazy). Already-loaded (or edited) levels keep
+  // their draft, so a level you filled but didn't submit is never refetched.
+  useEffect(() => {
+    if (!brand || loaded.has(level)) return;
+    let cancelled = false;
+    setLoading(true);
+    fetch(`/api/pillars?level=${level}&date=${date}&brand=${brand}`)
+      .then((r): any => (r.ok ? r.json() : {}))
+      .then((d) => {
+        if (cancelled) return;
+        const next: Record<number, Row> = {};
+        let cname = "";
+        for (const e of d.entries || []) {
+          next[e.item_no] = {
+            problem: e.problem || "", solution: e.solution || "",
+            planning: e.planning || "", execution: e.execution || "",
+          };
+          if (e.item_no === CUSTOM_NO && e.item_name) cname = e.item_name;
+        }
+        setDrafts((c) => ({ ...c, [level]: { rows: next, customName: cname } }));
+        setLoaded((s) => new Set(s).add(level));
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [level, brand, date, loaded]);
 
   function set(no: number, col: PillarColumnKey, val: string) {
-    setRows((cur) => ({ ...cur, [no]: { ...(cur[no] || EMPTY), [col]: val } }));
+    setDrafts((c) => {
+      const d = c[level] || { rows: {}, customName: "" };
+      return { ...c, [level]: { ...d, rows: { ...d.rows, [no]: { ...(d.rows[no] || EMPTY), [col]: val } } } };
+    });
+    setSaved(null);
+  }
+  function setCustom(val: string) {
+    setDrafts((c) => {
+      const d = c[level] || { rows: {}, customName: "" };
+      return { ...c, [level]: { ...d, customName: val } };
+    });
     setSaved(null);
   }
 
@@ -88,18 +105,35 @@ export default function PillarCreate() {
     [rows, pillar]
   );
 
-  async function save() {
+  // How many levels currently hold some input — shown next to Submit so the
+  // marketer knows the whole batch (not just the visible level) will be saved.
+  const levelsWithContent = useMemo(() => {
+    let n = 0;
+    for (const d of Object.values(drafts)) {
+      const has = Object.values(d.rows).some((r) => PILLAR_COLUMNS.some((c) => (r[c.key] || "").trim()))
+        || !!d.customName.trim();
+      if (has) n++;
+    }
+    return n;
+  }, [drafts]);
+
+  async function submit() {
     if (!brand) return setError("Pilih brand dahulu.");
-    setSaving(true); setError(""); setSaved(null);
-    const res = await fetch("/api/pillars", {
+    setSubmitting(true); setError(""); setSaved(null);
+    const levels: Record<string, { rows: Record<number, Row>; custom_name: string }> = {};
+    for (const [lvl, d] of Object.entries(drafts)) {
+      levels[lvl] = { rows: d.rows, custom_name: d.customName };
+    }
+    const res = await fetch("/api/pillars/batch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ level, date, brand_id: brand, rows, item_names: { [CUSTOM_NO]: customName } }),
+      body: JSON.stringify({ date, brand_id: brand, levels }),
     });
     const data = await res.json();
-    setSaving(false);
+    setSubmitting(false);
     if (!res.ok) return setError(data.error || "Could not save.");
-    setSaved(`${data.saved} item disimpan${data.cleared ? `, ${data.cleared} dikosongkan` : ""}`);
+    const lvls = (data.levels || []).map((l: number) => `L${l}`).join(", ");
+    setSaved(`${data.saved} item disimpan${data.cleared ? `, ${data.cleared} dikosongkan` : ""}${lvls ? ` · ${lvls}` : ""} · Laporan dihantar ke Telegram`);
   }
 
   if (!canEdit) return (
@@ -115,7 +149,7 @@ export default function PillarCreate() {
         <div>
           <h2 className="section-title">Create Pillar</h2>
           <p className="text-sm text-muted-fg">
-            Pilih level, isi kolum yang berkaitan. Tidak semua baris perlu diisi.
+            Isi mana-mana level — boleh tukar level tanpa hilang data. Tekan <b>Submit semua</b> sekali untuk simpan semua &amp; hantar laporan penuh ke Telegram.
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
@@ -210,11 +244,16 @@ export default function PillarCreate() {
               <AlertCircle className="h-4 w-4" aria-hidden="true" />{error}
             </span>
           )}
-          <button className="btn" onClick={save} disabled={saving || loading || !brand}
-            title={!brand ? "Pilih brand dahulu" : undefined}>
-            {saving
-              ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Menyimpan…</>
-              : <><Save className="h-4 w-4" aria-hidden="true" />Simpan</>}
+          {levelsWithContent > 0 && (
+            <span className="hidden text-xs text-muted-fg sm:inline">
+              {levelsWithContent} level ada isi
+            </span>
+          )}
+          <button className="btn" onClick={submit} disabled={submitting || !brand}
+            title={!brand ? "Pilih brand dahulu" : "Simpan semua level & hantar laporan penuh ke Telegram"}>
+            {submitting
+              ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Menghantar…</>
+              : <><Save className="h-4 w-4" aria-hidden="true" />Submit semua</>}
           </button>
         </div>
       </div>
@@ -289,7 +328,7 @@ export default function PillarCreate() {
                       <input
                         value={customName}
                         disabled={!brand}
-                        onChange={(e) => { setCustomName(e.target.value); setSaved(null); }}
+                        onChange={(e) => setCustom(e.target.value)}
                         placeholder="Nama item tambahan…"
                         aria-label="Nama item tambahan"
                         className="w-full rounded-lg border border-dashed border-line bg-white/70 px-2.5 py-1.5 text-sm font-semibold text-ink outline-none transition-colors duration-200 focus:border-primary focus:ring-2 focus:ring-primary/10 disabled:cursor-not-allowed disabled:bg-muted/40"

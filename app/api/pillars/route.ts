@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getSession } from "@/lib/session";
-import { getPillar, PILLAR_COLUMNS, TOTAL_PILLAR_ITEMS } from "@/lib/pillars";
-import { sendTelegram } from "@/lib/telegram";
-import { fmtDate } from "@/lib/format";
+import { getPillar } from "@/lib/pillars";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -178,43 +176,7 @@ export async function POST(req: Request) {
     saved += 1;
   }
 
-  // Report the update to the Telegram group — full coverage for THIS marketer,
-  // named. Best-effort: a messaging hiccup must never fail the save. Skipped
-  // when only clearing (nothing new was written).
-  if (saved > 0) {
-    try {
-      const esc = (s: unknown) =>
-        String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      const brand = await db.prepare("SELECT name FROM brands WHERE id = ?").get<{ name: string }>(brandId);
-
-      // The marketer's whole pillar, deduped to one row per (level, item) and
-      // limited to catalogue items so coverage can't exceed 100%.
-      const rows = await db
-        .prepare(
-          `SELECT DISTINCT ON (level, item_no) level, item_no, problem, solution, planning, execution
-             FROM pillar_entries WHERE marketer_id = ?
-            ORDER BY level, item_no, updated_at DESC`
-        )
-        .all<{ level: number; item_no: number; problem: string | null; solution: string | null; planning: string | null; execution: string | null }>(user.id);
-      const catalogue = rows.filter((r) => getPillar(r.level)?.items.some((i) => i.no === r.item_no));
-      const covered = catalogue.length;
-      const pct = Math.round((covered / TOTAL_PILLAR_ITEMS) * 100);
-      const colLine = PILLAR_COLUMNS
-        .map((c) => `${c.emoji} ${c.label}: <b>${catalogue.filter((r) => ((r as any)[c.key] || "").trim()).length}</b>`)
-        .join("\n");
-
-      const p = getPillar(level);
-      const msg =
-        `📊 <b>Pillar Update</b>\n` +
-        `👤 <b>${esc(user.name)}</b> (${esc(user.staff_id || "—")})\n` +
-        `🏷️ Brand: ${esc(brand?.name || "—")}\n` +
-        `📅 Tarikh: ${esc(fmtDate(date))}\n` +
-        `📌 Level ${level}: ${esc(p?.title || "")} — <b>${saved}</b> item dikemas kini\n\n` +
-        `📈 <b>Liputan keseluruhan: ${covered}/${TOTAL_PILLAR_ITEMS} (${pct}%)</b>\n` +
-        colLine;
-      await sendTelegram(msg);
-    } catch { /* best-effort */ }
-  }
-
+  // The Telegram report is sent once, on the batch submit (/api/pillars/batch),
+  // so filling several levels produces one full report rather than one per save.
   return NextResponse.json({ ok: true, saved, cleared });
 }

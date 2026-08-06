@@ -22,12 +22,9 @@ async function canEdit(profileId: string) {
     .get<{ user_id: number; marketer_id: number | null }>(profileId);
   if (!row) return null;
 
-  // The owning affiliate, or ANY marketer who manages them (shared affiliate).
+  // Shared affiliate pool: any marketer may edit any affiliate's links.
   if (user.role === "marketer" || user.role === "leader") {
-    const manages = await db
-      .prepare("SELECT 1 AS ok FROM affiliate_marketers WHERE affiliate_id = ? AND marketer_id = ?")
-      .get(row.user_id, user.id);
-    return manages ? { adminOverride: true, userId: null } : null;
+    return { adminOverride: true, userId: null };
   }
   if (row.user_id !== user.id) return null;
   return { adminOverride: false, userId: user.id };
@@ -56,12 +53,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     .get<{ id: number; user_id: number; marketer_id: number | null }>(params.id);
   if (!owner) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
-  const managesOwner = (user.role === "marketer" || user.role === "leader")
-    ? !!(await db
-        .prepare("SELECT 1 AS ok FROM affiliate_marketers WHERE affiliate_id = ? AND marketer_id = ?")
-        .get(owner.user_id, user.id))
-    : false;
-  const allowed = user.role === "admin" || managesOwner;
+  // Shared pool: admin or any marketer/leader may set brands/commission.
+  const allowed = user.role === "admin" || user.role === "marketer" || user.role === "leader";
   if (!allowed) {
     return NextResponse.json(
       {

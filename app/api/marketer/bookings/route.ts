@@ -48,9 +48,9 @@ export async function POST(req: Request) {
     profile = await db.prepare(
         `SELECT p.id, p.user_id
            FROM tiktok_profiles p
-           JOIN affiliate_marketers am ON am.affiliate_id = p.user_id AND am.marketer_id = ?
+           JOIN users u ON u.id = p.user_id AND u.role = 'affiliate'
           WHERE p.id = ?`
-      ).get<{ id: number; user_id: number }>(user.id, Number(body.profile_id));
+      ).get<{ id: number; user_id: number }>(Number(body.profile_id));
   }
   if (!profile)
     return NextResponse.json(

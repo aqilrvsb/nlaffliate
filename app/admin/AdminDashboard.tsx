@@ -17,6 +17,7 @@ import {
   type LinkBrand,
 } from "@/components/BrandCommission";
 import { handleFromUrl } from "@/lib/tiktok";
+import { EditProfileLink } from "@/components/AddProfileLink";
 import ProductsTab from "./ProductsTab";
 import AdminBrandsTab from "./BrandsTab";
 import SamplesTab from "./SamplesTab";
@@ -851,11 +852,14 @@ function TikTokLinksModal({
                   <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
                 </a>
               </div>
-              <button onClick={() => remove(p.id, handleFromUrl(p.url))}
-                className="shrink-0 cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger"
-                aria-label={`Delete ${handleFromUrl(p.url)}`}>
-                <Trash2 className="h-4 w-4" aria-hidden="true" />
-              </button>
+              <div className="flex shrink-0 items-center gap-1">
+                <EditProfileLink id={p.id} url={p.url} />
+                <button onClick={() => remove(p.id, handleFromUrl(p.url))}
+                  className="cursor-pointer rounded-lg p-2 text-muted-fg transition-colors duration-200 hover:bg-danger/10 hover:text-danger"
+                  aria-label={`Delete ${handleFromUrl(p.url)}`}>
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
             </div>
             {/* Rates hang off each brand, so the summary lists them all. */}
             <div className="mt-2">

@@ -724,7 +724,7 @@ export default function MarketerShell({
               overall={overall} from={from} to={to} />
           )}
           {active === "affiliates" && (
-            <AffiliatesTab affiliates={affiliates} lives={lives} pending={pendingAffiliates} />
+            <AffiliatesTab affiliates={affiliates} lives={lives} />
           )}
           {active === "pending" && (
             <div className="space-y-4">
@@ -1146,40 +1146,18 @@ function RequestAffiliateModal({
   );
 }
 
-function AffiliatesTab({ affiliates, lives, pending = [] }: {
+function AffiliatesTab({ affiliates, lives }: {
   affiliates: Affiliate[]; lives: Live[];
-  pending?: { id: number; name: string; staff_id: string | null; phone: string | null }[];
 }) {
   const canEdit = useCanEdit();
   const { refresh } = useNavigate();
   const [open, setOpen] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
   const [editing, setEditing] = useState<ManagedAffiliate | null>(null);
-  const [grabbing, setGrabbing] = useState<number | null>(null);
-  const [grabMsg, setGrabMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Which (link, brand) rate is being edited, and which link's summary is open.
   const [rateFor, setRateFor] = useState<{ pid: number; brand: LinkBrand } | null>(null);
   const [ratesFor, setRatesFor] = useState<{ pid: number; brands: LinkBrand[] } | null>(null);
-
-  async function grab(id: number, name: string) {
-    setGrabbing(id);
-    setGrabMsg(null);
-    try {
-      const res = await fetch("/api/marketer/affiliates/grab", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ affiliate_id: id }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) setGrabMsg({ ok: false, text: data.error || "Gagal grab." });
-      else { setGrabMsg({ ok: true, text: `${name} kini affiliate anda.` }); refresh(); }
-    } catch {
-      setGrabMsg({ ok: false, text: "Ralat rangkaian." });
-    } finally {
-      setGrabbing(null);
-    }
-  }
 
   const openAdd = () => { setEditing(null); setOpen(true); };
   const openEdit = (a: Affiliate) => {
@@ -1212,46 +1190,6 @@ function AffiliatesTab({ affiliates, lives, pending = [] }: {
 
       <RequestAffiliateModal open={requestOpen} onClose={() => setRequestOpen(false)}
         onDone={() => { setRequestOpen(false); refresh(); }} />
-
-      {/* Pending pool — unassigned affiliates any marketer can grab. */}
-      {canEdit && pending.length > 0 && (
-        <div className="card space-y-3 border-amber-200 bg-amber-50/50">
-          <div>
-            <h3 className="flex items-center gap-2 text-sm font-bold text-amber-800">
-              <UserPlus className="h-4 w-4" aria-hidden="true" />
-              Affiliate Pending — boleh grab ({pending.length})
-            </h3>
-            <p className="mt-0.5 text-xs text-amber-800/80">
-              Affiliate yang belum ada marketer. Grab untuk jadikan affiliate anda (siapa cepat dia dapat).
-            </p>
-          </div>
-          {grabMsg && (
-            <p className={`flex items-start gap-2 rounded-xl px-3 py-2 text-sm ${grabMsg.ok ? "bg-emerald-500/10 text-emerald-700" : "bg-danger/10 text-danger"}`}>
-              {grabMsg.ok ? <Check className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /> : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />}
-              {grabMsg.text}
-            </p>
-          )}
-          <div className="grid gap-2 sm:grid-cols-2">
-            {pending.map((a) => (
-              <div key={a.id} className="flex items-center gap-2 rounded-xl border border-amber-200 bg-white/70 px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-ink">{a.name}</p>
-                  <p className="truncate text-xs text-muted-fg">
-                    <span className="font-mono">{a.staff_id || "—"}</span>{a.phone ? ` · ${a.phone}` : ""}
-                  </p>
-                </div>
-                <button onClick={() => grab(a.id, a.name)} disabled={grabbing === a.id}
-                  className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-fg shadow-lift transition hover:opacity-90 disabled:opacity-50">
-                  {grabbing === a.id
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                    : <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />}
-                  Grab
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {affiliates.length === 0 ? (
         <p className="card text-center text-sm text-muted-fg">

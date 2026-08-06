@@ -115,18 +115,14 @@ export default async function MarketerPage({ searchParams }: { searchParams: { m
   };
 
   /**
-   * Affiliate-level membership: which affiliates this view manages. An affiliate
-   * can now be managed by several marketers (affiliate_marketers), so their
-   * roster, TikTok profiles and posts are matched through that join rather than
-   * the old single `users.marketer_id`. `affCol` is the affiliate's id column.
-   * Schedules (bookings) are NOT scoped this way — each booking has its own
-   * owning marketer (`bookings.marketer_id`), matched with mCond.
+   * The affiliate roster is a SHARED pool: every marketer/leader sees and can
+   * work with every affiliate (List / Posting / Reporting), so this matches all
+   * affiliates rather than a per-marketer subset. Schedules (bookings) are still
+   * owned per-marketer (`bookings.marketer_id`, matched with mCond), so the
+   * Dashboard and reporting stay attributed to who actually scheduled each live.
    */
-  const memberCond = (affCol: string) => {
-    const set = mid != null ? String(mid) : aggIds.join(",");
-    if (!set) return "FALSE";
-    return `${affCol} IN (SELECT affiliate_id FROM affiliate_marketers WHERE marketer_id IN (${set}))`;
-  };
+  const memberCond = (affCol: string) =>
+    `${affCol} IN (SELECT id FROM users WHERE role = 'affiliate')`;
 
   /**
    * In team mode, collapse each marketer's own copy of a shared brand onto the

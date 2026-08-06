@@ -21,14 +21,10 @@ export async function POST(req: Request) {
   if (!Number.isFinite(id))
     return NextResponse.json({ error: "booking_id required" }, { status: 400 });
 
+  // Shared pool: any marketer may grab any still-unowned schedule.
   const done = await db
-    .prepare(
-      `UPDATE bookings SET marketer_id = ?
-        WHERE id = ? AND marketer_id IS NULL
-          AND user_id IN (SELECT affiliate_id FROM affiliate_marketers WHERE marketer_id = ?)
-        RETURNING id`
-    )
-    .run(user.id, id, user.id);
+    .prepare("UPDATE bookings SET marketer_id = ? WHERE id = ? AND marketer_id IS NULL RETURNING id")
+    .run(user.id, id);
 
   if (!done.changes)
     return NextResponse.json(

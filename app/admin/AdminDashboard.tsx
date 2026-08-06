@@ -6,7 +6,7 @@ import {
   TrendingUp, Users, ShoppingBag, UserRound, Bot, Check, ExternalLink,
   Loader2, KeyRound, Clock, AlertTriangle, CalendarDays, Timer,
   LayoutDashboard, Package, Boxes, Link2, Trash2, Plus, AlertCircle, BarChart3, MessageCircle,
-  Tag, Search, UserCheck, UserX, Menu, LogOut, Settings, X, Radio, Crown, Pencil, Phone,
+  Tag, Search, UserCheck, UserX, Menu, LogOut, Settings, X, Radio, Crown, Pencil, Phone, Send,
 } from "lucide-react";
 import Link from "next/link";
 import type { SessionUser } from "@/lib/session";
@@ -333,6 +333,7 @@ export default function AdminDashboard({
 
       <AiSettingsCard />
       <WhatsAppCard />
+      <TelegramCard />
       </>
       )}
 
@@ -1185,6 +1186,88 @@ function EditUserModal({
  * shipped) fires automatically once it is set, and a test send proves the
  * device can actually deliver before anyone relies on it.
  */
+/**
+ * Telegram group notifications — bot token + group chat_id. Once set, a full
+ * Pillar report (with the marketer's name + Staff ID) is posted to the group
+ * whenever a marketer saves a pillar. "Detect" reads the chat_id from the bot's
+ * updates; "Test" fires a message to confirm delivery.
+ */
+function TelegramCard() {
+  const [cfg, setCfg] = useState<any>(null);
+  const [token, setToken] = useState("");
+  const [chatId, setChatId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch("/api/admin/telegram");
+      const d = r.ok ? await r.json() : {};
+      setCfg(d);
+      setChatId(d.chat_id || "");
+    } catch { setCfg({}); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  async function post(bodyObj: any, okText: string) {
+    setBusy(true); setMsg(null);
+    const r = await fetch("/api/admin/telegram", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(bodyObj),
+    });
+    const d = await r.json().catch(() => ({}));
+    setBusy(false);
+    if (!r.ok || d.ok === false) setMsg({ ok: false, text: d.error || "Gagal." });
+    else { setMsg({ ok: true, text: okText }); setToken(""); load(); }
+  }
+
+  return (
+    <section className="card">
+      <div className="mb-1 flex items-center gap-2">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+          <Send className="h-4 w-4" aria-hidden="true" />
+        </span>
+        <h2 className="font-bold text-ink">Telegram — Laporan Pillar</h2>
+      </div>
+      <p className="mb-4 text-xs text-muted-fg">
+        Bila marketer simpan pillar, laporan penuh (nama + ID staff marketer) dihantar ke group Telegram. Token dari @BotFather; chat_id boleh <b>Detect</b> selepas bot dimasukkan ke group.
+      </p>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="label" htmlFor="tg-token">Bot Token</label>
+          <input id="tg-token" className="input" type="password" autoComplete="off"
+            placeholder={cfg?.token_set ? `Saved (${cfg.token_hint}) — blank to keep` : "123456:ABC…"}
+            value={token} onChange={(e) => setToken(e.target.value)} />
+        </div>
+        <div>
+          <label className="label" htmlFor="tg-chat">Group chat_id</label>
+          <input id="tg-chat" className="input" autoComplete="off"
+            placeholder="-1001234567890" value={chatId} onChange={(e) => setChatId(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button className="btn" disabled={busy} onClick={() => post({ token, chat_id: chatId }, "Disimpan.")}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
+          Save
+        </button>
+        <button className="btn-ghost" disabled={busy} onClick={() => post({ action: "detect" }, "Chat_id dikesan.")}>
+          <Search className="h-4 w-4" aria-hidden="true" />Detect chat_id
+        </button>
+        <button className="btn-ghost" disabled={busy} onClick={() => post({ action: "test" }, "Mesej ujian dihantar.")}>
+          <Send className="h-4 w-4" aria-hidden="true" />Send test
+        </button>
+        {msg && (
+          <span className={`flex items-center gap-1 text-sm font-medium ${msg.ok ? "text-emerald-600" : "text-danger"}`}>
+            {msg.ok ? <Check className="h-4 w-4" aria-hidden="true" /> : <AlertCircle className="h-4 w-4" aria-hidden="true" />}{msg.text}
+          </span>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function WhatsAppCard() {
   const [cfg, setCfg] = useState<any>(null);
   const [device, setDevice] = useState("");

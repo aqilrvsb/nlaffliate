@@ -1153,6 +1153,7 @@ function AffiliatesTab({ affiliates, lives }: {
   const { refresh } = useNavigate();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "ready">("all");
   const [editing, setEditing] = useState<ManagedAffiliate | null>(null);
 
   // Which (link, brand) rate is being edited, and which link's summary is open.
@@ -1170,9 +1171,12 @@ function AffiliatesTab({ affiliates, lives }: {
   const activeCount = affiliates.filter((a) => a.activated).length;
   const readyCount = affiliates.length - activeCount;
   const q = search.trim().toLowerCase();
-  const shown = q
-    ? affiliates.filter((a) => `${a.name} ${a.staff_id ?? ""}`.toLowerCase().includes(q))
-    : affiliates;
+  const shown = affiliates.filter((a) => {
+    if (statusFilter === "active" && !a.activated) return false;
+    if (statusFilter === "ready" && a.activated) return false;
+    if (q && !`${a.name} ${a.staff_id ?? ""}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
 
   return (
     <div className="space-y-4">
@@ -1191,20 +1195,29 @@ function AffiliatesTab({ affiliates, lives }: {
         )}
       </div>
 
-      {/* Summary: activated vs. still needing the Aktifkan (Ready) button. */}
-      <div className="grid grid-cols-2 gap-3 sm:max-w-md">
-        <div className="card">
+      {/* Summary cards — click to filter the list. */}
+      <div className="grid grid-cols-3 gap-3">
+        <button type="button" onClick={() => setStatusFilter("all")}
+          className={`card cursor-pointer text-left transition ${statusFilter === "all" ? "ring-2 ring-primary" : "hover:bg-primary/5"}`}>
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-fg">
+            <Users className="h-3.5 w-3.5" aria-hidden="true" /> All
+          </p>
+          <p className="mt-1 text-2xl font-extrabold text-ink">{affiliates.length}</p>
+        </button>
+        <button type="button" onClick={() => setStatusFilter("active")}
+          className={`card cursor-pointer text-left transition ${statusFilter === "active" ? "ring-2 ring-emerald-500" : "hover:bg-emerald-500/5"}`}>
           <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-fg">
             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" /> Total Aktif
           </p>
           <p className="mt-1 text-2xl font-extrabold text-emerald-600">{activeCount}</p>
-        </div>
-        <div className="card">
+        </button>
+        <button type="button" onClick={() => setStatusFilter("ready")}
+          className={`card cursor-pointer text-left transition ${statusFilter === "ready" ? "ring-2 ring-rose-500" : "hover:bg-rose-500/5"}`}>
           <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-fg">
             <MousePointerClick className="h-3.5 w-3.5 text-rose-600" aria-hidden="true" /> Total Click Ready
           </p>
           <p className="mt-1 text-2xl font-extrabold text-rose-600">{readyCount}</p>
-        </div>
+        </button>
       </div>
 
       {/* Search by name or Staff ID. */}

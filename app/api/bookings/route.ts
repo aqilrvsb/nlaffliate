@@ -52,19 +52,11 @@ export async function POST(req: Request) {
   if (!brandRaw || !Number.isFinite(brandId)) {
     return NextResponse.json({ error: "Pick a brand." }, { status: 400 });
   }
-  // The brand must belong to one of this affiliate's marketers (they can now
-  // have several) — otherwise a booking could be filed against an unrelated
-  // marketer's brand.
-  const brand = await db.prepare(
-      `SELECT b.id FROM brands b
-        WHERE b.id = ?
-          AND b.marketer_id IN (SELECT marketer_id FROM affiliate_marketers WHERE affiliate_id = ?)`
-    ).get(brandId, user.id);
+  // Any real brand may be booked — the on-link check below is the guard (the
+  // brand must be registered on this link). Brands aren't tied to one marketer.
+  const brand = await db.prepare("SELECT id FROM brands WHERE id = ?").get(brandId);
   if (!brand) {
-    return NextResponse.json(
-      { error: "That brand is not available to you." },
-      { status: 403 }
-    );
+    return NextResponse.json({ error: "Brand tidak wujud." }, { status: 400 });
   }
 
 

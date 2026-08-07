@@ -61,11 +61,14 @@ export async function POST(req: Request) {
   const brandRaw = String(body.brand_id ?? "").trim();
   if (!brandRaw)
     return NextResponse.json({ error: "Pick a brand." }, { status: 400 });
+  // Any real brand may be booked — the on-link check below is the real guard
+  // (the brand must be registered on this shared link). Brands aren't tied to
+  // one marketer here.
   const brand = await db
-    .prepare("SELECT id FROM brands WHERE id = ? AND marketer_id = ?")
-    .get(Number(brandRaw), user.id);
+    .prepare("SELECT id FROM brands WHERE id = ?")
+    .get(Number(brandRaw));
   if (!brand)
-    return NextResponse.json({ error: "That brand is not yours." }, { status: 403 });
+    return NextResponse.json({ error: "Brand tidak wujud." }, { status: 400 });
 
   // The brand must be registered on this link. A live is paid at the rate set
   // for the (link, brand) pair, so a mismatch books a live nothing can pay.

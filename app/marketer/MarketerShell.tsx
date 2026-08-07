@@ -11,7 +11,7 @@ import {
   HelpCircle, Upload, ImagePlus, TrendingDown, Pencil, BarChart3,
   PackageSearch, FileSpreadsheet, ShoppingCart, Layers, Eye, MousePointerClick,
   Send, Boxes, ClipboardList, Tag, CalendarPlus, Trash2, AlertCircle, Settings, Plus,
-  Package, ListChecks, CreditCard, Download, X, UserPlus,
+  Package, ListChecks, CreditCard, Download, X, UserPlus, Search,
 } from "lucide-react";
 import { AffiliateModal, AffiliateActions, ActivateAffiliate, type ManagedAffiliate } from "./AffiliateManager";
 import BrandsTab, { BrandSelect, BrandFilterCard } from "./BrandsTab";
@@ -1152,7 +1152,7 @@ function AffiliatesTab({ affiliates, lives }: {
   const canEdit = useCanEdit();
   const { refresh } = useNavigate();
   const [open, setOpen] = useState(false);
-  const [requestOpen, setRequestOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<ManagedAffiliate | null>(null);
 
   // Which (link, brand) rate is being edited, and which link's summary is open.
@@ -1165,6 +1165,15 @@ function AffiliatesTab({ affiliates, lives }: {
     setOpen(true);
   };
 
+  // "Aktif" = login-ready (activated); "Click Ready" = still needs the Aktifkan
+  // button pressed. Search matches name or Staff ID.
+  const activeCount = affiliates.filter((a) => a.activated).length;
+  const readyCount = affiliates.length - activeCount;
+  const q = search.trim().toLowerCase();
+  const shown = q
+    ? affiliates.filter((a) => `${a.name} ${a.staff_id ?? ""}`.toLowerCase().includes(q))
+    : affiliates;
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -1175,29 +1184,45 @@ function AffiliatesTab({ affiliates, lives }: {
           </p>
         </div>
         {canEdit && (
-          <div className="flex flex-wrap items-center gap-2">
-            <button className="btn-ghost !py-2" onClick={() => setRequestOpen(true)}>
-              <UserPlus className="h-4 w-4" aria-hidden="true" />
-              Request Affiliate
-            </button>
-            <button className="btn !py-2" onClick={openAdd}>
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Add Affiliate
-            </button>
-          </div>
+          <button className="btn !py-2" onClick={openAdd}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Add Affiliate
+          </button>
         )}
       </div>
 
-      <RequestAffiliateModal open={requestOpen} onClose={() => setRequestOpen(false)}
-        onDone={() => { setRequestOpen(false); refresh(); }} />
+      {/* Summary: activated vs. still needing the Aktifkan (Ready) button. */}
+      <div className="grid grid-cols-2 gap-3 sm:max-w-md">
+        <div className="card">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-fg">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" /> Total Aktif
+          </p>
+          <p className="mt-1 text-2xl font-extrabold text-emerald-600">{activeCount}</p>
+        </div>
+        <div className="card">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-fg">
+            <MousePointerClick className="h-3.5 w-3.5 text-rose-600" aria-hidden="true" /> Total Click Ready
+          </p>
+          <p className="mt-1 text-2xl font-extrabold text-rose-600">{readyCount}</p>
+        </div>
+      </div>
 
-      {affiliates.length === 0 ? (
+      {/* Search by name or Staff ID. */}
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-fg" aria-hidden="true" />
+        <input className="input !pl-9" placeholder="Cari nama atau ID staff (AFL-###)…"
+          value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
+
+      {shown.length === 0 ? (
         <p className="card text-center text-sm text-muted-fg">
-          Belum ada affiliate — klik Add Affiliate, atau minta admin assign kepada anda.
+          {affiliates.length === 0
+            ? "Belum ada affiliate — klik Add Affiliate, atau minta admin assign kepada anda."
+            : "Tiada affiliate sepadan dengan carian."}
         </p>
       ) : (
       <div className="grid gap-3 md:grid-cols-2">
-      {affiliates.map((a) => (
+      {shown.map((a) => (
         <div key={a.id} className="card flex flex-col gap-3">
           <div className="flex items-center gap-2.5">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary text-sm font-bold text-white">

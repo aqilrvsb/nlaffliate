@@ -87,12 +87,39 @@ export async function POST(req: Request) {
     if (levelSaved > 0) touched.push(level);
   }
 
-  // One full report to the group — named, listing the levels submitted and the
-  // marketer's overall coverage. Best-effort.
+  // One full report to the group — named, with the ACTUAL text filled for each
+  // item (Problem / Solution / Planning / Execution), plus overall coverage.
+  // Best-effort; split into <4096-char chunks so Telegram never rejects it.
   if (saved > 0) {
     try {
       const esc = (s: unknown) =>
         String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+      // Detail from what was just submitted (the payload carries the text).
+      const detail: string[] = [];
+      for (const lvl of [...touched].sort((a, b) => a - b)) {
+        const pillar = getPillar(lvl);
+        if (!pillar) continue;
+        const payload = levels[String(lvl)];
+        const rows = payload?.rows || {};
+        const lines: string[] = [];
+        // Keep catalogue order, custom row last.
+        const nos = Object.keys(rows).map(Number).sort((a, b) => a - b);
+        for (const no of nos) {
+          const v = (rows[no] || {}) as Record<string, unknown>;
+          const cols = PILLAR_COLUMNS
+            .filter((c) => String(v[c.key] ?? "").trim())
+            .map((c) => `   ${c.emoji} <b>${c.label}:</b> ${esc(String(v[c.key]).trim())}`);
+          if (!cols.length) continue;
+          const itemName = no === CUSTOM_NO
+            ? (payload?.custom_name || "Item tambahan")
+            : (pillar.items.find((i) => i.no === no)?.name || `#${no}`);
+          lines.push(`▸ <b>${esc(itemName)}</b>\n${cols.join("\n")}`);
+        }
+        if (lines.length) detail.push(`\n📌 <b>Level ${lvl} — ${esc(pillar.title)}</b>\n${lines.join("\n")}`);
+      }
+
+      // Overall coverage across the whole pillar.
       const all = await db
         .prepare(
           `SELECT DISTINCT ON (level, item_no) level, item_no, problem, solution, planning, execution
@@ -103,21 +130,27 @@ export async function POST(req: Request) {
       const catalogue = all.filter((r) => getPillar(r.level)?.items.some((i) => i.no === r.item_no));
       const covered = catalogue.length;
       const pct = Math.round((covered / TOTAL_PILLAR_ITEMS) * 100);
-      const colLine = PILLAR_COLUMNS
-        .map((c) => `${c.emoji} ${c.label}: <b>${catalogue.filter((r) => (((r as any)[c.key]) || "").trim()).length}</b>`)
-        .join("\n");
-      const levelList = touched.sort((a, b) => a - b)
-        .map((l) => `L${l} ${getPillar(l)?.title ?? ""}`).join(", ");
 
-      const msg =
+      const header =
         `📊 <b>Pillar Update</b>\n` +
         `👤 <b>${esc(user.name)}</b> (${esc(user.staff_id || "—")})\n` +
-        `🏷️ Brand: ${esc(brand.name)}\n` +
-        `📅 Tarikh: ${esc(fmtDate(date))}\n` +
-        `📌 Level dikemas kini: ${esc(levelList)} — <b>${saved}</b> item\n\n` +
-        `📈 <b>Liputan keseluruhan: ${covered}/${TOTAL_PILLAR_ITEMS} (${pct}%)</b>\n` +
-        colLine;
-      await sendTelegram(msg);
+        `🏷️ Brand: ${esc(brand.name)}  ·  📅 ${esc(fmtDate(date))}\n` +
+        `📌 <b>${saved}</b> item dikemas kini  ·  📈 Liputan: <b>${covered}/${TOTAL_PILLAR_ITEMS} (${pct}%)</b>\n`;
+
+      // Chunk to Telegram's 4096-char limit, breaking between items.
+      const LIMIT = 3900;
+      const chunks: string[] = [];
+      let buf = header;
+      for (const block of detail) {
+        if ((buf + block).length > LIMIT) {
+          chunks.push(buf);
+          buf = block.replace(/^\n/, "");
+        } else {
+          buf += block;
+        }
+      }
+      chunks.push(buf);
+      for (const c of chunks) await sendTelegram(c);
     } catch { /* best-effort */ }
   }
 
